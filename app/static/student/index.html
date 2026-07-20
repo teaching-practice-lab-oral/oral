@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="AI 英語面試" />
+  <meta name="application-name" content="AI 英語面試" />
+  <meta name="theme-color" content="#4f46e5" />
+  <title>我的作業 - AI 英語面試練習系統</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <meta name="description" content="AI 輔助英語面試練習系統，幫助大學生提升英語面試能力。" />
+  <meta property="og:title" content="AI 英語面試練習系統 — 我的作業" />
+  <meta property="og:description" content="AI 輔助英語面試練習系統，幫助大學生提升英語面試能力。" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/static/favicon.svg" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+  integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+  crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+  integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+"
+  crossorigin="anonymous" />
+  <link rel="stylesheet" href="/static/student/common.css?v=1" />
+  <style>
+    .stage-watermark {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      z-index: 0;
+      display: none;
+      transform: translate(-50%, -50%) rotate(-12deg);
+      color: #4f46e5;
+      font-size: clamp(8rem, 25vw, 24rem);
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      line-height: 1;
+      opacity: 0.08;
+      pointer-events: none;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .stage-watermark.is-visible {
+      display: block;
+    }
+    .page-hero {
+      background: white;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 1.5rem 0;
+      margin-bottom: 2rem;
+    }
+    .assignment-card {
+      background: white;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      transition: transform 0.2s, box-shadow 0.2s;
+      overflow: hidden;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .assignment-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 30px rgba(79,70,229,0.15);
+    }
+    .card-accent {
+      height: 5px;
+      background: linear-gradient(90deg, var(--primary), #7c3aed);
+    }
+    .card-accent.completed {
+      background: linear-gradient(90deg, #10b981, #059669);
+    }
+    .card-accent.warning {
+      background: linear-gradient(90deg, #f59e0b, #d97706);
+    }
+    .card-accent.overdue {
+      background: linear-gradient(90deg, #ef4444, #dc2626);
+    }
+    .card-content {
+      padding: 1.25rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .assignment-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #1e1b4b;
+      margin-bottom: 0.5rem;
+    }
+    .assignment-desc {
+      font-size: 0.85rem;
+      color: #64748b;
+      flex: 1;
+      margin-bottom: 1rem;
+    }
+    .stage-progress {
+      margin-bottom: 1rem;
+    }
+    .stage-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.4rem;
+    }
+    .stage-label .stage-name {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+    .stage-label .stage-count {
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+    .progress { height: 6px; border-radius: 10px; background: #e2e8f0; }
+    .progress-bar { border-radius: 10px; }
+    .due-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.78rem;
+      color: #94a3b8;
+      margin-bottom: 1rem;
+    }
+    .due-badge.overdue { color: #ef4444; }
+    .due-badge.late { color: #d97706; }
+    .btn-start {
+      background: linear-gradient(90deg, var(--primary), #7c3aed);
+      border: none;
+      color: white;
+      font-weight: 600;
+      border-radius: 10px;
+      padding: 0.55rem 1rem;
+      transition: opacity 0.2s;
+    }
+    .btn-start:hover { opacity: 0.88; color: white; }
+    .btn-view {
+      background: white;
+      border: 2px solid #10b981;
+      color: #10b981;
+      font-weight: 600;
+      border-radius: 10px;
+      padding: 0.5rem 1rem;
+      transition: all 0.2s;
+    }
+    .btn-view:hover { background: #10b981; color: white; }
+    .completed-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+    .completed-actions .btn { display: flex; align-items: center; justify-content: center; }
+    .btn-retry {
+      background: linear-gradient(90deg, var(--primary), #7c3aed);
+      border: 2px solid transparent;
+      color: white;
+      font-weight: 600;
+      border-radius: 10px;
+      padding: 0.5rem 1rem;
+      transition: opacity 0.2s;
+    }
+    .btn-retry:hover:not(:disabled) { opacity: 0.88; color: white; }
+    .btn-retry:disabled { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; opacity: 1; }
+    .retry-feedback { color: #b91c1c; font-size: 0.78rem; margin-top: 0.45rem; }
+    .retry-feedback:empty { display: none; }
+    .assignment-actions { display: flex; flex-direction: column; gap: 0.6rem; }
+    .record-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
+    .btn-record {
+      border: 1.5px solid #c7d2fe;
+      color: #4338ca;
+      background: #fff;
+      border-radius: 9px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.48rem 0.35rem;
+      white-space: nowrap;
+    }
+    .btn-record:hover:not(:disabled) { background: #eef2ff; border-color: #818cf8; color: #3730a3; }
+    .btn-record:disabled { background: #f8fafc; border-color: #e2e8f0; color: #94a3b8; opacity: 1; }
+    .record-list-item { border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem; }
+    .grade-attempt + .grade-attempt { border-top: 1px solid #e2e8f0; padding-top: 1.25rem; margin-top: 1.25rem; }
+    .grade-revision { border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+    .grade-revision + .grade-revision { margin-top: 0.75rem; }
+    .grade-revision summary { cursor: pointer; list-style: none; padding: 0.85rem 1rem; background: #f8fafc; }
+    .grade-revision summary::-webkit-details-marker { display: none; }
+    .grade-revision[open] summary { border-bottom: 1px solid #e2e8f0; }
+    .grade-revision-body { padding: 1rem; }
+    .grade-rating { border-bottom: 1px solid #f1f5f9; padding: 0.5rem 0; }
+    .grade-rating:last-child { border-bottom: 0; }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .status-completed { background: #d1fae5; color: #065f46; }
+    .status-active { background: #ede9fe; color: #4338ca; }
+    .status-warning { background: #fef3c7; color: #92400e; }
+    .status-pending { background: #e0f2fe; color: #0369a1; }
+    .status-overdue { background: #fee2e2; color: #b91c1c; }
+    .status-late { background: #fef3c7; color: #b45309; }
+    .btn-locked {
+      background: #f1f5f9;
+      border: 2px solid #e2e8f0;
+      color: #94a3b8;
+      font-weight: 600;
+      border-radius: 10px;
+      padding: 0.55rem 1rem;
+      width: 100%;
+      cursor: not-allowed;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: #94a3b8;
+    }
+    .empty-state i { font-size: 4rem; opacity: 0.4; display: block; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-custom navbar-dark">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="/student">
+        <i class="bi bi-mic-fill"></i>
+        <span>AI 英語面試練習系統</span>
+      </a>
+      <div class="ms-auto d-flex align-items-center gap-3">
+        <span class="text-white d-flex align-items-center gap-1">
+          <i class="bi bi-person-circle"></i>
+          <span id="userName"></span>
+        </span>
+        <button class="btn btn-outline-light btn-sm" data-action="openChangePw">
+          <i class="bi bi-key me-1"></i>變更密碼
+        </button>
+        <button class="btn btn-outline-light btn-sm" data-action="logout">
+          <i class="bi bi-box-arrow-right me-1"></i>登出
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 變更密碼 Modal -->
+  <div class="modal fade" id="changePwModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold"><i class="bi bi-key me-2 text-primary"></i>變更密碼</h5>
+          <button type="button" class="btn-close" id="changePwClose" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body pt-2">
+          <div id="changePwAlert" class="alert d-none"></div>
+          <div id="changePwFirstLoginNote" class="alert alert-warning small d-none">
+            <i class="bi bi-exclamation-triangle me-1"></i>您使用的是系統初始密碼，請立即更換新密碼以保護帳號安全。
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">舊密碼</label>
+            <input type="password" class="form-control" id="oldPassword" placeholder="請輸入舊密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">新密碼</label>
+            <input type="password" class="form-control" id="newPassword" placeholder="至少 8 個字元" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+          </div>
+          <div class="mb-1">
+            <label class="form-label fw-semibold">確認新密碼</label>
+            <input type="password" class="form-control" id="confirmPassword" placeholder="再輸入一次新密碼" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+          </div>
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-light" id="changePwCancelBtn" data-bs-dismiss="modal">稍後再說</button>
+          <button class="btn btn-primary" id="changePwSubmitBtn" data-action="doChangePassword">
+            <i class="bi bi-check-lg me-1"></i>確認變更
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 提交紀錄／成績共用 Modal -->
+  <div class="modal fade" id="assignmentRecordsModal" tabindex="-1" aria-labelledby="assignmentRecordsModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold" id="assignmentRecordsModalTitle"></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+        </div>
+        <div class="modal-body" id="assignmentRecordsModalBody"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container py-4">
+    <div class="d-flex align-items-center mb-4 gap-2">
+      <i class="bi bi-journal-text fs-4 text-primary"></i>
+      <h4 class="mb-0 fw-bold">我的作業</h4>
+    </div>
+
+    <div id="loadingMsg" class="text-center py-5">
+      <div class="spinner-border text-primary"></div>
+      <p class="mt-2 text-muted">載入作業中...</p>
+    </div>
+
+    <div id="emptyMsg" class="empty-state d-none">
+      <i class="bi bi-inbox"></i>
+      <h5>目前沒有開放中的作業</h5>
+      <p class="text-muted small">請等待教師開放作業後再回來查看。</p>
+    </div>
+
+    <div id="assignmentList" class="row g-3"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+  integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+  crossorigin="anonymous"></script>
+  <script src="/static/pwa.js?v=7"></script>
+  <script src="/static/student/workflow.js?v=4"></script>
+  <script type="module" src="/static/student/controllers/index.mjs?v=4"></script>
+  <script type="module" src="/static/student/controllers/index-page.mjs?v=5"></script>
+
+<div id="stageWatermark" class="stage-watermark" aria-hidden="true">Stage</div>
+<script>
+  if (window.location.hostname.startsWith('dev-')) {
+    document.getElementById('stageWatermark').classList.add('is-visible');
+  }
+</script>
+<footer style="text-align:center;padding:12px 0 8px;font-size:0.85rem;color:#888;">AI 英語面試練習系統 · Apache-2.0</footer>
+</body>
+</html>

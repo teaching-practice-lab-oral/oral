@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>評分規準管理 - AI 英語面試練習系統管理後台</title>
+  <link rel="icon" href="/static/favicon.svg">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="/static/admin/css/common.css?v=4">
+  <style>
+    .panel { background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:1.25rem; }
+    .dimension { border:1px solid #cbd5e1;border-radius:12px;padding:1rem;margin-bottom:1rem; }
+    .criterion { background:#f8fafc;border-radius:10px;padding:.9rem;margin-top:.75rem; }
+    .level-pill { display:inline-flex;border-radius:999px;background:#eef2ff;color:#4338ca;padding:.25rem .65rem;margin:.15rem;font-size:.8rem; }
+    .level-editor { border-top:1px dashed #cbd5e1;margin-top:.8rem;padding-top:.8rem; }
+    .level-row { background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:.7rem;margin-top:.55rem; }
+    .sticky-tools { position:sticky;top:1rem; }
+    .rubric-note { background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:.7rem .85rem; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-admin navbar-expand-lg"></nav>
+  <div id="toastContainer"></div>
+  <main class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 gap-3 flex-wrap">
+      <div>
+        <h4 class="fw-bold mb-1"><i class="bi bi-ui-checks-grid text-primary me-2"></i>評分規準版本管理</h4>
+        <p class="text-muted mb-0">草稿可以修改或刪除；發布後如需調整，請建立新版本。每個評分項目可設定自己的配分級距。</p>
+      </div>
+      <button id="createBtn" class="btn btn-primary d-none" data-action="createRubric">
+        <i class="bi bi-plus-lg me-1"></i>建立評分規準
+      </button>
+    </div>
+    <div class="row g-4">
+      <aside class="col-lg-3">
+        <div class="panel sticky-tools">
+          <label class="form-label fw-bold">評分規準版本</label>
+          <div id="versionList" class="list-group"></div>
+          <hr>
+          <div>
+            <strong>共用五級換算</strong>
+            <p class="small text-muted mt-1 mb-2">未自訂級距的項目才會使用。</p>
+            <div>
+              <span class="level-pill">表現優良 100%</span>
+              <span class="level-pill">符合標準 75%</span>
+              <span class="level-pill">尚待加強 50%</span>
+              <span class="level-pill">基礎待提升 25%</span>
+              <span class="level-pill">無法評分 0%</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+      <section class="col-lg-9">
+        <div id="emptyState" class="panel text-center text-muted py-5">正在載入評分規準...</div>
+        <div id="editor" class="d-none">
+          <div class="panel mb-3">
+            <div class="row g-3">
+              <div class="col-md-7">
+                <label class="form-label">名稱</label>
+                <input id="rubricName" class="form-control">
+              </div>
+              <div class="col-md-5">
+                <label class="form-label">狀態</label>
+                <div id="versionStatus" class="form-control bg-light"></div>
+              </div>
+              <div class="col-12">
+                <label class="form-label">說明</label>
+                <textarea id="rubricDescription" class="form-control" rows="2"></textarea>
+              </div>
+              <div class="col-12">
+                <label class="form-label">注意事項（每行一項）</label>
+                <textarea id="rubricNotes" class="form-control" rows="3" placeholder="例如：遲交扣 20 分"></textarea>
+              </div>
+            </div>
+          </div>
+          <div id="notesPreview" class="mb-3"></div>
+          <div id="dimensions"></div>
+          <div class="panel d-flex gap-2 flex-wrap">
+            <button id="saveBtn" class="btn btn-primary" data-action="saveDraft"><i class="bi bi-save me-1"></i>儲存草稿</button>
+            <button id="publishBtn" class="btn btn-success" data-action="publishVersion"><i class="bi bi-send-check me-1"></i>發布</button>
+            <button id="deleteDraftBtn" class="btn btn-outline-danger" data-action="deleteDraftVersion"><i class="bi bi-trash me-1"></i>刪除草稿版本</button>
+            <button id="cloneBtn" class="btn btn-outline-primary" data-action="cloneVersion"><i class="bi bi-files me-1"></i>建立新版</button>
+            <button id="archiveBtn" class="btn btn-outline-danger ms-auto" data-action="archiveRubric">封存評分規準</button>
+            <span id="scoreTotal" class="align-self-center fw-bold ms-2"></span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="/static/admin/js/common.js?v=8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+    crossorigin="anonymous"></script>
+  <script>
+    let rows = [];
+    let current = null;
+    let isPrivileged = false;
+
+    function deep(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function safeKey(value) {
+      return String(value || 'criterion')
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '_')
+        .replace(/^_+|_+$/g, '') || `criterion_${Date.now()}`;
+    }
+
+    function levelAwardedPoints(level, criterionPoints) {
+      if (level && level.points != null) return Number(level.points);
+      return Number(criterionPoints) * Number(level && level.ratio != null ? level.ratio : 0);
+    }
+
+    async function init() {
+      await window._adminReady;
+      const me = await (await fetch('/api/auth/me')).json();
+      isPrivileged = !!me.is_privileged_admin;
+      createBtn.classList.toggle('d-none', !isPrivileged);
+      await loadRows();
+    }
+
+    async function loadRows(selectId = null) {
+      const response = await fetch(`/api/admin/rubrics?include_drafts=${isPrivileged ? 'true' : 'false'}`);
+      rows = response.ok ? await response.json() : [];
+      versionList.innerHTML = rows.map(version => `
+        <button class="list-group-item list-group-item-action"
+          data-action="selectVersion" data-args='[${version.version_id}]'>
+          <div class="fw-bold">${escHtml(version.rubric_name)}</div>
+          <small>v${version.version_number} · ${version.status === 'published' ? '已發布' : '草稿'}${version.is_archived ? ' · 已封存' : ''}</small>
+        </button>`).join('');
+      if (!rows.length) {
+        emptyState.textContent = '目前沒有評分規準';
+        editor.classList.add('d-none');
+        return;
+      }
+      selectVersion(selectId || current?.version_id || rows[0].version_id);
+    }
+
+    function selectVersion(id) {
+      current = rows.find(version => version.version_id === id);
+      if (!current) return;
+      emptyState.classList.add('d-none');
+      editor.classList.remove('d-none');
+      rubricName.value = current.rubric_name;
+      rubricDescription.value = current.description || '';
+      rubricNotes.value = (current.definition.notes || []).join('\n');
+      versionStatus.textContent = `v${current.version_number} · ${current.status === 'published' ? '已發布' : '草稿'}`;
+      renderDimensions();
+      renderNotesPreview();
+
+      const editable = isPrivileged && current.status === 'draft' && !current.is_archived;
+      editor.querySelectorAll('input,textarea').forEach(element => { element.disabled = !editable; });
+      editor.querySelectorAll('.edit-only').forEach(element => element.classList.toggle('d-none', !editable));
+      saveBtn.classList.toggle('d-none', !editable);
+      publishBtn.classList.toggle('d-none', !editable);
+      deleteDraftBtn.classList.toggle('d-none', !editable);
+      cloneBtn.classList.toggle('d-none', !isPrivileged || current.is_archived);
+      archiveBtn.classList.toggle('d-none', !isPrivileged || current.is_system || current.is_archived);
+      [...versionList.children].forEach((element, index) => {
+        element.classList.toggle('active', rows[index]?.version_id === current.version_id);
+      });
+    }
+
+    function renderNotesPreview() {
+      const notes = rubricNotes.value.split('\n').map(note => note.trim()).filter(Boolean);
+      notesPreview.innerHTML = notes.length
+        ? `<div class="rubric-note"><strong><i class="bi bi-exclamation-circle me-1"></i>評分注意事項</strong><ul class="mb-0 mt-2">${notes.map(note => `<li>${escHtml(note)}</li>`).join('')}</ul></div>`
+        : '';
+    }
+
+    function levelRowHtml(level = {}) {
+      const points = level.points != null ? Number(level.points) : '';
+      return `<div class="level-row" data-level>
+        <div class="row g-2">
+          <div class="col-md-2">
+            <label class="form-label small">得分</label>
+            <input type="number" name="rubric_level_points" class="form-control form-control-sm level-points" min="0" max="100" step="1" inputmode="numeric" value="${escAttr(points)}" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small">級距名稱</label>
+            <input class="form-control form-control-sm level-label" value="${escAttr(level.label || '')}">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label small">評分描述</label>
+            <textarea class="form-control form-control-sm level-anchor" rows="2">${escHtml(level.anchor || '')}</textarea>
+          </div>
+          <div class="col-md-1 d-flex align-items-end">
+            <button type="button" class="btn btn-sm btn-outline-danger w-100 edit-only" title="刪除級距" data-action="removeLevel">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function criterionHtml(dimensionIndex, criterionIndex, criterion) {
+      const ownLevels = Array.isArray(criterion.levels) ? criterion.levels : [];
+      return `<div class="criterion" data-criterion>
+        <div class="row g-2">
+          <div class="col-md-7">
+            <label class="form-label small">評分項目名稱</label>
+            <input class="form-control criterion-name" value="${escAttr(criterion.name)}">
+            <input type="hidden" class="criterion-key" value="${escAttr(criterion.key)}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small">配分</label>
+            <input type="number" name="rubric_criterion_points" class="form-control criterion-points" min="1" max="100" inputmode="numeric" value="${Number(criterion.points)}" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <button type="button" class="btn btn-outline-danger w-100 edit-only"
+              data-action="removeCriterion" data-args='[${dimensionIndex},${criterionIndex}]'>刪除</button>
+          </div>
+          <div class="col-12">
+            <label class="form-label small">評分說明</label>
+            <textarea class="form-control criterion-description" rows="2">${escHtml(criterion.description)}</textarea>
+          </div>
+        </div>
+        <div class="level-editor">
+          <div class="d-flex justify-content-between align-items-center gap-2">
+            <strong class="small">此項配分級距</strong>
+            <button type="button" class="btn btn-sm btn-outline-secondary edit-only" data-action="addLevel">
+              <i class="bi bi-plus me-1"></i>新增級距
+            </button>
+          </div>
+          <div class="criterion-levels">
+            ${ownLevels.length ? ownLevels.map(levelRowHtml).join('') : '<p class="shared-level-note small text-muted mt-2 mb-0">目前使用左側的共用五級換算。</p>'}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function renderDimensions() {
+      dimensions.innerHTML = (current.definition.dimensions || []).map((dimension, dimensionIndex) => `
+        <div class="dimension">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-8">
+              <label class="form-label">評分面向</label>
+              <input class="form-control dim-name fw-bold" value="${escAttr(dimension.name)}">
+              <input type="hidden" class="dim-key" value="${escAttr(dimension.key)}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">此面向配分</label>
+              <input type="number" name="rubric_dimension_weight" class="form-control dim-weight" value="${Number(dimension.weight)}" min="1" max="100" inputmode="numeric" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+            </div>
+          </div>
+          <div class="criteria">${dimension.criteria.map((criterion, criterionIndex) => criterionHtml(dimensionIndex, criterionIndex, criterion)).join('')}</div>
+          <button type="button" class="btn btn-sm btn-outline-primary mt-3 edit-only"
+            data-action="addCriterion" data-args='[${dimensionIndex}]'>
+            <i class="bi bi-plus"></i>新增評分項目
+          </button>
+        </div>`).join('');
+      updateTotal();
+      guardNumericInputsAgainstCredentialAutofill(dimensions);
+      dimensions.querySelectorAll('input[type=number]').forEach(element => element.addEventListener('input', updateTotal));
+    }
+
+    function collect() {
+      const definition = deep(current.definition);
+      definition.notes = rubricNotes.value.split('\n').map(note => note.trim()).filter(Boolean);
+      definition.dimensions = [...dimensions.querySelectorAll('.dimension')].map((dimensionElement, dimensionIndex) => ({
+        key: safeKey(dimensionElement.querySelector('.dim-key').value || `dimension_${dimensionIndex + 1}`),
+        name: dimensionElement.querySelector('.dim-name').value.trim(),
+        weight: Number(dimensionElement.querySelector('.dim-weight').value),
+        criteria: [...dimensionElement.querySelectorAll('[data-criterion]')].map((criterionElement, criterionIndex) => {
+          const levels = [...criterionElement.querySelectorAll('[data-level]')].map(levelElement => {
+            const points = Number(levelElement.querySelector('.level-points').value);
+            return {
+              value: points,
+              points,
+              label: levelElement.querySelector('.level-label').value.trim(),
+              anchor: levelElement.querySelector('.level-anchor').value.trim(),
+            };
+          });
+          const criterion = {
+            key: safeKey(criterionElement.querySelector('.criterion-key').value || `criterion_${dimensionIndex + 1}_${criterionIndex + 1}`),
+            name: criterionElement.querySelector('.criterion-name').value.trim(),
+            points: Number(criterionElement.querySelector('.criterion-points').value),
+            description: criterionElement.querySelector('.criterion-description').value.trim(),
+          };
+          if (levels.length) criterion.levels = levels;
+          return criterion;
+        }),
+      }));
+      return definition;
+    }
+
+    function updateTotal() {
+      const total = [...document.querySelectorAll('.dim-weight')]
+        .reduce((sum, element) => sum + Number(element.value || 0), 0);
+      scoreTotal.textContent = `所有評分面向合計：${total} / 100`;
+      scoreTotal.className = `align-self-center fw-bold ms-2 ${total === 100 ? 'text-success' : 'text-danger'}`;
+    }
+
+    function addLevel(event) {
+      const criterion = this.closest('[data-criterion]');
+      const levels = criterion.querySelector('.criterion-levels');
+      levels.querySelector('.shared-level-note')?.remove();
+      levels.insertAdjacentHTML('beforeend', levelRowHtml({ points: 0, label: '新級距', anchor: '請填寫評分描述' }));
+      const editable = isPrivileged && current.status === 'draft' && !current.is_archived;
+      levels.querySelectorAll('input,textarea').forEach(element => { element.disabled = !editable; });
+      guardNumericInputsAgainstCredentialAutofill(levels);
+    }
+
+    function removeLevel(event) {
+      const levels = this.closest('.criterion-levels');
+      this.closest('[data-level]')?.remove();
+      if (!levels.querySelector('[data-level]')) {
+        levels.innerHTML = '<p class="shared-level-note small text-muted mt-2 mb-0">目前使用左側的共用五級換算。</p>';
+      }
+    }
+
+    function addCriterion(dimensionIndex) {
+      current.definition = collect();
+      const dimension = current.definition.dimensions[dimensionIndex];
+      dimension.criteria.push({
+        key: `${dimension.key}_${Date.now()}`,
+        name: '新評分項目',
+        points: 1,
+        description: '請填寫評分說明',
+      });
+      renderDimensions();
+    }
+
+    function removeCriterion(dimensionIndex, criterionIndex) {
+      current.definition = collect();
+      const dimension = current.definition.dimensions[dimensionIndex];
+      if (dimension.criteria.length <= 1) {
+        showToast('每個評分面向至少保留一個項目', 'warning');
+        return;
+      }
+      dimension.criteria.splice(criterionIndex, 1);
+      renderDimensions();
+    }
+
+    async function saveDraft() {
+      const response = await fetch(`/api/admin/rubric-versions/${current.version_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: rubricName.value,
+          description: rubricDescription.value,
+          definition: collect(),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        showToast(data.detail || '儲存失敗', 'danger');
+        return false;
+      }
+      showToast('評分規準草稿已儲存', 'success');
+      current = data;
+      await loadRows(data.version_id);
+      return true;
+    }
+
+    async function publishVersion() {
+      if (!await confirmAdminAction('發布後不能直接修改，如需調整必須建立新版本。', {
+        title: '發布評分規準', confirmText: '發布', variant: 'success',
+      })) return;
+      if (!await saveDraft()) return;
+      const response = await fetch(`/api/admin/rubric-versions/${current.version_id}/publish`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) {
+        showToast(data.detail || '發布失敗', 'danger');
+        return;
+      }
+      showToast('評分規準已發布', 'success');
+      await loadRows(data.version_id);
+    }
+
+    async function cloneVersion() {
+      const response = await fetch(`/api/admin/rubric-versions/${current.version_id}/new-version`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) {
+        showToast(data.detail || '建立新版失敗', 'danger');
+        return;
+      }
+      await loadRows(data.version_id);
+    }
+
+    async function createRubric() {
+      const name = await promptAdminText('請為新的評分規準命名。', { title: '建立評分規準' });
+      if (!name) return;
+      const source = current ? collect() : rows[0]?.definition;
+      if (!source) {
+        showToast('目前沒有可作為起點的評分規準，請重新整理後再試。', 'warning');
+        return;
+      }
+      const response = await fetch('/api/admin/rubrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description: '', definition: source }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        showToast(data.detail || '建立失敗', 'danger');
+        return;
+      }
+      await loadRows(data.version_id);
+    }
+
+    async function deleteDraftVersion() {
+      if (!current || current.status !== 'draft') return;
+      const label = `${current.rubric_name} v${current.version_number}`;
+      if (!await confirmAdminAction(`確定刪除「${label}」？此草稿版本刪除後無法復原。`, {
+        title: '刪除草稿版本', confirmText: '刪除草稿', variant: 'danger',
+      })) return;
+      const response = await fetch(`/api/admin/rubric-versions/${current.version_id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const data = await response.json();
+        showToast(data.detail || '刪除失敗', 'danger');
+        return;
+      }
+      showToast('評分規準草稿版本已刪除', 'success');
+      current = null;
+      await loadRows();
+    }
+
+    async function archiveRubric() {
+      if (!await confirmAdminAction('封存後不可再指派給新作業。', {
+        title: '封存評分規準', confirmText: '封存', variant: 'danger',
+      })) return;
+      const response = await fetch(`/api/admin/rubrics/${current.rubric_id}/archive`, { method: 'POST' });
+      if (!response.ok) {
+        const data = await response.json();
+        showToast(data.detail || '封存失敗', 'danger');
+        return;
+      }
+      current = null;
+      await loadRows();
+    }
+
+    rubricNotes?.addEventListener('input', renderNotesPreview);
+    init();
+  </script>
+</body>
+</html>

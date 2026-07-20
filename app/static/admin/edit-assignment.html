@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>編輯作業 - AI 英語面試練習系統管理後台</title>
+  <meta name="description" content="修改英語面試練習作業設定" />
+  <meta property="og:title" content="編輯作業 - AI 英語面試練習系統" />
+  <meta property="og:description" content="修改英語面試練習作業設定" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/static/favicon.svg" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+  integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+  crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+  integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD"
+  crossorigin="anonymous" />
+  <link rel="stylesheet" href="/static/admin/css/common.css?v=3" />
+  <style>
+    .panel-title { font-size: 1rem; font-weight: 700; color: #1e293b; }
+    .stage-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: #eef2ff; color: #4f46e5; border-radius: 8px; padding: 0.3rem 0.8rem; font-size: 0.82rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .iq-section { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-top: 1rem; }
+    .prompt-select-wrap { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-admin navbar-expand-lg"></nav>
+  <div id="toastContainer"></div>
+
+  <div class="container py-4" style="max-width:960px">
+
+    <div id="loadingState" class="text-center py-5 text-muted">
+      <div class="spinner-border mb-3" role="status"></div>
+      <div>載入中...</div>
+    </div>
+
+    <div id="errorState" class="d-none text-center py-5">
+      <i class="bi bi-exclamation-triangle fs-1 text-danger opacity-50 d-block mb-3"></i>
+      <div class="text-muted" id="errorMsg">無法載入作業資料</div>
+      <a href="/admin/assignments" class="btn btn-outline-secondary mt-3">返回作業列表</a>
+    </div>
+
+    <div id="mainContent" class="d-none">
+      <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+        <a href="/admin/assignments" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-arrow-left me-1"></i>返回作業列表
+        </a>
+        <h5 class="fw-bold mb-0" id="pageTitle"><i class="bi bi-pencil me-2 text-warning"></i>編輯作業</h5>
+      </div>
+
+      <div id="globalAlert" class="alert d-none mb-3"></div>
+
+      <!-- Panel 1: 基本設定 -->
+      <div class="panel">
+        <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+          <span class="panel-title"><i class="bi bi-sliders me-2 text-primary"></i>基本設定</span>
+          <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-success" data-action="saveAll">
+              <i class="bi bi-check-lg me-1"></i>儲存
+            </button>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">標題 <span class="text-danger">*</span></label>
+          <input class="form-control" id="editTitle" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">說明</label>
+          <textarea class="form-control" id="editDesc" rows="2"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">
+            指定班級 <span class="text-muted small fw-normal">（留空則開放全部學生）</span>
+          </label>
+          <div id="editClassTagsWrap" class="tags-input-wrap border rounded p-2 d-flex flex-wrap gap-1 align-items-center" style="min-height:38px;cursor:text" data-action="focusTagInput" data-args='["editClassTagInput"]'>
+            <input id="editClassTagInput" class="border-0 flex-grow-1" style="min-width:80px;outline:none" placeholder="輸入課號後按 Enter 新增" data-action-keydown="handleTagKeyH" data-args='["editClassTagsWrap","editClassTagInput"]' autocomplete="off" readonly data-action-focus="clearReadonlyAttr" />
+          </div>
+          <div id="editClassHint" class="form-text text-muted mt-1"></div>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">開放日期</label>
+            <input type="hidden" id="editStartDate" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">截止日期</label>
+            <input type="hidden" id="editDueDate" />
+          </div>
+        </div>
+        <div class="alert alert-light border mb-1"><i class="bi bi-diagram-3 me-1 text-primary"></i>固定流程：欲應徵的職位 → 寫作 → 跟讀 → 角色扮演 → AI 回饋 → 心得撰寫</div>
+      </div>
+
+      <!-- Panel 2: 共用題組 -->
+      <div class="panel">
+        <div class="panel-title mb-4"><i class="bi bi-list-ol me-2 text-primary"></i>題目設定</div>
+        <div class="mb-1">
+          <label class="form-label fw-semibold">
+            寫作、跟讀與角色扮演題組
+            <span class="badge bg-primary ms-1">共用 4 題</span>
+          </label>
+          <select class="form-select" id="editQuestionSet" data-action-change="updateQuestionSetUI"></select>
+          <div class="form-text text-muted">公版題組可直接使用；改成自訂時才需要填寫四題。</div>
+          <div id="editQuestionPreview" class="bg-light border rounded p-3 mt-3"></div>
+          <div class="d-flex flex-column gap-2 mt-3 d-none" id="editCustomQuestions">
+            <div class="input-group">
+              <span class="input-group-text text-muted" style="width:2.5rem">Q1</span>
+              <input class="form-control" id="editQ0" placeholder="第 1 題題目" />
+            </div>
+            <div class="input-group">
+              <span class="input-group-text text-muted" style="width:2.5rem">Q2</span>
+              <input class="form-control" id="editQ1" placeholder="第 2 題題目" />
+            </div>
+            <div class="input-group">
+              <span class="input-group-text text-muted" style="width:2.5rem">Q3</span>
+              <input class="form-control" id="editQ2" placeholder="第 3 題題目" />
+            </div>
+            <div class="input-group">
+              <span class="input-group-text text-muted" style="width:2.5rem">Q4</span>
+              <input class="form-control" id="editQ3" placeholder="第 4 題題目" />
+            </div>
+            <div class="form-text text-muted">自訂模式必須填寫全部 4 題；修改只影響之後的新嘗試。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 3: AI 提示詞設定 -->
+      <div class="panel">
+        <div class="panel-title mb-4"><i class="bi bi-sliders2 me-2 text-primary"></i>AI 提示詞設定</div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">AI 情境主題說明 <span class="text-muted small fw-normal">（英文，供 Stage 3/6/8 AI 參考）</span></label>
+          <textarea class="form-control" id="editPromptContext" rows="2" placeholder="e.g. Personal background, self-introduction, motivation for applying, strengths and weaknesses"></textarea>
+        </div>
+
+        <!-- 草稿寫作提示詞選擇 (Stage 3) -->
+        <div class="prompt-select-wrap">
+          <div class="stage-badge mb-2"><i class="bi bi-pencil-square"></i>草稿寫作提示詞（Stage 3）</div>
+          <div class="text-muted small mb-2">AI 對學生草稿提供英文文法與表達回饋</div>
+          <select class="form-select" id="editS3Template">
+            <option value="">使用系統預設 — 面試主題寫作回饋提示詞</option>
+          </select>
+          <div class="form-text text-muted mt-1">
+            如需新增自訂提示詞，請至 <a href="/admin/prompts" target="_blank">提示詞管理</a> 頁面建立。
+          </div>
+        </div>
+
+        <!-- 面試官提示詞選擇 (Stage 6，roleplay only) -->
+        <div class="prompt-select-wrap" id="s6TemplateWrap">
+          <div class="stage-badge mb-2"><i class="bi bi-person-badge"></i>面試官提示詞（Stage 6）</div>
+          <div class="text-muted small mb-2">AI 扮演英文面試官進行口試對話（含安全規則）</div>
+          <select class="form-select" id="editS6Template">
+            <option value="">使用系統預設 — 面試官提示詞</option>
+          </select>
+          <div class="form-text text-muted mt-1">
+            如需新增自訂提示詞，請至 <a href="/admin/prompts" target="_blank">提示詞管理</a> 頁面建立。
+          </div>
+        </div>
+
+        <div class="prompt-select-wrap">
+          <div class="stage-badge mb-2"><i class="bi bi-bar-chart-line"></i>口語回饋提示詞（Stage 8）</div>
+          <select class="form-select" id="editS8Template"><option value="">使用系統預設 — 英語面試學習回饋提示詞</option></select>
+        </div>
+
+        <div class="prompt-select-wrap">
+          <div class="stage-badge mb-2"><i class="bi bi-ui-checks-grid"></i>批改用評分規準</div>
+          <select class="form-select" id="editRubric"></select>
+          <div class="form-text">已開始的提交保留原版本；變更只影響新的嘗試。</div>
+        </div>
+
+        <div class="text-muted small">
+          <i class="bi bi-info-circle me-1"></i>口語 AI 回饋（Stage 8）使用全系統共用的「英語面試學習回饋提示詞」，可於提示詞管理頁面查看。
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-between mb-5">
+        <a href="/admin/assignments" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>返回作業列表
+        </a>
+        <button class="btn btn-primary px-4" data-action="saveAll">
+          <i class="bi bi-check-circle me-1"></i>儲存全部
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/admin/js/common.js?v=8"></script>
+  <script src="/static/admin/js/date-time-picker.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+  integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+  crossorigin="anonymous"></script>
+  <script type="module" src="/static/admin/controllers/edit-assignment.mjs?v=4"></script>
+
+</body>
+</html>

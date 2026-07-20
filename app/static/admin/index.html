@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>系統總覽 - AI 英語面試練習系統管理後台</title>
+  <meta name="description" content="查看學生使用統計與作業狀態" />
+  <meta property="og:title" content="系統總覽 - AI 英語面試練習系統" />
+  <meta property="og:description" content="查看學生使用統計與作業狀態" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/static/favicon.svg" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+  integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+  crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+  integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD"
+  crossorigin="anonymous" />
+  <link rel="stylesheet" href="/static/admin/css/common.css?v=4" />
+  <style>
+    .stat-card {
+      background: white;
+      border-radius: 16px;
+      padding: 1.4rem 1.5rem;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .stat-icon {
+      width: 52px; height: 52px;
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem;
+      flex-shrink: 0;
+    }
+    .stat-value { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+    .stat-label { font-size: 0.82rem; color: #64748b; margin-top: 0.2rem; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-admin navbar-expand-lg"></nav>
+  <div id="toastContainer"></div>
+
+  <div class="container-fluid px-4 py-4">
+    <h5 class="fw-bold mb-4 text-slate-700">
+      <i class="bi bi-speedometer2 me-2 text-primary"></i>系統總覽
+    </h5>
+
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-4 col-xl-2">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#ede9fe;color:#6d28d9"><i class="bi bi-people-fill"></i></div>
+          <div>
+            <div class="stat-value text-primary" id="statStudents">-</div>
+            <div class="stat-label">學生總數</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-2">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#dbeafe;color:#1d4ed8"><i class="bi bi-journal-text"></i></div>
+          <div>
+            <div class="stat-value text-info" id="statAssignments">-</div>
+            <div class="stat-label">作業數</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-2">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#f1f5f9;color:#475569"><i class="bi bi-collection"></i></div>
+          <div>
+            <div class="stat-value text-secondary" id="statSubmissions">-</div>
+            <div class="stat-label">提交記錄</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-2">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#d1fae5;color:#065f46"><i class="bi bi-check-circle-fill"></i></div>
+          <div>
+            <div class="stat-value text-success" id="statCompleted">-</div>
+            <div class="stat-label">已完成</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-2">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fef3c7;color:#92400e"><i class="bi bi-lightning-charge-fill"></i></div>
+          <div>
+            <div class="stat-value text-warning" id="statApiToday">-</div>
+            <div class="stat-label">今日 API 用量</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-12">
+        <div class="section-card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-journal-text me-2 text-muted"></i>作業列表</span>
+            <a href="/admin/assignments" class="btn btn-primary"><i class="bi bi-gear me-1"></i><span class="button-label-nudge">管理</span></a>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="table-light">
+                <tr><th class="ps-3">標題</th><th>截止</th><th>狀態</th><th></th></tr>
+              </thead>
+              <tbody id="assignmentList">
+                <tr><td colspan="4" class="text-center text-muted py-4">
+                  <div class="spinner-border spinner-border-sm me-2"></div>載入中...
+                </td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/admin/js/common.js?v=8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+  integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+  crossorigin="anonymous"></script>
+  <script>
+    async function loadDashboard() {
+      await window._adminReady; // wait for refresh so the rotated session hash is valid
+      const [statsRes, assignRes] = await Promise.all([
+        fetch('/api/admin/dashboard', { headers: authHeaders() }),
+        fetch('/api/admin/assignments', { headers: authHeaders() }),
+      ]);
+
+      if (statsRes.status === 401 || statsRes.status === 403) { let m='登入逾期，請重新登入。'; try{const e=await statsRes.clone().json();if(e.detail)m=e.detail;}catch(_){} redirectAdminToLogin(m); return; }
+      if (!statsRes.ok) {
+        let m = '載入儀表板失敗，請稍後再試。';
+        try { const e = await statsRes.clone().json(); if (e.detail) m = e.detail; } catch (_) {}
+        showAlert(m);
+        return;
+      }
+
+      const stats = await statsRes.json();
+      document.getElementById('statStudents').textContent = stats.total_students;
+      document.getElementById('statAssignments').textContent = stats.total_assignments;
+      document.getElementById('statSubmissions').textContent = stats.total_submissions;
+      document.getElementById('statCompleted').textContent = stats.completed_submissions;
+      document.getElementById('statApiToday').textContent = stats.today_api_calls;
+
+      const atbody = document.getElementById('assignmentList');
+      if (assignRes.status === 401 || assignRes.status === 403) { let m='登入逾期，請重新登入。'; try{const e=await assignRes.clone().json();if(e.detail)m=e.detail;}catch(_){} redirectAdminToLogin(m); return; }
+      if (!assignRes.ok) {
+        let m = '載入近期作業失敗，請稍後再試。';
+        try { const e = await assignRes.clone().json(); if (e.detail) m = e.detail; } catch (_) {}
+        showAlert(m);
+        atbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">載入作業失敗</td></tr>';
+        return;
+      }
+      const assignments = await assignRes.json();
+      if (!Array.isArray(assignments)) {
+        showAlert('近期作業資料格式錯誤，請重新整理後再試。');
+        atbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">資料格式錯誤</td></tr>';
+        return;
+      }
+      if (assignments.length) {
+        const now = new Date();
+        atbody.innerHTML = assignments.slice(0,10).map(a => {
+          const overdue = a.is_active && a.due_date && now > new Date(a.due_date);
+          const stCls = !a.is_active ? 'bg-secondary' : overdue ? 'bg-danger' : 'bg-success';
+          const stTxt = !a.is_active ? '已關閉' : overdue ? '已截止' : '開放中';
+          return `
+          <tr>
+            <td class="ps-3 fw-semibold">${escHtml(a.title)}</td>
+            <td class="small text-muted">${a.due_date ? new Date(a.due_date).toLocaleDateString('zh-TW') : '—'}</td>
+            <td><span class="badge ${stCls}">${stTxt}</span></td>
+            <td><a href="/admin/assignments/${a.id}/results" class="btn btn-outline-primary py-0">查看學生作業</a></td>
+          </tr>`;
+        }).join('');
+      } else {
+        atbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">尚無作業</td></tr>';
+      }
+    }
+
+    loadDashboard();
+  </script>
+
+<footer style="text-align:center;padding:12px 0 8px;font-size:0.85rem;color:#888;">AI 英語面試練習系統 · Apache-2.0</footer>
+</body>
+</html>

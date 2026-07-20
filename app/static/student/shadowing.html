@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="AI 英語面試" />
+  <meta name="application-name" content="AI 英語面試" />
+  <meta name="theme-color" content="#4f46e5" />
+  <title>跟讀練習 - AI 英語面試練習系統</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <meta name="description" content="跟讀英語面試問答，強化口語流利度。" />
+  <meta property="og:title" content="跟讀練習 — AI 英語面試練習系統" />
+  <meta property="og:description" content="跟讀英語面試問答，強化口語流利度。" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/static/favicon.svg" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+  integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+  crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+  integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+"
+  crossorigin="anonymous" />
+  <link rel="stylesheet" href="/static/student/common.css?v=1" />
+  <style>
+    .feedback-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem 1.25rem; }
+    pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: inherit; }
+    .btn-outline-primary-custom { border: 2px solid #4f46e5; color: #4f46e5; background: white; border-radius: 10px; padding: 0.55rem 1.4rem; font-weight: 600; transition: all 0.15s; }
+    .btn-outline-primary-custom:hover { background: #4f46e5; color: white; }
+    .btn-record { background: linear-gradient(90deg, #ef4444, #dc2626); border: none; color: white; border-radius: 10px; padding: 0.55rem 1.4rem; font-weight: 600; }
+    .btn-stop { background: #475569; border: none; color: white; border-radius: 10px; padding: 0.55rem 1.4rem; font-weight: 600; }
+    audio { border-radius: 10px; width: 100%; max-width: 500px; }
+    .timer-display { font-size: 1.6rem; font-weight: 700; font-family: 'Courier New', monospace; color: #ef4444; }
+    .q-block { border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; background: white; }
+    .q-block.q-done { border-color: #a7f3d0; background: #f0fdf4; }
+    .q-block.q-active { border-color: #c7d2fe; background: #eef2ff; }
+    .q-block.q-locked { opacity: 0.5; pointer-events: none; }
+    .q-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.35rem; }
+    .q-label.done { color: #059669; }
+    .q-label.active { color: #4f46e5; }
+    .q-label.locked { color: #94a3b8; }
+    .q-question { font-weight: 600; font-size: 1rem; color: #1e293b; margin-bottom: 0.9rem; }
+    .q-subtitle { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem 1rem; font-size: 1rem; line-height: 1.8; white-space: pre-wrap; letter-spacing: 0.01em; margin-bottom: 1rem; color: #334155; }
+    .q-subtitle.sync-ready { cursor: text; }
+    .tts-word { appearance: none; border: 0; background: transparent; color: inherit; display: inline; margin: 0; padding: 0.05em 0.08em; border-radius: 0.28rem; font: inherit; line-height: inherit; letter-spacing: inherit; text-align: inherit; transition: background-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease; }
+    .tts-word:hover { background: #e0e7ff; color: #3730a3; }
+    .tts-word.is-past { color: #64748b; }
+    .tts-word.is-active { background: #4f46e5; color: #fff; box-shadow: 0 0 0 2px rgba(79,70,229,0.16); }
+    .tts-word:focus-visible { outline: 3px solid rgba(79,70,229,0.4); outline-offset: 2px; }
+    .tts-sync-note { color: #64748b; font-size: 0.78rem; margin: -0.55rem 0 1rem; }
+    @media (prefers-reduced-motion: reduce) { .tts-word { transition: none; } }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-custom navbar-expand-lg">
+    <div class="container">
+      <a class="navbar-brand text-white fw-bold" href="/student">
+        <i class="bi bi-arrow-left me-2"></i>返回作業列表
+      </a>
+      <div class="ms-auto d-flex align-items-center gap-3">
+        <span class="attempt-badge d-none" id="attemptBadge"></span>
+        <button class="btn btn-outline-light btn-sm" data-action="logout">
+          <i class="bi bi-box-arrow-right me-1"></i>登出
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <div id="toastContainer"></div>
+
+  <div class="container mt-4 mb-5" style="max-width: 860px;">
+    <div id="loadingMsg" class="text-center py-5">
+      <div class="spinner-border text-primary" style="width:3rem;height:3rem;"></div>
+      <p class="mt-3 text-muted">載入中...</p>
+    </div>
+
+    <div id="content" class="d-none">
+      <div class="mb-4">
+        <h3 id="assignmentTitle" class="fw-bold mb-1"></h3>
+        <p id="assignmentDesc" class="text-muted mb-1"></p>
+        <p id="dueDate" class="text-muted small mb-0"></p>
+      </div>
+      <div class="progress-steps" id="progressSteps"></div>
+      <div id="viewModeBanner" class="d-none mb-3"></div>
+      <div id="sectionContainer"></div>
+      <div class="section-nav" id="sectionNav"></div>
+    </div>
+  </div>
+
+  <script>window.CURRENT_SECTION = 3; window.PAGE_PATH = 'shadowing';</script>
+  <script src="/static/student/workflow.js?v=4"></script>
+  <script src="/static/student/common.js?v=22"></script>
+  <script src="/static/pwa.js?v=7"></script>
+  <script src="/static/student/practice-runtime.js?v=4"></script>
+  <script src="/static/student/tts-subtitles.js?v=2"></script>
+  <script type="module" src="/static/student/controllers/shadowing.mjs?v=4"></script>
+
+</body>
+</html>

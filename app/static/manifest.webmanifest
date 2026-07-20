@@ -1,0 +1,35 @@
+{
+  "id": "/student",
+  "name": "AI 英語面試練習系統",
+  "short_name": "AI 英語面試",
+  "description": "AI 輔助英語面試練習系統",
+  "lang": "zh-TW",
+  "start_url": "/student",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone"],
+  "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "/manifest.webmanifest"
+    }
+  ],
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/static/icons/pwa-icon-192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/pwa-icon-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

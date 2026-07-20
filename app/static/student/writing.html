@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="AI 英語面試" />
+  <meta name="application-name" content="AI 英語面試" />
+  <meta name="theme-color" content="#4f46e5" />
+  <title>寫作練習 - AI 英語面試練習系統</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <meta name="description" content="完成英語面試寫作練習，獲得 AI 練習回饋。" />
+  <meta property="og:title" content="寫作練習 — AI 英語面試練習系統" />
+  <meta property="og:description" content="完成英語面試寫作練習，獲得 AI 練習回饋。" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/static/favicon.svg" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+  integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+  crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+  integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+"
+  crossorigin="anonymous" />
+  <link rel="stylesheet" href="/static/student/common.css?v=1" />
+  <style>
+    .sub-step { border-left: 3px solid #e2e8f0; padding-left: 1.25rem; margin-bottom: 1.5rem; }
+    .sub-step.done { border-left-color: var(--success); }
+    .sub-step.active-step { border-left-color: var(--primary); }
+    .sub-step-label { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.5rem; }
+    .sub-step.done .sub-step-label { color: var(--success); }
+    .sub-step.active-step .sub-step-label { color: var(--primary); }
+    .feedback-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem 1.25rem; }
+    .correction-card { border-radius: 10px; border: 1px solid #fecaca; background: #fff5f5; padding: 0.85rem 1rem; margin-bottom: 0.75rem; }
+    .correction-card .cc-original { color: #dc2626; font-style: italic; margin-bottom: 0.4rem; }
+    .correction-card .cc-corrected { color: #065f46; font-weight: 600; margin-bottom: 0.4rem; }
+    .correction-card .cc-explanation { color: #475569; font-size: 0.85rem; }
+    .polished-box { border-left: 3px solid #4f46e5; padding: 0.8rem 1rem; background: #eef2ff; border-radius: 0 12px 12px 0; }
+    pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: inherit; }
+    .form-control-modern { border-radius: 12px; border: 1.5px solid #e2e8f0; padding: 0.9rem 1rem; transition: border-color 0.2s, box-shadow 0.2s; background: white; }
+    .form-control-modern:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,0.12); outline: none; }
+    .btn-outline-primary-custom { border: 2px solid #4f46e5; color: #4f46e5; background: white; border-radius: 10px; padding: 0.55rem 1.4rem; font-weight: 600; transition: all 0.15s; }
+    .btn-outline-primary-custom:hover { background: #4f46e5; color: white; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-custom navbar-expand-lg">
+    <div class="container">
+      <a class="navbar-brand text-white fw-bold" href="/student">
+        <i class="bi bi-arrow-left me-2"></i>返回作業列表
+      </a>
+      <div class="ms-auto d-flex align-items-center gap-3">
+        <span class="attempt-badge d-none" id="attemptBadge"></span>
+        <button class="btn btn-outline-light btn-sm" data-action="logout">
+          <i class="bi bi-box-arrow-right me-1"></i>登出
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <div id="toastContainer"></div>
+
+  <div class="container mt-4 mb-5" style="max-width: 860px;">
+    <div id="loadingMsg" class="text-center py-5">
+      <div class="spinner-border text-primary" style="width:3rem;height:3rem;"></div>
+      <p class="mt-3 text-muted">載入中...</p>
+    </div>
+
+    <div id="content" class="d-none">
+      <div class="mb-4">
+        <h3 id="assignmentTitle" class="fw-bold mb-1"></h3>
+        <p id="assignmentDesc" class="text-muted mb-1"></p>
+        <p id="dueDate" class="text-muted small mb-0"></p>
+      </div>
+      <div class="progress-steps" id="progressSteps"></div>
+      <div id="viewModeBanner" class="d-none mb-3"></div>
+      <div id="sectionContainer"></div>
+      <div class="section-nav" id="sectionNav"></div>
+    </div>
+  </div>
+
+  <script>window.CURRENT_SECTION = 2; window.PAGE_PATH = 'writing';</script>
+  <script src="/static/student/workflow.js?v=4"></script>
+  <script src="/static/student/common.js?v=22"></script>
+  <script src="/static/pwa.js?v=7"></script>
+  <script src="/static/student/practice-runtime.js?v=4"></script>
+  <script type="module" src="/static/student/controllers/writing.mjs?v=5"></script>
+
+</body>
+</html>

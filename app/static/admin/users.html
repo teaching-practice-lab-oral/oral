@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>使用者管理 - AI 英語面試練習系統管理後台</title>
+  <meta name="description" content="管理學生帳號與權限" />
+  <meta property="og:title" content="使用者管理 - AI 英語面試練習系統" />
+  <meta property="og:description" content="管理學生帳號與權限" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/static/favicon.svg" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+  integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+  crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+  integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD"
+  crossorigin="anonymous" />
+  <link rel="stylesheet" href="/static/admin/css/common.css?v=3" />
+  <style>
+    .main-card {
+      background: white;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      overflow: hidden;
+    }
+    .table tbody tr:hover { background: #f8fafc; }
+    .search-bar { max-width: 280px; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-admin navbar-expand-lg"></nav>
+  <div id="toastContainer"></div>
+
+  <div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+      <h5 class="fw-bold mb-0"><i class="bi bi-people me-2 text-primary"></i>使用者管理</h5>
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="input-group input-group-sm search-bar">
+          <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+          <input type="text" class="form-control" id="searchInput" placeholder="搜尋學號或姓名..." data-action-input="filterTable" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" />
+        </div>
+        <select class="form-select form-select-sm" id="classFilter" style="max-width:160px" data-action-change="filterTable">
+          <option value="">全部班級</option>
+        </select>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
+          <i class="bi bi-person-plus me-1"></i>新增使用者
+        </button>
+        <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#importModal">
+          <i class="bi bi-file-earmark-excel me-1"></i>匯入 XLSX
+        </button>
+      </div>
+    </div>
+
+    <div class="main-card">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0" id="usersTable">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">學號</th>
+              <th>姓名</th>
+              <th>電子郵件</th>
+              <th>班級（課號）</th>
+              <th>角色</th>
+              <th>狀態</th>
+              <th>建立日期</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody">
+            <tr><td colspan="8" class="text-center py-5">
+              <div class="spinner-border text-primary spinner-border-sm me-2"></div>載入中...
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div id="userCount" class="text-muted small mt-2 ps-1"></div>
+  </div>
+
+  <!-- 新增使用者 Modal -->
+  <div class="modal fade" id="createUserModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold"><i class="bi bi-person-plus me-2 text-primary"></i>新增使用者</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body pt-2">
+          <div id="createAlert" class="alert d-none"></div>
+          <form id="createForm">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">學號 <span class="text-danger">*</span></label>
+              <input class="form-control" id="newStudentId" placeholder="例：B10101001" required />
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">姓名 <span class="text-danger">*</span></label>
+              <input class="form-control" id="newName" required />
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">電子郵件 <span class="text-danger">*</span></label>
+              <input type="email" class="form-control" id="newEmail" required />
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">備用信箱 <span class="text-muted fw-normal">（選填）</span></label>
+              <input type="email" class="form-control" id="newBackupEmail" placeholder="推薦使用 gmail.com" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">班級（課號）</label>
+              <input class="form-control" id="newClassName" placeholder="例：A1234" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">密碼 <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <input type="password" class="form-control" id="newPassword" required autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+                <button class="btn btn-outline-secondary" type="button" data-action="fillRandomCreatePassword">
+                  <i class="bi bi-shuffle me-1"></i>隨機產生
+                </button>
+                <button class="btn btn-outline-secondary" type="button" data-action="togglePasswordVisibility" data-args='["newPassword"]' title="顯示密碼" aria-label="顯示密碼">
+                  <i class="bi bi-eye me-1"></i><span>顯示</span>
+                </button>
+              </div>
+              <div class="form-text">建立完成後會自動把這組密碼寄送到使用者信箱。</div>
+            </div>
+            <div class="mb-1">
+              <label class="form-label fw-semibold">角色</label>
+              <select class="form-select" id="newRole" data-action-change="toggleCreateBackupEmailAvailability">
+                <option value="student">學生</option>
+                <option value="admin">管理員</option>
+              </select>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-light" data-bs-dismiss="modal">取消</button>
+          <button class="btn btn-primary" id="createUserBtn" data-action="createUser">
+            <span id="createUserSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+            <i class="bi bi-check-lg me-1"></i><span id="createUserBtnLabel">建立</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 編輯備用信箱 Modal -->
+  <div class="modal fade" id="editBackupEmailModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold"><i class="bi bi-envelope-at me-2 text-primary"></i>設定備用信箱</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body pt-2">
+          <div id="editBackupEmailAlert" class="alert d-none"></div>
+          <p class="text-muted small mb-2">對象：<strong id="editBackupEmailName"></strong></p>
+          <input type="email" class="form-control" id="editBackupEmailValue" placeholder="留空則清除" />
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-light" data-bs-dismiss="modal">取消</button>
+          <button class="btn btn-primary" data-action="saveBackupEmail"><i class="bi bi-check-lg me-1"></i>儲存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 編輯班級 Modal -->
+  <div class="modal fade" id="editClassModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold"><i class="bi bi-mortarboard me-2 text-info"></i>設定班級</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body pt-2">
+          <div id="editClassAlert" class="alert d-none"></div>
+          <p class="text-muted small mb-2">對象：<strong id="editClassName"></strong></p>
+          <input class="form-control" id="editClassValue" placeholder="課號（留空則清除）" />
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-light" data-bs-dismiss="modal">取消</button>
+          <button class="btn btn-info text-white" data-action="saveClass"><i class="bi bi-check-lg me-1"></i>儲存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 匯入 XLSX Modal -->
+  <div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-excel me-2 text-success"></i>從 XLSX 匯入使用者</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body pt-2">
+          <div class="alert alert-light border small mb-3">
+            <i class="bi bi-info-circle me-1 text-info"></i>
+            Excel 欄位格式：<strong>A: 學號、B: 姓名、C: 電子郵件、D: 課號（選填）、E: 備用信箱（選填）</strong>（第一列為標題列）
+          </div>
+          <div id="importAlert" class="alert d-none"></div>
+          <input type="file" class="form-control" id="importFile" accept=".xlsx,.xls" />
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-light" data-bs-dismiss="modal">取消</button>
+          <button class="btn btn-success" data-action="importUsers">
+            <span id="importSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+            <i class="bi bi-upload me-1"></i>匯入
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 匯入結果 Modal -->
+  <div class="modal fade" id="importResultModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold"><i class="bi bi-check2-circle me-2 text-success"></i>匯入結果確認</h5>
+        </div>
+        <div class="modal-body">
+          <div id="importResultSummary" class="alert alert-success mb-3"></div>
+          <div id="importResultErrors" class="alert alert-warning d-none mb-3"></div>
+          <p class="text-muted small mb-2">以下使用者已成功建立，請確認後寄出帳號信件。密碼僅顯示一次，請妥善記錄。</p>
+          <div class="table-responsive">
+            <table class="table table-bordered table-sm mb-0" id="importResultTable">
+              <thead class="table-light">
+                <tr>
+                  <th>學號</th>
+                  <th>姓名</th>
+                  <th>電子郵件</th>
+                  <th>課號</th>
+                  <th>備用信箱</th>
+                  <th>初始密碼</th>
+                </tr>
+              </thead>
+              <tbody id="importResultBody"></tbody>
+            </table>
+          </div>
+          <div id="sendEmailProgressWrap" class="d-none mt-3">
+            <div class="d-flex justify-content-between small text-muted mb-1">
+              <span>寄送進度</span>
+              <span id="sendEmailProgressText">0 / 0</span>
+            </div>
+            <div class="progress" style="height: 8px;">
+              <div id="sendEmailProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                   role="progressbar" style="width: 0%;"></div>
+            </div>
+          </div>
+          <div id="sendEmailAlert" class="alert d-none mt-3"></div>
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-light" data-bs-dismiss="modal" data-action="loadUsers">關閉</button>
+          <button class="btn btn-outline-success" id="exportXlsxBtn" data-action="exportImportedXlsx">
+            <i class="bi bi-file-earmark-excel me-1"></i>匯出 XLSX
+          </button>
+          <button class="btn btn-primary" id="sendEmailsBtn" data-action="sendImportEmails">
+            <span id="sendEmailSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+            <i class="bi bi-envelope me-1"></i><span id="sendEmailsBtnLabel">寄出帳號信件</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 重設密碼 Modal -->
+  <div class="modal fade" id="resetPwModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold"><i class="bi bi-key me-2 text-warning"></i>重設密碼</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body pt-2">
+          <div id="resetAlert" class="alert d-none"></div>
+          <p class="text-muted small mb-3">重設密碼對象：<strong class="text-dark" id="resetUserName"></strong></p>
+          <div class="input-group mb-2">
+            <input type="password" class="form-control" id="newResetPassword" placeholder="請輸入新密碼" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+            <button class="btn btn-outline-secondary" type="button" data-action="fillRandomResetPassword">
+              <i class="bi bi-shuffle me-1"></i>隨機產生
+            </button>
+            <button class="btn btn-outline-secondary" type="button" data-action="togglePasswordVisibility" data-args='["newResetPassword"]' title="顯示密碼" aria-label="顯示密碼">
+              <i class="bi bi-eye me-1"></i><span>顯示</span>
+            </button>
+          </div>
+          <input type="password" class="form-control" id="resetAdminPassword" placeholder="請輸入您自己的管理員密碼以確認" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-light" data-bs-dismiss="modal">取消</button>
+          <button class="btn btn-warning" id="resetPwBtn" data-action="doReset">
+            <span id="resetPwSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+            <i class="bi bi-key me-1"></i><span id="resetPwBtnLabel">重設密碼</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 刪除使用者確認 Modal -->
+  <div class="modal fade" id="deleteUserModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold text-danger"><i class="bi bi-person-x me-2"></i>刪除使用者</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body pt-2">
+          <div id="deleteUserAlert" class="alert d-none"></div>
+          <div class="alert alert-danger border-0 py-2 small mb-3">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+            即將刪除：<strong id="deleteUserName"></strong>（<span id="deleteUserStudentId"></span>）<br>
+            此操作<strong>無法復原</strong>，該學生的所有作業紀錄將一併刪除。
+          </div>
+          <label class="form-label fw-semibold">請輸入您的管理員密碼以確認</label>
+          <input type="password" class="form-control" id="deleteUserPassword" placeholder="管理員密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-light" data-bs-dismiss="modal">取消</button>
+          <button class="btn btn-danger" data-action="confirmDeleteUser">
+            <i class="bi bi-person-x me-1"></i>確認刪除
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/admin/js/common.js?v=8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+  integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+  crossorigin="anonymous"></script>
+  <script>
+    function authHeaders(json=true) {
+      const h = {};
+      if (json) h['Content-Type'] = 'application/json';
+      return h;
+    }
+    function showAlert(id, msg, type='danger') {
+      if (id === 'alertBox') {
+        showToast(msg, type);
+        return;
+      }
+      const el = document.getElementById(id);
+      el.className = `alert alert-${type}`;
+      el.textContent = msg;
+    }
+
+    let allUsers = [];
+    let resetUserId = null;
+    let editClassUserId = null;
+    const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+
+    function generateRandomPassword(length=12) {
+      const values = new Uint32Array(length);
+      window.crypto.getRandomValues(values);
+      let password = '';
+      for (let i = 0; i < values.length; i++) {
+        password += PASSWORD_ALPHABET[values[i] % PASSWORD_ALPHABET.length];
+      }
+      return password;
+    }
+
+    function fillRandomCreatePassword() {
+      document.getElementById('newPassword').value = generateRandomPassword();
+    }
+
+    function fillRandomResetPassword() {
+      document.getElementById('newResetPassword').value = generateRandomPassword();
+    }
+
+    function getCurrentAdminId() {
+      return Number(sessionStorage.getItem('userId') || '0');
+    }
+
+    function isPrivilegedAdmin() {
+      return sessionStorage.getItem('isPrivilegedAdmin') === '1';
+    }
+
+    function isProtectedAdminUser(user) {
+      return !!(user && user.is_protected_admin);
+    }
+
+    function canToggleUserActive(user) {
+      if (user.id === getCurrentAdminId()) return false;
+      if (isProtectedAdminUser(user)) return false;
+      if (user.role === 'admin' && !isPrivilegedAdmin()) return false;
+      if (user.role === 'student' && !isPrivilegedAdmin()) return false;
+      return true;
+    }
+
+    function canDeleteUser(user) {
+      if (user.id === getCurrentAdminId()) return false;
+      if (isProtectedAdminUser(user)) return false;
+      if (user.role === 'admin' && !isPrivilegedAdmin()) return false;
+      if (user.role === 'student' && !isPrivilegedAdmin()) return false;
+      return true;
+    }
+
+    function canResetUserPassword(user) {
+      if (user.role === 'admin' && user.id !== getCurrentAdminId() && !isPrivilegedAdmin()) return false;
+      if (isProtectedAdminUser(user) && user.id !== getCurrentAdminId()) return false;
+      return true;
+    }
+
+    function canEditUserClass(user) {
+      if (user.role === 'admin' && !isPrivilegedAdmin()) return false;
+      if (isProtectedAdminUser(user)) return false;
+      return true;
+    }
+
+    function getToggleRestrictionReason(user) {
+      if (user.id === getCurrentAdminId()) return '不可停用自己的帳號';
+      if (isProtectedAdminUser(user)) return '此帳號不可停用';
+      if (user.role === 'admin' && !isPrivilegedAdmin()) return '只有指定管理員可管理管理員帳號';
+      if (user.role === 'student' && !isPrivilegedAdmin()) return '只有指定管理員可停用學生';
+      return '';
+    }
+
+    function getDeleteRestrictionReason(user) {
+      if (user.id === getCurrentAdminId()) return '不可刪除自己的帳號';
+      if (isProtectedAdminUser(user)) return '此帳號不可刪除';
+      if (user.role === 'admin' && !isPrivilegedAdmin()) return '只有指定管理員可管理管理員帳號';
+      if (user.role === 'student' && !isPrivilegedAdmin()) return '只有指定管理員可刪除學生';
+      return '';
+    }
+
+    function getResetRestrictionReason(user) {
+      if (user.role === 'admin' && user.id !== getCurrentAdminId() && !isPrivilegedAdmin()) return '只有指定管理員可管理管理員帳號';
+      if (isProtectedAdminUser(user) && user.id !== getCurrentAdminId()) return '不可直接重設受保護管理員的密碼';
+      return '';
+    }
+
+    function getEditClassRestrictionReason(user) {
+      if (user.role === 'admin' && !isPrivilegedAdmin()) return '只有指定管理員可管理管理員帳號';
+      if (isProtectedAdminUser(user)) return '受保護管理員不可被指定課號';
+      return '';
+    }
+
+    function togglePasswordVisibility(inputId) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const isHidden = input.type === 'password';
+      input.type = isHidden ? 'text' : 'password';
+      this.title = isHidden ? '隱藏密碼' : '顯示密碼';
+      this.setAttribute('aria-label', this.title);
+      this.innerHTML = isHidden
+        ? '<i class="bi bi-eye-slash me-1"></i><span>隱藏</span>'
+        : '<i class="bi bi-eye me-1"></i><span>顯示</span>';
+    }
+
+    async function loadClasses() {
+      const res = await fetch('/api/admin/classes', { headers: authHeaders() });
+      if (!res.ok) return;
+      const classes = await res.json();
+      const sel = document.getElementById('classFilter');
+      // keep first "全部班級" option
+      while (sel.options.length > 1) sel.remove(1);
+      classes.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        sel.appendChild(opt);
+      });
+    }
+
+    async function loadUsers() {
+      await window._adminReady;
+      if (!isPrivilegedAdmin()) {
+        const adminOption = document.querySelector('#newRole option[value="admin"]');
+        if (adminOption) adminOption.disabled = true;
+        document.getElementById('newRole').value = 'student';
+      }
+      const res = await fetch('/api/admin/users?limit=500', { headers: authHeaders() });
+      if (res.status === 401) { redirectAdminToLogin(); return; }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showAlert('alertBox', data.detail || '載入使用者列表失敗，請稍後再試。');
+        allUsers = [];
+        filterTable();
+        return;
+      }
+      const data = await res.json();
+      allUsers = Array.isArray(data.users) ? data.users : [];
+      if (!Array.isArray(data.users)) {
+        showAlert('alertBox', '使用者列表格式錯誤，請重新整理後再試。');
+      }
+      await loadClasses();
+      filterTable();
+    }
+
+    function filterTable() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const cls = document.getElementById('classFilter').value;
+      let filtered = allUsers;
+      if (q) filtered = filtered.filter(u =>
+        (u.student_id||'').toLowerCase().includes(q) ||
+        (u.name||'').toLowerCase().includes(q) ||
+        (u.email||'').toLowerCase().includes(q) ||
+        (u.backup_email||'').toLowerCase().includes(q)
+      );
+      if (cls) filtered = filtered.filter(u => (u.course_num || '') === cls);
+      renderUsers(filtered);
+    }
+
+    function renderUsers(users) {
+      const tbody = document.getElementById('usersBody');
+      document.getElementById('userCount').textContent = `共 ${users.length} 位使用者`;
+      if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">尚無使用者資料</td></tr>';
+        return;
+      }
+      tbody.innerHTML = users.map(u => `
+        ${(() => {
+          const canToggle = canToggleUserActive(u);
+          const canDelete = canDeleteUser(u);
+          const canReset = canResetUserPassword(u);
+          const canEditClass = canEditUserClass(u);
+          const toggleReason = getToggleRestrictionReason(u);
+          const deleteReason = getDeleteRestrictionReason(u);
+          const resetReason = getResetRestrictionReason(u);
+          const editClassReason = getEditClassRestrictionReason(u);
+          const toggleAttrs = canToggle
+            ? `data-action-change="toggleActiveH" data-args='[${u.id}]' title="${u.is_active ? '啟用中（點擊停用）' : '已停用（點擊啟用）'}"`
+            : `disabled title="${escAttr(toggleReason || '無法變更狀態')}"`;
+          const editClassButton = canEditClass
+            ? `<button class="btn btn-outline-info btn-sm" data-action="openEditClassH" data-id="${u.id}" data-name="${escAttr(u.name)}" data-course="${escAttr(u.course_num||'')}" title="設定班級">
+                <i class="bi bi-mortarboard"></i>
+              </button>`
+            : `<button class="btn btn-outline-secondary btn-sm" disabled title="${escAttr(editClassReason || '無法設定課號')}">
+                <i class="bi bi-mortarboard"></i>
+              </button>`;
+          const backupEmailButton = u.role === 'student'
+            ? `<button class="btn btn-outline-primary btn-sm" data-action="openBackupEmail" data-args='[${u.id}]' title="設定備用信箱">
+                <i class="bi bi-envelope-at"></i>
+              </button>`
+            : `<button class="btn btn-outline-secondary btn-sm" disabled title="僅學生可設定備用信箱">
+                <i class="bi bi-envelope-at"></i>
+              </button>`;
+          const resetButton = canReset
+            ? `<button class="btn btn-outline-warning btn-sm" data-action="openResetH" data-id="${u.id}" data-name="${escAttr(u.name)}" title="重設密碼">
+                <i class="bi bi-key"></i>
+              </button>`
+            : `<button class="btn btn-outline-secondary btn-sm" disabled title="${escAttr(resetReason || '無法重設密碼')}">
+                <i class="bi bi-key"></i>
+              </button>`;
+          const deleteButton = canDelete
+            ? `<button class="btn btn-outline-danger btn-sm" data-action="openDeleteUserH" data-id="${u.id}" data-name="${escAttr(u.name)}" data-sid="${escAttr(u.student_id)}" title="刪除使用者">
+                <i class="bi bi-trash"></i>
+              </button>`
+            : `<button class="btn btn-outline-secondary btn-sm" disabled title="${escAttr(deleteReason || '無法刪除')}">
+                <i class="bi bi-lock"></i>
+              </button>`;
+          return `
+        <tr>
+          <td class="ps-3"><code class="text-primary">${escHtml(u.student_id)}</code></td>
+          <td class="fw-semibold">${escHtml(u.name)}</td>
+          <td class="text-muted small">
+            <div>${escHtml(u.email)}</div>
+            <div class="mt-1">備用：${u.backup_email ? escHtml(u.backup_email) : '<span class="text-muted">—</span>'}</div>
+          </td>
+          <td>
+            ${u.course_num
+              ? `<span class="badge bg-info text-white">${escHtml(u.course_num)}</span>`
+              : '<span class="text-muted small">—</span>'}
+          </td>
+          <td>
+            <span class="badge ${u.role==='admin' ? 'bg-danger' : 'bg-primary'}">
+              <i class="bi bi-${u.role==='admin' ? 'shield-fill' : 'person-fill'} me-1"></i>
+              ${u.role==='admin' ? '管理員' : '學生'}
+            </span>
+            <div class="small text-muted mt-1">角色不可變更</div>
+          </td>
+          <td>
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" ${u.is_active ? 'checked' : ''}
+                ${toggleAttrs} />
+            </div>
+          </td>
+          <td class="small text-muted">${new Date(u.created_at).toLocaleDateString('zh-TW')}</td>
+          <td>
+            <div class="d-flex gap-1 align-items-center flex-wrap">
+              ${editClassButton}
+              ${backupEmailButton}
+              ${resetButton}
+              ${deleteButton}
+            </div>
+          </td>
+        </tr>`;
+        })()}
+      `).join('');
+    }
+
+    async function createUser() {
+      const form = document.getElementById('createForm');
+      const btn = document.getElementById('createUserBtn');
+      const spinner = document.getElementById('createUserSpinner');
+      if (btn.disabled) return;
+      if (!form.reportValidity()) return;
+      const payload = {
+        student_id: document.getElementById('newStudentId').value.trim(),
+        name: document.getElementById('newName').value.trim(),
+        email: document.getElementById('newEmail').value.trim(),
+        backup_email: document.getElementById('newBackupEmail').value.trim() || null,
+        course_num: document.getElementById('newClassName').value.trim() || null,
+        password: document.getElementById('newPassword').value,
+        role: document.getElementById('newRole').value,
+      };
+      btn.disabled = true;
+      spinner.classList.remove('d-none');
+      try {
+        const res = await fetch('/api/admin/users', {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { showAlert('createAlert', data.detail || '建立使用者時發生錯誤'); return; }
+        document.getElementById('createForm').reset();
+        document.getElementById('createAlert').className = 'alert d-none';
+        bootstrap.Modal.getInstance(document.getElementById('createUserModal')).hide();
+        showAlert('alertBox', data.message || '使用者建立成功！', data.email_sent === false ? 'warning' : 'success');
+        loadUsers();
+      } catch (e) {
+        showAlert('createAlert', '建立使用者時發生錯誤：' + (e && e.message ? e.message : e));
+      } finally {
+        btn.disabled = false;
+        spinner.classList.add('d-none');
+      }
+    }
+
+    function toggleCreateBackupEmailAvailability() {
+      const isStudent = document.getElementById('newRole').value === 'student';
+      const input = document.getElementById('newBackupEmail');
+      input.disabled = !isStudent;
+      if (!isStudent) input.value = '';
+      input.placeholder = isStudent ? '推薦使用 gmail.com' : '僅學生可設定';
+    }
+
+    function openEditClass(userId, name, currentClass) {
+      editClassUserId = userId;
+      document.getElementById('editClassName').textContent = name;
+      document.getElementById('editClassValue').value = currentClass;
+      document.getElementById('editClassAlert').className = 'alert d-none';
+      new bootstrap.Modal(document.getElementById('editClassModal')).show();
+    }
+
+    async function saveClass() {
+      const val = document.getElementById('editClassValue').value.trim();
+      const res = await fetch(`/api/admin/users/${editClassUserId}`, {
+        method: 'PATCH', headers: authHeaders(),
+        body: JSON.stringify({ course_num: val || '' })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showAlert('editClassAlert', data.detail || '儲存失敗');
+        return;
+      }
+      bootstrap.Modal.getInstance(document.getElementById('editClassModal')).hide();
+      showAlert('alertBox', '班級已更新！', 'success');
+      loadUsers();
+    }
+
+    let editBackupEmailUserId = null;
+
+    function openBackupEmail(userId) {
+      const user = allUsers.find(item => Number(item.id) === Number(userId));
+      if (!user) {
+        showAlert('alertBox', '找不到使用者資料，請重新整理頁面後再試。');
+        return;
+      }
+      editBackupEmailUserId = userId;
+      document.getElementById('editBackupEmailName').textContent = user.name;
+      document.getElementById('editBackupEmailValue').value = user.backup_email || '';
+      document.getElementById('editBackupEmailAlert').className = 'alert d-none';
+      new bootstrap.Modal(document.getElementById('editBackupEmailModal')).show();
+    }
+
+    async function saveBackupEmail() {
+      const input = document.getElementById('editBackupEmailValue');
+      if (!input.checkValidity()) { input.reportValidity(); return; }
+      const value = input.value.trim();
+      const res = await fetch(`/api/admin/users/${editBackupEmailUserId}`, {
+        method: 'PATCH', headers: authHeaders(),
+        body: JSON.stringify({ backup_email: value || null })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert('editBackupEmailAlert', data.detail || '儲存失敗');
+        return;
+      }
+      bootstrap.Modal.getInstance(document.getElementById('editBackupEmailModal')).hide();
+      showAlert('alertBox', '備用信箱已更新！', 'success');
+      loadUsers();
+    }
+
+    let pendingImportUsers = [];
+    let importedForExport = [];  // kept for XLSX export even after emails are sent
+
+    async function importUsers() {
+      const file = document.getElementById('importFile').files[0];
+      if (!file) { showAlert('importAlert', '請選擇檔案'); return; }
+      const spinner = document.getElementById('importSpinner');
+      spinner.classList.remove('d-none');
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/admin/users/import', {
+        method: 'POST', body: fd
+      });
+      const data = await res.json();
+      spinner.classList.add('d-none');
+      if (!res.ok) { showAlert('importAlert', data.detail || '匯入時發生錯誤'); return; }
+
+      bootstrap.Modal.getInstance(document.getElementById('importModal')).hide();
+
+      pendingImportUsers = data.imported_users || [];
+      importedForExport = (data.imported_users || []).slice();
+      const summary = document.getElementById('importResultSummary');
+      summary.innerHTML = `<i class="bi bi-check-circle me-2"></i>匯入完成：成功建立 <strong>${data.created}</strong> 筆，略過 <strong>${data.skipped}</strong> 筆。`;
+
+      const errBox = document.getElementById('importResultErrors');
+      if (data.errors && data.errors.length) {
+        errBox.innerHTML = '<strong>警告：</strong>' + escHtml(data.errors.join('；'));
+        errBox.classList.remove('d-none');
+      } else {
+        errBox.classList.add('d-none');
+      }
+
+      const tbody = document.getElementById('importResultBody');
+      if (pendingImportUsers.length) {
+        tbody.innerHTML = pendingImportUsers.map(u => `
+          <tr>
+            <td><code>${escHtml(u.student_id)}</code></td>
+            <td>${escHtml(u.name)}</td>
+            <td class="text-muted small">${escHtml(u.email)}</td>
+            <td>${u.course_num ? `<span class="badge bg-info">${escHtml(u.course_num)}</span>` : '<span class="text-muted">—</span>'}</td>
+            <td class="text-muted small">${u.backup_email ? escHtml(u.backup_email) : '—'}</td>
+            <td><code class="text-danger fw-bold">${escHtml(u.password)}</code></td>
+          </tr>`).join('');
+        document.getElementById('sendEmailsBtn').classList.remove('d-none');
+        document.getElementById('exportXlsxBtn').classList.remove('d-none');
+      } else {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">無新增使用者</td></tr>';
+        document.getElementById('sendEmailsBtn').classList.add('d-none');
+        document.getElementById('exportXlsxBtn').classList.add('d-none');
+      }
+
+      document.getElementById('sendEmailAlert').className = 'alert d-none';
+      document.getElementById('importFile').value = '';
+      new bootstrap.Modal(document.getElementById('importResultModal')).show();
+    }
+
+    async function exportImportedXlsx() {
+      if (!importedForExport.length) { showAlert('sendEmailAlert', '沒有可匯出的帳號資料，請先匯入。', 'warning'); return; }
+      const btn = document.getElementById('exportXlsxBtn');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/admin/users/export-batch-xlsx', {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify({ users: importedForExport })
+        });
+        if (!res.ok) { showAlert('sendEmailAlert', '匯出失敗，請稍後再試。', 'danger'); return; }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'imported_accounts.xlsx';
+        document.body.appendChild(a);   // Firefox needs the anchor in the DOM
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);  // revoke late so the download isn't aborted
+      } catch (e) {
+        showAlert('sendEmailAlert', '匯出時發生錯誤：' + (e && e.message ? e.message : e), 'danger');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function updateSendProgress(sent, failed, total) {
+      const done = sent + failed;
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      const bar = document.getElementById('sendEmailProgressBar');
+      bar.style.width = pct + '%';
+      bar.classList.toggle('bg-danger', failed > 0);
+      document.getElementById('sendEmailProgressText').textContent =
+        `${done} / ${total}` + (failed ? `（失敗 ${failed}）` : '');
+    }
+
+    async function sendImportEmails() {
+      if (!pendingImportUsers.length) return;
+      const btn = document.getElementById('sendEmailsBtn');
+      const spinner = document.getElementById('sendEmailSpinner');
+      const alertEl = document.getElementById('sendEmailAlert');
+      const progressWrap = document.getElementById('sendEmailProgressWrap');
+      btn.disabled = true;
+      spinner.classList.remove('d-none');
+      alertEl.className = 'alert d-none';
+
+      // Snapshot the batch being sent so we can map failed emails back to user rows for retry.
+      const batch = pendingImportUsers.slice();
+
+      const res = await fetch('/api/admin/users/send-import-emails', {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ users: batch })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        btn.disabled = false;
+        spinner.classList.add('d-none');
+        alertEl.className = 'alert alert-danger mt-3';
+        alertEl.textContent = data.detail || '寄送失敗';
+        return;
+      }
+
+      // Background job started — poll its status until done.
+      progressWrap.classList.remove('d-none');
+      updateSendProgress(0, 0, data.total);
+
+      let pollFailures = 0;
+      const poll = async () => {
+        let st;
+        try {
+          const r = await fetch(`/api/admin/users/send-import-emails/${data.job_id}`, { headers: authHeaders() });
+          if (r.status === 401) { redirectAdminToLogin(); return; }
+          if (r.status === 404) throw new Error('寄信作業已不存在，請重新啟動。');
+          if (!r.ok) throw new Error('status ' + r.status);
+          st = await r.json();
+          pollFailures = 0;
+        } catch (e) {
+          pollFailures += 1;
+          if (pollFailures < 4 && !String(e.message).includes('已不存在')) {
+            setTimeout(poll, 2000);
+            return;
+          }
+          btn.disabled = false;
+          spinner.classList.add('d-none');
+          alertEl.className = 'alert alert-danger mt-3';
+          alertEl.textContent = e.message || '無法取得寄信進度，請稍後重試。';
+          return;
+        }
+        updateSendProgress(st.sent, st.failed, st.total);
+        if (!st.done) { setTimeout(poll, 1500); return; }
+
+        // Finished.
+        btn.disabled = false;
+        spinner.classList.add('d-none');
+        const failedSet = new Set(st.failed_emails || []);
+        if (failedSet.size) {
+          // Keep only the failed users so the admin can retry just those.
+          pendingImportUsers = batch.filter(u => failedSet.has(u.email));
+          document.getElementById('sendEmailsBtnLabel').textContent = `重寄失敗 (${pendingImportUsers.length})`;
+          alertEl.className = 'alert alert-warning mt-3';
+          alertEl.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>已寄出 <strong>${st.sent}</strong> 封，失敗 <strong>${st.failed}</strong> 封：` +
+            `<div class="small mt-1">${escHtml((st.failed_emails || []).join('、'))}</div>`;
+        } else {
+          alertEl.className = 'alert alert-success mt-3';
+          alertEl.innerHTML = `<i class="bi bi-check-circle me-2"></i>已成功寄出全部 <strong>${st.sent}</strong> 封信件。`;
+          btn.classList.add('d-none');
+          progressWrap.classList.add('d-none');
+          pendingImportUsers = [];
+        }
+      };
+      setTimeout(poll, 1200);
+    }
+
+    function openReset(userId, name) {
+      resetUserId = userId;
+      document.getElementById('resetUserName').textContent = name;
+      document.getElementById('newResetPassword').value = '';
+      document.getElementById('resetAdminPassword').value = '';
+      document.getElementById('resetAlert').className = 'alert d-none';
+      new bootstrap.Modal(document.getElementById('resetPwModal')).show();
+    }
+
+    async function doReset() {
+      const btn = document.getElementById('resetPwBtn');
+      const spinner = document.getElementById('resetPwSpinner');
+      if (btn.disabled) return;
+      const pw = document.getElementById('newResetPassword').value;
+      const adminPw = document.getElementById('resetAdminPassword').value;
+      if (!pw) { showAlert('resetAlert', '請輸入新密碼'); return; }
+      if (!adminPw) { showAlert('resetAlert', '請輸入您的管理員密碼以確認'); return; }
+      btn.disabled = true;
+      spinner.classList.remove('d-none');
+      try {
+        const res = await fetch(`/api/admin/users/${resetUserId}/reset-password`, {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify({ new_password: pw, admin_password: adminPw })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 403) { showAlert('resetAlert', data.detail || '無法重設密碼'); return; }
+        if (!res.ok) { showAlert('resetAlert', data.detail || '發生錯誤'); return; }
+        bootstrap.Modal.getInstance(document.getElementById('resetPwModal')).hide();
+        showAlert('alertBox', data.message || '密碼重設成功！', data.email_sent === false ? 'warning' : 'success');
+      } catch (e) {
+        showAlert('resetAlert', '發生錯誤：' + (e && e.message ? e.message : e));
+      } finally {
+        btn.disabled = false;
+        spinner.classList.add('d-none');
+      }
+    }
+
+    async function toggleActive(userId, active, checkbox) {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ is_active: active })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.detail || '操作失敗', 'danger');
+        checkbox.checked = !active;
+      }
+    }
+
+    let deleteUserId = null;
+
+    function openDeleteUser(id, name, studentId) {
+      deleteUserId = id;
+      document.getElementById('deleteUserName').textContent = name;
+      document.getElementById('deleteUserStudentId').textContent = studentId;
+      document.getElementById('deleteUserPassword').value = '';
+      document.getElementById('deleteUserAlert').className = 'alert d-none';
+      new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
+    }
+
+    async function confirmDeleteUser() {
+      const pw = document.getElementById('deleteUserPassword').value;
+      if (!pw) { showAlert('deleteUserAlert', '請輸入密碼'); return; }
+      const res = await fetch(`/api/admin/users/${deleteUserId}/delete`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ admin_password: pw })
+      });
+      if (res.status === 403) {
+        const data = await res.json().catch(() => ({}));
+        showAlert('deleteUserAlert', data.detail || '無法刪除');
+        return;
+      }
+      if (res.status === 400) {
+        const data = await res.json().catch(() => ({}));
+        showAlert('deleteUserAlert', data.detail || '無法刪除');
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showAlert('deleteUserAlert', data.detail || '刪除失敗，請稍後再試');
+        return;
+      }
+      bootstrap.Modal.getInstance(document.getElementById('deleteUserModal')).hide();
+      showAlert('alertBox', '使用者已成功刪除。', 'success');
+      loadUsers();
+    }
+
+    loadUsers();
+  </script>
+
+</body>
+</html>
