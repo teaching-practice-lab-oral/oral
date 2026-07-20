@@ -137,54 +137,110 @@ cp .env.example .env.production
 nano .env.production
 ```
 
-依照以下說明逐一填寫，**不要留下範例的假值**：
+依照以下說明逐一填寫，**不要留下範例的假值**；這份內容也對應 [.env.example](.env.example) 與 `config.py` 的設定項目：
 
 ```env
 # ── 資料庫 ──────────────────────────────────────────────────
 POSTGRES_USER=oral
-POSTGRES_PASSWORD=請換成你自己的密碼          # 例如 MyStr0ngPwd!
+POSTGRES_PASSWORD=replace-with-a-long-random-database-password
 POSTGRES_DB=oraldb
-DATABASE_URL=postgresql://oral:請換成你自己的密碼@db:5432/oraldb
-# 注意：DATABASE_URL 裡的密碼要和 POSTGRES_PASSWORD 一樣
+DATABASE_URL=postgresql://oral:replace-with-a-long-random-database-password@db:5432/oraldb
 
-# ── JWT 金鑰 ─────────────────────────────────────────────────
+# ── JWT / 使用者會話 ────────────────────────────────────────
 # 用以下指令產生一個安全的亂數金鑰：
 # python3 -c "import secrets; print(secrets.token_hex(32))"
-SECRET_KEY=貼上剛產生的金鑰
+SECRET_KEY=
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_HOURS=8
+SESSION_TOUCH_SECONDS=60
+STUDENT_ONLINE_LIMIT=200
+STUDENT_PRESENCE_TTL_SECONDS=300
+DB_POOL_SIZE=10
+DB_MAX_OVERFLOW=10
+DB_POOL_TIMEOUT=10
+DB_POOL_RECYCLE=1800
 
 # ── OpenAI ───────────────────────────────────────────────────
 OPENAI_API_KEY=sk-...
 
 # ── Oracle Object Storage ────────────────────────────────────
 OCI_ENDPOINT_URL=https://<namespace>.compat.objectstorage.<region>.oraclecloud.com
-OCI_ACCESS_KEY_ID=你的-access-key-id
-OCI_SECRET_ACCESS_KEY=你的-secret-access-key
-OCI_BUCKET_NAME=oral-audio          # 要和你建立的 Bucket 名稱一致
-OCI_REGION=ap-tokyo-1               # 依你的 Bucket 所在區域填寫
+OCI_ACCESS_KEY_ID=your-oci-access-key-id
+OCI_SECRET_ACCESS_KEY=your-oci-secret-access-key
+OCI_BUCKET_NAME=oral-audio
+OCI_REGION=ap-tokyo-1
 
-# ── SMTP 寄件設定─────────────────────────────────────
+# ── 郵件設定 ─────────────────────────────────────────────────
 MAIL_HOST=smtp.example.com
 MAIL_PORT=587
-MAIL_USER=你的-SMTP-使用者名稱
-MAIL_PASSWORD=你的-SMTP-密碼
-MAIL_FROM=已驗證的寄件信箱
-MAIL_FROM_NAME=英文口試練習系統     # 寄件者顯示名稱
-MAIL_REPLY_TO=回覆信箱
+MAIL_USER=your-smtp-username
+MAIL_USERNAME=
+MAIL_PASSWORD=your-smtp-password
+MAIL_FROM=your-email@example.com
+MAIL_FROM_NAME=AI 英文口試練習系統
+MAIL_REPLY_TO=reply-to@example.com
+MAIL_REPLY_TO_NAME=Your Name
+PASSWORD_RESET_ADMIN_EMAIL=security-contact@example.com
+REMINDER_EXCLUDED_EMAILS=
+MAIL_SIGNATURE_HTML=
 MAIL_STARTTLS=true
 MAIL_SSL_TLS=false
-MAIL_SIGNATURE_HTML=                # 可選：信件頁尾 HTML，留空也沒關係
+MAIL_SERVER=
 
 # ── Cloudflare Turnstile ─────────────────────────────────────
-TURNSTILE_SECRET_KEY=你的-turnstile-secret-key
-TURNSTILE_SITE_KEY=你的-turnstile-site-key
+TURNSTILE_SECRET_KEY=your-turnstile-secret-key
+TURNSTILE_SITE_KEY=your-turnstile-site-key
 
 # ── 應用程式 ─────────────────────────────────────────────────
 APP_ENV=production
 APP_ENV_FILE=.env.production
-oral_IMAGE=你的-registry/oral@sha256:填入本次建置映像的-digest
-CORS_ORIGINS=https://你的網域.com   # 或 http://你的伺服器IP:7682
+# production compose 需要固定的 image digest，不能用可變的 :latest
+MEET_IMAGE=your-registry/meet@sha256:replace-with-built-image-digest
+PUBLIC_BASE_URL=https://your-domain.example.com
+WORKER_ONLY=false
+CORS_ORIGINS=https://your-domain.example.com
+TRUSTED_HOSTS=your-domain.example.com
+TRUSTED_PROXY_IPS=127.0.0.1,::1
+MAX_REQUEST_BODY_BYTES=58720256
+WORKER_MAX_REQUEST_BODY_BYTES=75497472
+WORKER_MAX_TTS_CHARS=20000
+WORKER_MAX_AUDIO_BASE64_CHARS=70000000
+FORWARDED_ALLOW_IPS=127.0.0.1
+PROTECTED_ADMIN_STUDENT_ID=12345678
+GUNICORN_WORKERS=4
+
+# ── API 使用量限制 ─────────────────────────────────────────
+STAGE_HOURLY_LIMIT=20
+DAILY_API_LIMIT=40
+MAX_AUDIO_SECONDS=300
+
+# ── 保留與清理 ─────────────────────────────────────────────
+LOGIN_EVENT_RETENTION_DAYS=180
+ADMIN_AUDIT_RETENTION_DAYS=365
+API_USAGE_RETENTION_DAYS=90
+PROCTOR_EVENT_RETENTION_DAYS=365
+MAINTENANCE_CLEANUP_INTERVAL_SECONDS=86400
+PASSWORD_RESET_EXPIRE_HOURS=72
+PASSWORD_RESET_USER_DAILY_LIMIT=3
+PASSWORD_RESET_IP_HOURLY_LIMIT=10
+
+# ── 併發控制 ────────────────────────────────────────────────
+OPENAI_CHAT_MODEL=gpt-5.4-mini
+OPENAI_WHISPER_MODEL=whisper-1
+OPENAI_TTS_MODEL=gpt-4o-mini-tts
+TTS_VOICE=ash
+TTS_SPEED=0.95
+OPENAI_MAX_CONCURRENCY=15
+TTS_MAX_CONCURRENCY=10
+AUDIO_PROCESSING_MAX_CONCURRENCY=20
+
+# ── 可選的 CHT / Taiwan worker offload ─────────────────────
+CHT_WORKER_ENABLED=false
+CHT_WORKER_BASE_URL=https://worker.example.com
+CHT_WORKER_WEIGHT=0.5
+CHT_WORKER_SECRET=replace-with-a-long-random-worker-secret
+CHT_WORKER_TIMEOUT_SECONDS=90
+CHT_WORKER_COOLDOWN_SECONDS=60
 ```
 
 > `MAIL_PASSWORD` 請填入 SMTP 服務商核發的密碼，不一定與帳號登入密碼相同。
