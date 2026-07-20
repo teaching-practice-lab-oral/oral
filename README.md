@@ -185,7 +185,6 @@ APP_ENV=production
 APP_ENV_FILE=.env.production
 oral_IMAGE=你的-registry/oral@sha256:填入本次建置映像的-digest
 CORS_ORIGINS=https://你的網域.com   # 或 http://你的伺服器IP:7682
-TUNNEL_TOKEN=你的-cloudflare-tunnel-token
 ```
 
 > `MAIL_PASSWORD` 請填入 SMTP 服務商核發的密碼，不一定與帳號登入密碼相同。
