@@ -44,7 +44,7 @@ docker compose up -d --build
 執行測試：
 
 ```bash
-PYTHONPYCACHEPREFIX=/tmp/meet-pycache PYTHONPATH=. pytest -q
+PYTHONPYCACHEPREFIX=/tmp/oral-pycache PYTHONPATH=. pytest -q
 node --test tests/js/*.test.mjs
 ```
 
@@ -93,8 +93,8 @@ docker run hello-world
 ## 第二步：下載專案
 
 ```bash
-git clone <你的-repo-網址> /home/ubuntu/meet
-cd /home/ubuntu/meet
+git clone <你的-repo-網址> /home/ubuntu/oral
+cd /home/ubuntu/oral
 ```
 
 ---
@@ -104,7 +104,7 @@ cd /home/ubuntu/meet
 這是用來存放學生錄音的雲端空間（免費方案有 10 GB）。
 
 1. 登入 **OCI Console** → Object Storage → **Create Bucket**
-   - Bucket 名稱：自訂（例如 `meet-audio`）
+   - Bucket 名稱：自訂（例如 `oral-audio`）
    - Visibility：**Private**（私人，不對外公開）
 
 2. 取得存取金鑰：
@@ -141,10 +141,10 @@ nano .env.production
 
 ```env
 # ── 資料庫 ──────────────────────────────────────────────────
-POSTGRES_USER=meet
+POSTGRES_USER=oral
 POSTGRES_PASSWORD=請換成你自己的密碼          # 例如 MyStr0ngPwd!
-POSTGRES_DB=meetdb
-DATABASE_URL=postgresql://meet:請換成你自己的密碼@db:5432/meetdb
+POSTGRES_DB=oraldb
+DATABASE_URL=postgresql://oral:請換成你自己的密碼@db:5432/oraldb
 # 注意：DATABASE_URL 裡的密碼要和 POSTGRES_PASSWORD 一樣
 
 # ── JWT 金鑰 ─────────────────────────────────────────────────
@@ -161,7 +161,7 @@ OPENAI_API_KEY=sk-...
 OCI_ENDPOINT_URL=https://<namespace>.compat.objectstorage.<region>.oraclecloud.com
 OCI_ACCESS_KEY_ID=你的-access-key-id
 OCI_SECRET_ACCESS_KEY=你的-secret-access-key
-OCI_BUCKET_NAME=meet-audio          # 要和你建立的 Bucket 名稱一致
+OCI_BUCKET_NAME=oral-audio          # 要和你建立的 Bucket 名稱一致
 OCI_REGION=ap-tokyo-1               # 依你的 Bucket 所在區域填寫
 
 # ── SMTP 寄件設定─────────────────────────────────────
@@ -183,7 +183,7 @@ TURNSTILE_SITE_KEY=你的-turnstile-site-key
 # ── 應用程式 ─────────────────────────────────────────────────
 APP_ENV=production
 APP_ENV_FILE=.env.production
-MEET_IMAGE=你的-registry/meet@sha256:填入本次建置映像的-digest
+oral_IMAGE=你的-registry/oral@sha256:填入本次建置映像的-digest
 CORS_ORIGINS=https://你的網域.com   # 或 http://你的伺服器IP:7682
 TUNNEL_TOKEN=你的-cloudflare-tunnel-token
 ```
@@ -195,7 +195,7 @@ TUNNEL_TOKEN=你的-cloudflare-tunnel-token
 ## 第六步：啟動服務
 
 ```bash
-cd /home/ubuntu/meet
+cd /home/ubuntu/oral
 
 # 會先啟動 db，再由 migrate service 執行 baseline、系統資料 bootstrap
 # 與 alembic check；全部成功後 web 才會啟動。
@@ -228,7 +228,7 @@ docker compose --env-file .env.production -f docker-compose-production.yml run -
 
 ```bash
 docker compose --env-file .env.production -f docker-compose-production.yml exec db \
-  psql -U meet -d meetdb -c "select version_num from alembic_version;"
+  psql -U oral -d oraldb -c "select version_num from alembic_version;"
 ```
 
 ---
@@ -283,7 +283,7 @@ docker compose --env-file .env.production -f docker-compose-production.yml resta
 docker compose --env-file .env.production -f docker-compose-production.yml logs migrate
 
 # 連進資料庫查看資料
-docker compose --env-file .env.production -f docker-compose-production.yml exec db psql -U meet -d meetdb
+docker compose --env-file .env.production -f docker-compose-production.yml exec db psql -U oral -d oraldb
 
 # 查看 web 服務 log
 docker compose --env-file .env.production -f docker-compose-production.yml logs -f web
@@ -355,7 +355,7 @@ docker compose --env-file .env.production -f docker-compose-production.yml up -d
 如需手動清除某位學生當天的 API 用量：
 
 ```bash
-docker compose --env-file .env.production -f docker-compose-production.yml exec db psql -U meet -d meetdb -c "
+docker compose --env-file .env.production -f docker-compose-production.yml exec db psql -U oral -d oraldb -c "
 DELETE FROM api_usage_logs
 WHERE user_id = <學生的user_id>
   AND called_at >= (NOW() AT TIME ZONE 'Asia/Taipei')::date;
