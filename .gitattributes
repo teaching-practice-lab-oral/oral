@@ -1,0 +1,20 @@
+* text=auto
+
+# Internal operational artifacts are not part of a public source archive.
+release_mail export-ignore
+release_mail/** export-ignore
+security-audit export-ignore
+security-audit/** export-ignore
+README_for_me.md export-ignore
+pg_backup export-ignore
+pg_backup/** export-ignore
+.agents export-ignore
+.agents/** export-ignore
+.codex export-ignore
+.codex/** export-ignore
+
+# Local/test material is useful in the repository but not required by runtime-only archives.
+.pytest_cache export-ignore
+.pytest_cache/** export-ignore
+dist-source export-ignore
+dist-source/** export-ignore

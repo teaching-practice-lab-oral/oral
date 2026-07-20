@@ -1,0 +1,51 @@
+# Secrets — never bake into the image
+.env
+.env.*
+
+# Version control
+.git
+.gitignore
+
+# Python caches / build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local data / backups
+db_backup/
+backups/
+pg_backup/
+*.sqlite3
+*.db
+*.dump
+*.bak
+
+# Private keys and local exports/uploads
+*.pem
+*.key
+*.p12
+*.pfx
+*.csv
+*.xlsx
+uploads/
+media/
+release_mail/
+
+# Editor / tooling
+.claude/
+.vscode/
+.idea/
+
+# Development and audit material not needed at runtime
+README.md
+docs/
+tests/
+security-audit/
