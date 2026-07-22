@@ -35,7 +35,7 @@ async def generate_asset(
             stage=5,
             operation="shadowing_tts",
         ):
-            audio_bytes = await tts.generate_speech(spoken_text)
+            audio_bytes = await tts.generate_speech(spoken_text, tts.SpeechProfile.SHADOWING)
         timing = await tts_alignment.create_tts_timing(
             audio_bytes,
             spoken_text,

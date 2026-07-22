@@ -83,6 +83,10 @@ SCHEMA_STATEMENTS = ['CREATE TABLE email_jobs (\n'
  '\tcourse_num VARCHAR(64), \n'
  '\tis_active BOOLEAN NOT NULL, \n'
  "\tmust_change_password BOOLEAN DEFAULT 'false' NOT NULL, \n"
+ '\tprivacy_notice_version VARCHAR(32), \n'
+ '\tprivacy_acknowledged_at TIMESTAMP WITHOUT TIME ZONE, \n'
+ '\tsystem_terms_version VARCHAR(32), \n'
+ '\tsystem_terms_accepted_at TIMESTAMP WITHOUT TIME ZONE, \n'
  "\tsession_version INTEGER DEFAULT '1' NOT NULL, \n"
  "\tfailed_login_count INTEGER DEFAULT '0' NOT NULL, \n"
  '\tlocked_until TIMESTAMP WITHOUT TIME ZONE, \n'
@@ -92,7 +96,10 @@ SCHEMA_STATEMENTS = ['CREATE TABLE email_jobs (\n'
  "\tCONSTRAINT ck_users_role CHECK (role IN ('student', 'admin')), \n"
  "\tCONSTRAINT ck_users_admin_backup_email_null CHECK (role = 'student' OR backup_email IS NULL), \n"
  '\tCONSTRAINT ck_users_session_version_positive CHECK (session_version >= 1), \n'
- '\tCONSTRAINT ck_users_failed_login_count_nonnegative CHECK (failed_login_count >= 0)\n'
+ '\tCONSTRAINT ck_users_failed_login_count_nonnegative CHECK (failed_login_count >= 0), \n'
+ '\tCONSTRAINT ck_users_privacy_ack_pair CHECK ((privacy_notice_version IS NULL) = (privacy_acknowledged_at IS '
+ 'NULL)), \n'
+ '\tCONSTRAINT ck_users_terms_ack_pair CHECK ((system_terms_version IS NULL) = (system_terms_accepted_at IS NULL))\n'
  ')',
  'CREATE TABLE active_sessions (\n'
  '\tid SERIAL NOT NULL, \n'
@@ -138,7 +145,7 @@ SCHEMA_STATEMENTS = ['CREATE TABLE email_jobs (\n'
  '\tstage INTEGER NOT NULL, \n'
  '\tcalled_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, \n'
  '\tPRIMARY KEY (id), \n'
- '\tCONSTRAINT ck_api_usage_logs_stage CHECK (stage IN (1, 3, 6, 7)), \n'
+ '\tCONSTRAINT ck_api_usage_logs_stage CHECK (stage IN (1, 3, 5, 6, 7)), \n'
  '\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE\n'
  ')',
  'CREATE TABLE login_events (\n'

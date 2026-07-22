@@ -73,14 +73,14 @@ window.fetch = (url, options = {}) => {
 // Pages declare top-level `let assignment`, `let submission`, `let viewedSubmission`, `let assignmentId`, `let viewId`
 // which are window-scoped in non-module scripts and readable here as window.*.
 
-(async function () {
+window.studentAuthReady = (async function () {
   try {
     const r = await fetch('/api/auth/me', { credentials: 'include' });
     if (r.status === 401) {
       redirectToStudentLogin();
-      return;
+      return new Promise(() => {});
     }
-    if (!r.ok) return;
+    if (!r.ok) throw new Error(`auth_${r.status}`);
     const data = await r.json();
     sessionStorage.setItem('role', data.role);
     sessionStorage.setItem('name', data.name);
@@ -88,11 +88,21 @@ window.fetch = (url, options = {}) => {
     sessionStorage.setItem('requires_legal_acknowledgement', data.requires_legal_acknowledgement ? '1' : '0');
     if ((data.must_change_password || data.requires_legal_acknowledgement) && location.pathname !== '/student') {
       navigateStudentPage('/student', { replace: true });
-      return;
+      return new Promise(() => {});
     }
-    if (data.role === 'admin') { navigateStudentPage('/admin', { replace: true }); return; }
-    if (data.role !== 'student') redirectToStudentLogin('此帳號無法使用學生介面。');
-  } catch (_) {}
+    if (data.role === 'admin') {
+      navigateStudentPage('/admin', { replace: true });
+      return new Promise(() => {});
+    }
+    if (data.role !== 'student') {
+      redirectToStudentLogin('此帳號無法使用學生介面。');
+      return new Promise(() => {});
+    }
+    return data;
+  } catch (_) {
+    redirectToStudentLogin('目前無法確認登入狀態，請重新登入。');
+    return new Promise(() => {});
+  }
 })();
 
 // Rotate token once per hour to keep the JWT alive without per-page-load races.

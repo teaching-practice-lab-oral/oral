@@ -57,6 +57,17 @@ class LoginResponse(BaseModel):
     is_privileged_admin: bool = False
 
 
+class LegalDocumentResponse(BaseModel):
+    title: str
+    version: str
+    url: str
+
+
+class LegalDocumentsResponse(BaseModel):
+    privacy_notice: LegalDocumentResponse
+    system_terms: LegalDocumentResponse
+
+
 class PasswordResetRequestCreate(BaseModel):
     course_num: str
     name: str
@@ -816,21 +827,26 @@ class ResetPasswordRequest(BaseModel):
         return validate_password(v)
 
 
+class LegalAcknowledgementRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    privacy_notice_version: str
+    privacy_acknowledged: bool
+    system_terms_version: str
+    terms_accepted: bool
+
+
 class ChangePasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     old_password: str
     new_password: str
-    privacy_acknowledged: bool = False
-    terms_accepted: bool = False
+    legal_acknowledgement: Optional[LegalAcknowledgementRequest] = None
 
     @field_validator("new_password")
     @classmethod
     def _check_new_password(cls, v: str) -> str:
         return validate_password(v)
-
-
-class LegalAcknowledgementRequest(BaseModel):
-    privacy_acknowledged: bool = False
-    terms_accepted: bool = False
 
 
 class MessageResponse(BaseModel):

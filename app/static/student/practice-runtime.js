@@ -241,6 +241,7 @@
   }
 
   async function bootstrap() {
+    await window.studentAuthReady;
     if (mobileDevice && !standalone) {
       mobileInstallGate();
       return never();

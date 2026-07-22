@@ -1,5 +1,15 @@
 let loginAttemptInProgress = false;
 
+(async function loadLegalDocumentLinks() {
+  try {
+    const response = await fetch('/api/auth/legal-documents');
+    if (!response.ok) return;
+    const documents = await response.json();
+    document.getElementById('loginSystemTerms').href = documents.system_terms.url;
+    document.getElementById('loginPrivacyNotice').href = documents.privacy_notice.url;
+  } catch (_) {}
+})();
+
 function clearStoredAuthState() {
   ['role', 'name', 'user_id', 'userId', 'studentId', 'must_change_password', 'requires_legal_acknowledgement', 'isPrivilegedAdmin']
     .forEach(key => sessionStorage.removeItem(key));

@@ -41,12 +41,7 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 docker compose up -d --build
 ```
 
-執行測試：
-
-```bash
-PYTHONPYCACHEPREFIX=/tmp/oral-pycache PYTHONPATH=. pytest -q
-node --test tests/js/*.test.mjs
-```
+公開原始碼不包含測試檔；維護者的驗證程式應放在 Git 忽略的 `.local-tests/`，不得提交到公開倉庫。
 
 請勿使用真實學生資料作為開發 fixture，也不要把 `.env`、database dump、匯出檔、錄音或照片提交到版本控制。
 
@@ -203,7 +198,6 @@ TRUSTED_HOSTS=your-domain.example.com
 TRUSTED_PROXY_IPS=127.0.0.1,::1
 MAX_REQUEST_BODY_BYTES=58720256
 WORKER_MAX_REQUEST_BODY_BYTES=75497472
-WORKER_MAX_TTS_CHARS=20000
 WORKER_MAX_AUDIO_BASE64_CHARS=70000000
 FORWARDED_ALLOW_IPS=127.0.0.1
 PROTECTED_ADMIN_STUDENT_ID=12345678
@@ -228,8 +222,7 @@ PASSWORD_RESET_IP_HOURLY_LIMIT=10
 OPENAI_CHAT_MODEL=gpt-5.4-mini
 OPENAI_WHISPER_MODEL=whisper-1
 OPENAI_TTS_MODEL=gpt-4o-mini-tts
-TTS_VOICE=ash
-TTS_SPEED=0.95
+# TTS 語音、指示與 1.0x 語速由 roleplay/shadowing profile 集中管理；輸入上限 4,096 字元。
 OPENAI_MAX_CONCURRENCY=15
 TTS_MAX_CONCURRENCY=10
 AUDIO_PROCESSING_MAX_CONCURRENCY=20

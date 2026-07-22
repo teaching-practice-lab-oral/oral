@@ -1,4 +1,7 @@
 from datetime import timedelta
+from enum import IntEnum
+from typing import Callable
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -8,7 +11,12 @@ from app.config import settings
 from app.utils import taipei_now
 
 
-API_USAGE_STAGES = frozenset({1, 3, 5, 6, 7})
+class ExternalApiStage(IntEnum):
+    JOB_PROFILE = 1
+    WRITING_FEEDBACK = 3
+    SHADOWING = 5
+    ROLEPLAY = 6
+    FINAL_REPORT = 7
 
 
 def check_login_ip_rate_limit(db: Session, ip_address: str | None) -> None:
@@ -37,21 +45,28 @@ def check_login_ip_rate_limit(db: Session, ip_address: str | None) -> None:
         )
 
 
-def reserve_api_call(user_id: int, stage: int) -> None:
+def reserve_api_call(
+    user_id: int,
+    stage: ExternalApiStage,
+    *,
+    session_factory: Callable[[], Session] | None = None,
+) -> None:
     """Atomically enforce and consume one external-API allowance.
 
     The dedicated transaction deliberately does not share the route's ORM
     session. Locking the user row serializes both the per-stage and aggregate
     daily counters across every web worker without committing caller state.
     """
-    if stage not in API_USAGE_STAGES:
-        raise ValueError(f"Unsupported API usage stage: {stage}")
+    try:
+        stage = ExternalApiStage(stage)
+    except ValueError as exc:
+        raise ValueError(f"Unsupported API usage stage: {stage}") from exc
 
     now = taipei_now()
     one_hour_ago = now - timedelta(hours=1)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    with SessionLocal() as quota_db:
+    with (session_factory or SessionLocal)() as quota_db:
         try:
             user = (
                 quota_db.query(User)

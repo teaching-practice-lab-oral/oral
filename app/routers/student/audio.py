@@ -116,7 +116,7 @@ async def prepare_audio_shadowing_tts_question(
 
         student_id = current_user.student_id
         db.rollback()
-        rate_limiter.reserve_api_call(current_user.id, 5)
+        rate_limiter.reserve_api_call(current_user.id, rate_limiter.ExternalApiStage.SHADOWING)
         asset = await generate_asset(
             final_draft_answers,
             student_id,

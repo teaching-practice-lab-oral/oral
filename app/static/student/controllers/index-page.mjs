@@ -1,3 +1,5 @@
+import { AccountSetupController } from '/static/student/account-setup.mjs?v=1';
+
 function clearStudentAuthState() {
   ['role', 'name', 'user_id', 'userId', 'studentId', 'must_change_password', 'requires_legal_acknowledgement', 'isPrivilegedAdmin']
     .forEach(key => sessionStorage.removeItem(key));
@@ -14,6 +16,11 @@ window.ApiUnauthorizedHandler = async response => {
   try { message = (await response.json()).detail || message; } catch (_) {}
   redirectToStudentLogin(message);
 };
+
+const accountSetup = new AccountSetupController({
+  apiReady: window.StudentApiClientReady,
+  nativeFetch: window.StudentApiNativeFetch,
+});
 
 async function bootstrapStudentPage() {
   try {
@@ -40,8 +47,10 @@ async function bootstrapStudentPage() {
     sessionStorage.setItem('isPrivilegedAdmin', data.is_privileged_admin ? '1' : '0');
     document.getElementById('userName').textContent = data.name || '';
     if (data.must_change_password || data.requires_legal_acknowledgement) {
-      openChangePw(data.must_change_password, data.requires_legal_acknowledgement);
-      return;
+      await accountSetup.open({
+        forcePassword: data.must_change_password,
+        requiresLegal: data.requires_legal_acknowledgement,
+      });
     }
     await loadAssignments();
   } catch (_) {
@@ -58,143 +67,6 @@ async function logout() {
 function authHeaders() {
   const m = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
   return { 'Content-Type': 'application/json', 'X-CSRF-Token': m ? m[1] : '' };
-}
-
-let changePwRequiresAcknowledgement = false;
-let changePwAcknowledgementOnly = false;
-
-function openChangePw(forceChange = false, requiresAcknowledgement = false) {
-  forceChange = forceChange === true;
-  requiresAcknowledgement = requiresAcknowledgement === true;
-  const forceSetup = forceChange || requiresAcknowledgement;
-  changePwRequiresAcknowledgement = requiresAcknowledgement;
-  changePwAcknowledgementOnly = requiresAcknowledgement && !forceChange;
-  document.getElementById('oldPassword').value = '';
-  document.getElementById('newPassword').value = '';
-  document.getElementById('confirmPassword').value = '';
-  document.getElementById('privacyAcknowledged').checked = false;
-  document.getElementById('termsAccepted').checked = false;
-  document.getElementById('changePwAlert').className = 'alert d-none';
-  document.getElementById('changePwAlert').textContent = '';
-  const note = document.getElementById('changePwFirstLoginNote');
-  const noteTitle = document.getElementById('changePwSetupTitle');
-  const noteText = document.getElementById('changePwSetupText');
-  const subtitle = document.getElementById('changePwSubtitle');
-  const modalTitle = document.getElementById('changePwModalTitle');
-  const docs = document.getElementById('changePwLegalDocs');
-  const consent = document.getElementById('changePwLegalConsent');
-  const passwordGroups = document.querySelectorAll('#changePwModal .password-group');
-  const submitBtn = document.getElementById('changePwSubmitBtn');
-  const cancelBtn = document.getElementById('changePwCancelBtn');
-  const closeBtn = document.getElementById('changePwClose');
-  const modalEl = document.getElementById('changePwModal');
-  const existingModal = bootstrap.Modal.getInstance(modalEl);
-  if (existingModal) existingModal.dispose();
-  passwordGroups.forEach(group => group.classList.toggle('d-none', changePwAcknowledgementOnly));
-  if (forceSetup) {
-    note.classList.remove('d-none');
-    cancelBtn.classList.add('d-none');
-    closeBtn.classList.add('d-none');
-    if (requiresAcknowledgement) {
-      noteTitle.textContent = forceChange ? '首次使用前請完成設定' : '法遵事項已更新';
-      noteText.textContent = forceChange
-        ? '請閱讀個資告知事項與系統使用者條款，並設定新的登入密碼。'
-        : '請閱讀更新後的個資告知事項與系統使用者條款，再分別完成確認。';
-      subtitle.textContent = forceChange
-        ? '完成法遵確認與密碼設定後，即可繼續使用系統。'
-        : '此確認不等同於同意參與研究，也不需要再次變更密碼。';
-      modalTitle.textContent = forceChange ? '完成帳戶設定' : '確認更新的法遵事項';
-      submitBtn.innerHTML = forceChange
-        ? '<i class="bi bi-check2-circle me-1"></i>儲存設定'
-        : '<i class="bi bi-check2-circle me-1"></i>確認並繼續';
-      docs.classList.remove('d-none');
-      consent.classList.remove('d-none');
-    } else {
-      noteTitle.textContent = '密碼已由管理員重設';
-      noteText.textContent = '請先確認並儲存您的登入密碼，再繼續使用系統。';
-      subtitle.textContent = '完成密碼更新後，即可繼續使用系統。';
-      modalTitle.textContent = '設定新的登入密碼';
-      submitBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>儲存新密碼';
-      docs.classList.add('d-none');
-      consent.classList.add('d-none');
-    }
-  } else {
-    note.classList.add('d-none');
-    docs.classList.add('d-none');
-    consent.classList.add('d-none');
-    cancelBtn.classList.remove('d-none');
-    closeBtn.classList.remove('d-none');
-    subtitle.textContent = '定期更新登入密碼，有助於保護您的帳戶與作業資料。';
-    modalTitle.textContent = '設定新的登入密碼';
-    submitBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>儲存新密碼';
-  }
-  new bootstrap.Modal(modalEl, {
-    backdrop: forceSetup ? 'static' : true,
-    keyboard: !forceSetup
-  }).show();
-}
-
-async function doChangePassword() {
-  const oldPw = document.getElementById('oldPassword').value;
-  const newPw = document.getElementById('newPassword').value;
-  const confirmPw = document.getElementById('confirmPassword').value;
-  const alertEl = document.getElementById('changePwAlert');
-  const submitBtn = document.getElementById('changePwSubmitBtn');
-
-  function showChangePwAlert(msg, type = 'danger') {
-    alertEl.className = `alert alert-${type}`;
-    alertEl.textContent = msg;
-  }
-
-  if (!changePwAcknowledgementOnly) {
-    if (!oldPw || !newPw || !confirmPw) { showChangePwAlert('請填寫所有欄位'); return; }
-    if (newPw !== confirmPw) { showChangePwAlert('新密碼與確認密碼不一致'); return; }
-    if (newPw.length < 8) { showChangePwAlert('新密碼至少需要 8 個字元'); return; }
-  }
-  if (changePwRequiresAcknowledgement) {
-    const privacyAcknowledged = document.getElementById('privacyAcknowledged').checked;
-    const termsAccepted = document.getElementById('termsAccepted').checked;
-    if (!privacyAcknowledged) { showChangePwAlert('請先閱讀並勾選個人資料告知事項'); return; }
-    if (!termsAccepted) { showChangePwAlert('請先閱讀並同意系統使用者條款'); return; }
-  }
-
-  submitBtn.disabled = true;
-  const originalSubmitHtml = submitBtn.innerHTML;
-  submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>變更中...';
-  try {
-    const { requestJson } = await window.StudentApiClientReady;
-    const endpoint = changePwAcknowledgementOnly
-      ? '/api/auth/legal-acknowledgement'
-      : '/api/auth/change-password';
-    const body = changePwAcknowledgementOnly
-      ? {
-          privacy_acknowledged: document.getElementById('privacyAcknowledged').checked,
-          terms_accepted: document.getElementById('termsAccepted').checked
-        }
-      : {
-          old_password: oldPw,
-          new_password: newPw,
-          privacy_acknowledged: changePwRequiresAcknowledgement ? document.getElementById('privacyAcknowledged').checked : false,
-          terms_accepted: changePwRequiresAcknowledgement ? document.getElementById('termsAccepted').checked : false
-        };
-    await requestJson(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(body)
-    }, window.StudentApiNativeFetch);
-    if (!changePwAcknowledgementOnly) sessionStorage.setItem('must_change_password', '0');
-    if (changePwRequiresAcknowledgement) sessionStorage.setItem('requires_legal_acknowledgement', '0');
-    changePwRequiresAcknowledgement = false;
-    changePwAcknowledgementOnly = false;
-    const modal = bootstrap.Modal.getInstance(document.getElementById('changePwModal'));
-    if (modal) modal.hide();
-    showChangePwAlert('', 'success');
-    await loadAssignments();
-  } catch (error) {
-    showChangePwAlert(error?.detail || error?.message || '目前無法更新密碼，請稍後再試。');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = originalSubmitHtml;
-  }
 }
 
 const assignmentItemsById = new Map();
@@ -540,8 +412,8 @@ Object.assign(window, {
   bootstrapStudentPage,
   logout,
   authHeaders,
-  openChangePw,
-  doChangePassword,
+  openChangePw: () => accountSetup.open(),
+  doChangePassword: () => accountSetup.submit(),
   stageLabel,
   fmtDatetime,
   dateStatus,

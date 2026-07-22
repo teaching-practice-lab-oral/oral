@@ -7,7 +7,6 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from app.config import settings
 from app.database import Base
-from app.legal_documents import PRIVACY_NOTICE_VERSION, SYSTEM_TERMS_VERSION
 
 
 class User(Base):
@@ -23,8 +22,6 @@ class User(Base):
     course_num = Column(String(64), nullable=True, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     must_change_password = Column(Boolean, default=False, server_default="false", nullable=False)
-    # Kept for compatibility with the original one-time acknowledgement rollout.
-    legal_acknowledged_at = Column(DateTime, nullable=True)
     privacy_notice_version = Column(String(32), nullable=True)
     privacy_acknowledged_at = Column(DateTime, nullable=True)
     system_terms_version = Column(String(32), nullable=True)
@@ -49,16 +46,6 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
-
-    @property
-    def requires_legal_acknowledgement(self) -> bool:
-        """Whether this student has not acknowledged both current public versions."""
-        return self.role == "student" and (
-            self.privacy_notice_version != PRIVACY_NOTICE_VERSION
-            or self.privacy_acknowledged_at is None
-            or self.system_terms_version != SYSTEM_TERMS_VERSION
-            or self.system_terms_accepted_at is None
-        )
 
     __table_args__ = (
         CheckConstraint("role IN ('student', 'admin')", name="ck_users_role"),

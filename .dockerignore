@@ -48,4 +48,5 @@ release_mail/
 README.md
 docs/
 tests/
+.local-tests/
 security-audit/

@@ -69,7 +69,7 @@ async def speaking1_shadowing_question(
         key_stem = f"shadowing_recording_q{question_index}_{uuid4().hex}"
         db.rollback()
         prepared_audio = await audio_processor.prepare_audio_upload(audio, key_stem)
-        rate_limiter.reserve_api_call(current_user.id, 5)
+        rate_limiter.reserve_api_call(current_user.id, rate_limiter.ExternalApiStage.SHADOWING)
 
         with worker_client.routing_context(
             user_id=current_user.id,
@@ -82,7 +82,6 @@ async def speaking1_shadowing_question(
                 prepared_audio,
                 student_id,
                 submission_id,
-                key_stem,
             )
 
         # Re-check mutable preconditions under a fresh row lock before accepting

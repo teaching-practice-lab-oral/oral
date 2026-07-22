@@ -4,11 +4,11 @@ import base64
 import secrets
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import settings
 from app.middleware import BearerPathAuthMiddleware, RequestBodyLimitMiddleware
-from app.services.tts import generate_speech_local
+from app.services.tts import MAX_TTS_INPUT_CHARS, SpeechProfile, generate_speech_local
 
 app = FastAPI(
     title="Oral CHT Worker",
@@ -30,9 +30,10 @@ app.add_middleware(
 
 
 class TTSRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=settings.WORKER_MAX_TTS_CHARS)
-    voice: str | None = None
-    speed: float | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=MAX_TTS_INPUT_CHARS)
+    profile: SpeechProfile
 
 
 class TTSResponse(BaseModel):
@@ -73,7 +74,7 @@ async def health() -> dict:
 
 @app.post("/internal/worker/tts", response_model=TTSResponse, dependencies=[Depends(require_worker_secret)])
 async def worker_tts(payload: TTSRequest) -> TTSResponse:
-    audio = await generate_speech_local(payload.text, voice=payload.voice, speed=payload.speed)
+    audio = await generate_speech_local(payload.text, payload.profile)
     return TTSResponse(audio_base64=base64.b64encode(audio).decode("ascii"))
 
 

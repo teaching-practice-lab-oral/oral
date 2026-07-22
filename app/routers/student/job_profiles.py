@@ -102,7 +102,7 @@ async def generate_learning_scaffold(
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-        rate_limiter.reserve_api_call(current_user.id, 1)
+        rate_limiter.reserve_api_call(current_user.id, rate_limiter.ExternalApiStage.JOB_PROFILE)
         # The quota reservation owns a separate short transaction. Explicitly
         # release this route's row lock before the slow external request.
         db.rollback()

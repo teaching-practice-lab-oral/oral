@@ -13,20 +13,20 @@ from app.auth import (
 )
 from app.config import settings
 from app.database import get_db
-from app.legal_documents import (
-    PRIVACY_NOTICE_VERSION,
-    SYSTEM_TERMS_TITLE,
-    SYSTEM_TERMS_VERSION,
-)
 from app.models import User, LoginEvent, ActiveSession, PasswordResetToken, StudentPresence
 from app.services.presence import acquire_student_presence, release_student_presence
 from app.schemas import (
     ChangePasswordRequest, LegalAcknowledgementRequest, MessageResponse,
     LoginRequest, LoginResponse, PasswordResetConfirm, PasswordResetRequestCreate,
-    UserMe,
+    LegalDocumentsResponse, UserMe,
 )
 from app.services import mail
 from app.services.admin_audit import log_actor_action
+from app.services.legal_acknowledgement import (
+    public_documents,
+    record_acknowledgement,
+    requires_acknowledgement,
+)
 from app.services.rate_limiter import check_login_ip_rate_limit
 from app.utils import get_client_ip, taipei_now
 
@@ -39,42 +39,10 @@ _RESET_REQUEST_RESPONSE = {
 }
 
 
-def _record_current_legal_acknowledgement(
-    db: Session,
-    request: Request,
-    user: User,
-) -> None:
-    """Persist the two distinct document versions and auditable acceptance times."""
-    acknowledged_at = taipei_now()
-    user.privacy_notice_version = PRIVACY_NOTICE_VERSION
-    user.privacy_acknowledged_at = acknowledged_at
-    user.system_terms_version = SYSTEM_TERMS_VERSION
-    user.system_terms_accepted_at = acknowledged_at
-    # Preserve the legacy field for older exports and operational tooling.
-    user.legal_acknowledged_at = acknowledged_at
-    log_actor_action(
-        db,
-        "student.legal.acknowledge",
-        actor_student_id=user.student_id,
-        actor_name=user.name,
-        actor_user=user,
-        request=request,
-        target_type="user",
-        target_id=user.id,
-        target_label=user.student_id,
-        summary="確認現行個資告知事項與系統使用者條款",
-        details={
-            "privacy_notice_version": PRIVACY_NOTICE_VERSION,
-            "system_terms_version": SYSTEM_TERMS_VERSION,
-        },
-    )
-
-
-def _require_legal_choices(*, privacy_acknowledged: bool, terms_accepted: bool) -> None:
-    if not privacy_acknowledged:
-        raise HTTPException(status_code=400, detail="請先閱讀並勾選個人資料告知事項")
-    if not terms_accepted:
-        raise HTTPException(status_code=400, detail=f"請先閱讀並同意「{SYSTEM_TERMS_TITLE}」")
+@router.get("/legal-documents", response_model=LegalDocumentsResponse)
+def legal_documents():
+    """Return the only legal-document metadata accepted by acknowledgement APIs."""
+    return public_documents()
 
 
 def _record_password_reset_audit(
@@ -501,7 +469,7 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
         name=user.name,
         user_id=user.id,
         must_change_password=bool(user.must_change_password),
-        requires_legal_acknowledgement=user.requires_legal_acknowledgement,
+        requires_legal_acknowledgement=requires_acknowledgement(user),
         is_privileged_admin=bool(user.is_privileged_admin),
     )
 
@@ -517,13 +485,18 @@ def change_password(
     """Change credentials for either authenticated role at the auth boundary."""
     if not verify_password(payload.old_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="舊密碼不正確")
-    requires_acknowledgement = current_user.requires_legal_acknowledgement
-    if requires_acknowledgement:
-        _require_legal_choices(
-            privacy_acknowledged=payload.privacy_acknowledged,
-            terms_accepted=payload.terms_accepted,
+    needs_legal_acknowledgement = requires_acknowledgement(current_user)
+    if needs_legal_acknowledgement:
+        if payload.legal_acknowledgement is None:
+            raise HTTPException(status_code=400, detail="請先完成法遵文件確認")
+        record_acknowledgement(
+            db,
+            request,
+            current_user,
+            payload.legal_acknowledgement,
         )
-        _record_current_legal_acknowledgement(db, request, current_user)
+    elif payload.legal_acknowledgement is not None:
+        raise HTTPException(status_code=400, detail="目前不需要重新確認法遵文件")
     current_user.hashed_password = hash_password(payload.new_password)
     current_user.must_change_password = False
     if current_user.role != "admin":
@@ -581,13 +554,9 @@ def acknowledge_legal_documents(
     """Acknowledge revised documents without forcing an unrelated password change."""
     if current_user.role != "student":
         raise HTTPException(status_code=400, detail="此確認流程僅適用於學生帳號")
-    if not current_user.requires_legal_acknowledgement:
+    if not requires_acknowledgement(current_user):
         return MessageResponse(message="法遵事項已是最新版本")
-    _require_legal_choices(
-        privacy_acknowledged=payload.privacy_acknowledged,
-        terms_accepted=payload.terms_accepted,
-    )
-    _record_current_legal_acknowledgement(db, request, current_user)
+    record_acknowledgement(db, request, current_user, payload)
     db.commit()
     return MessageResponse(message="法遵事項確認完成")
 
@@ -676,4 +645,7 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserMe)
 def me(current_user: User = Depends(get_current_user)):
-    return current_user
+    response = UserMe.model_validate(current_user)
+    return response.model_copy(
+        update={"requires_legal_acknowledgement": requires_acknowledgement(current_user)}
+    )

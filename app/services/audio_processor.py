@@ -29,6 +29,7 @@ _SYNC_BYTES = {b'\xff\xfb', b'\xff\xf3', b'\xff\xf2', b'\xff\xe3'}  # raw MP3 sy
 class PreparedAudioUpload:
     data: bytes
     source_filename: str
+    key_stem: str
 
 
 def audio_filename_for_content(data: bytes, key_stem: str) -> str:
@@ -121,6 +122,7 @@ async def prepare_audio_upload(audio: UploadFile, key_stem: str) -> PreparedAudi
     return PreparedAudioUpload(
         data=audio_bytes,
         source_filename=audio_filename_for_content(audio_bytes, key_stem),
+        key_stem=key_stem,
     )
 
 
@@ -128,7 +130,6 @@ async def process_prepared_audio(
     prepared: PreparedAudioUpload,
     student_id: str,
     submission_id: int,
-    key_stem: str,
 ) -> tuple[str, str, dict | None]:
     """Transcode, store, and transcribe an already locally validated recording.
 
@@ -137,6 +138,7 @@ async def process_prepared_audio(
     """
     audio_bytes = prepared.data
     source_filename = prepared.source_filename
+    key_stem = prepared.key_stem
     worker_result = await worker_client.process_audio(audio_bytes, source_filename)
     if worker_result is not None:
         mp3_bytes, transcript, metrics = worker_result
@@ -152,14 +154,3 @@ async def process_prepared_audio(
         audio_key = f"audio/{student_id}/{submission_id}/{key_stem}.mp3"
         await storage.upload_file_async(audio_key, mp3_bytes, "audio/mpeg")
     return audio_key, transcript, metrics
-
-
-async def process_audio_upload(
-    audio: UploadFile,
-    student_id: str,
-    submission_id: int,
-    key_stem: str,
-) -> tuple[str, str, dict | None]:
-    """Compatibility wrapper for callers that do not need a pre-quota boundary."""
-    prepared = await prepare_audio_upload(audio, key_stem)
-    return await process_prepared_audio(prepared, student_id, submission_id, key_stem)

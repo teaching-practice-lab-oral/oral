@@ -1,12 +1,25 @@
 """Curated public interview questions and their question-specific scaffolds."""
 from __future__ import annotations
 
+import unicodedata
 from collections import OrderedDict
 from copy import deepcopy
 from typing import Iterable
 
 
 DEFAULT_QUESTION_SET_KEY = "background_motivation"
+CUSTOM_QUESTION_MAX_CHARS = 500
+
+
+def contains_non_latin_script(text: str | None) -> bool:
+    """Return whether text contains non-Latin letters or CJK/full-width punctuation."""
+    for char in text or "":
+        codepoint = ord(char)
+        if 0x3000 <= codepoint <= 0x303F or 0xFF00 <= codepoint <= 0xFFEF:
+            return True
+        if char.isalpha() and "LATIN" not in unicodedata.name(char, ""):
+            return True
+    return False
 
 
 def _item(
@@ -241,6 +254,10 @@ def normalize_custom_questions(questions: Iterable[str] | None) -> list[str]:
     values = [str(question or "").strip() for question in (questions or [])]
     if len(values) != 4 or any(not value for value in values):
         raise ValueError("自訂題組必須恰好填寫 4 題，且每題不可空白。")
+    if any(len(value) > CUSTOM_QUESTION_MAX_CHARS for value in values):
+        raise ValueError(f"自訂題目每題不可超過 {CUSTOM_QUESTION_MAX_CHARS} 個字元。")
+    if any(contains_non_latin_script(value) for value in values):
+        raise ValueError("自訂面試題目必須使用英文，不可包含中文或其他非拉丁文字。")
     return values
 
 

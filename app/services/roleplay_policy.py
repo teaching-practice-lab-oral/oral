@@ -4,6 +4,7 @@ import re
 import logging
 from difflib import SequenceMatcher
 
+from app.question_sets import CUSTOM_QUESTION_MAX_CHARS, contains_non_latin_script
 from app.services.workflow_policy import (
     CORE_QUESTION_COUNT,
     MAX_ROLEPLAY_TURNS,
@@ -16,8 +17,10 @@ _GUARDRAIL_REASK_MARKERS = (
     "please answer in english",
     "let's stay focused on the interview",
 )
-
-
+_SECRET_QUESTION_FALLBACK = (
+    "Please choose one example you mentioned and explain one specific "
+    "difficulty you personally faced, what you did, and what result followed?"
+)
 def _normalize_interviewer_question(text: str | None) -> str:
     normalized = (text or "").lower().replace("’", "'")
     for phrase in ("let's stay focused on the interview", "please answer in english"):
@@ -133,6 +136,7 @@ def question_request(expected_index: int, core_question: str, context: str) -> s
         f"Ask core question {expected_index + 1} now. Preserve this intent: {core_question}\n"
         "Keep it as one question, but make it specific: ask for a concrete example, "
         "the candidate's own action, reasoning, difficulty, or result when appropriate. "
+        "Respond in English only; do not use Chinese or any other non-Latin script. "
         "Do not ask any other question.\n" + context
     )
 
@@ -146,6 +150,9 @@ def validated_question(
     allow_reask: bool = True,
 ) -> tuple[str, int]:
     text = (generated or "").strip()
+    if len(text) > CUSTOM_QUESTION_MAX_CHARS or contains_non_latin_script(text):
+        logger.warning("Roleplay question %s was invalid; using canonical fallback", expected_index)
+        return core_questions[expected_index], expected_index
     matched = match_interview_question_index(text, core_questions)
     if matched == expected_index:
         return text, matched
@@ -164,11 +171,15 @@ def validated_question(
 
 def validated_secret_question(generated: str | None, core_questions: list[str]) -> str:
     text = " ".join((generated or "").strip().split())
-    if not text or len(text) > 500 or match_interview_question_index(text, core_questions) is not None:
-        return (
-            "Please choose one example you mentioned and explain one specific "
-            "difficulty you personally faced, what you did, and what result followed?"
-        )
+    if contains_non_latin_script(text):
+        logger.warning("Generated verification question contained a non-Latin script; using English fallback")
+        return _SECRET_QUESTION_FALLBACK
+    if (
+        not text
+        or len(text) > CUSTOM_QUESTION_MAX_CHARS
+        or match_interview_question_index(text, core_questions) is not None
+    ):
+        return _SECRET_QUESTION_FALLBACK
     return text
 
 

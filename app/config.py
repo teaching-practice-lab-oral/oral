@@ -62,7 +62,7 @@ class Settings(BaseSettings):
 
     # App
     APP_ENV: str = "development"
-    PUBLIC_BASE_URL: str = "http://localhost:7682"
+    PUBLIC_BASE_URL: str = ""
     WORKER_ONLY: bool = False
     CORS_ORIGINS: str = ""
     TRUSTED_HOSTS: str = ""
@@ -73,7 +73,6 @@ class Settings(BaseSettings):
     # Worker audio is JSON/base64, so its envelope must account for 4/3
     # expansion while remaining independently bounded.
     WORKER_MAX_REQUEST_BODY_BYTES: int = 72 * 1024 * 1024
-    WORKER_MAX_TTS_CHARS: int = 20_000
     WORKER_MAX_AUDIO_BASE64_CHARS: int = 70_000_000
 
     # Cloudflare Turnstile
@@ -84,8 +83,6 @@ class Settings(BaseSettings):
     OPENAI_CHAT_MODEL: str = "gpt-5.4-mini"
     OPENAI_WHISPER_MODEL: str = "whisper-1"
     OPENAI_TTS_MODEL: str = "gpt-4o-mini-tts"
-    TTS_VOICE: str = "ash"
-    TTS_SPEED: float = 0.95
 
     # Protected master admin account (cannot be deleted, deactivated, or demoted)
     PROTECTED_ADMIN_STUDENT_ID: str = ""
@@ -223,8 +220,8 @@ class Settings(BaseSettings):
             raise ValueError("MAX_REQUEST_BODY_BYTES must be at least 1 MiB")
         if self.WORKER_MAX_REQUEST_BODY_BYTES < 1024 * 1024:
             raise ValueError("WORKER_MAX_REQUEST_BODY_BYTES must be at least 1 MiB")
-        if self.WORKER_MAX_TTS_CHARS < 1 or self.WORKER_MAX_AUDIO_BASE64_CHARS < 1:
-            raise ValueError("worker payload limits must be positive")
+        if self.WORKER_MAX_AUDIO_BASE64_CHARS < 1:
+            raise ValueError("worker audio payload limit must be positive")
         if self.MAX_AUDIO_SECONDS < 1:
             raise ValueError("MAX_AUDIO_SECONDS must be positive")
         if self.OPERATION_LOCK_POOL_SIZE < 1 or self.OPERATION_LOCK_POOL_TIMEOUT < 1:

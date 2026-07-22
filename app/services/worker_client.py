@@ -188,14 +188,12 @@ async def check_health() -> dict[str, Any]:
 
 async def generate_speech(
     text: str,
-    voice: str | None = None,
-    speed: float | None = None,
+    profile: str,
 ) -> bytes | None:
     """Return MP3 bytes from the worker, or None when local fallback should run."""
     data = await _post_json("/internal/worker/tts", {
         "text": text,
-        "voice": voice,
-        "speed": speed,
+        "profile": profile,
     })
     if data is None:
         return None

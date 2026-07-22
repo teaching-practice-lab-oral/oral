@@ -25,7 +25,7 @@ records the direct dependency versions declared by this source release.
 | python-multipart | 0.0.31 | Apache-2.0 |
 | python-dotenv | 1.2.2 | BSD-3-Clause |
 | boto3 | 1.34.101 | Apache-2.0 |
-| OpenAI Python library | 1.30.1 | Apache-2.0 |
+| OpenAI Python library | 2.45.0 | Apache-2.0 |
 | aiosmtplib | 5.1.1 | MIT |
 | openpyxl | 3.1.2 | MIT |
 | python-docx | 1.2.0 | MIT |
@@ -39,7 +39,8 @@ records the direct dependency versions declared by this source release.
 
 The application dependency versions and license identifiers above were checked
 against the metadata and license files inside the exact wheel files selected on
-2026-07-20. The pytest entry was checked from the installed 9.1.1 distribution.
+2026-07-20; OpenAI 2.45.0 was rechecked on 2026-07-22. The pytest entry was
+checked from the installed 9.1.1 distribution.
 Transitive packages are selected by pip at build time and may change because the
 project does not currently ship a complete lockfile. Redistributors must inspect
 the resolved environment and preserve all license and NOTICE files included by

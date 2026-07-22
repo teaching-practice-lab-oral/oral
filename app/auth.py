@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import User, ActiveSession
+from app.services.legal_acknowledgement import requires_acknowledgement
 from app.services.presence import touch_student_presence
 from app.utils import get_client_ip, taipei_now
 
@@ -122,7 +123,7 @@ def get_current_user(
     # which made this security gate see a different path than the router.
     request_path = request.scope.get("path", "")
     if (
-        user.must_change_password or user.requires_legal_acknowledgement
+        user.must_change_password or requires_acknowledgement(user)
     ) and request_path not in _PASSWORD_CHANGE_ALLOWED_PATHS:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
