@@ -169,24 +169,50 @@ class Settings(BaseSettings):
             raise ValueError("ALGORITHM must be HS256")
         placeholder_markers = ("your-secret", "change-me", "changeme", "replace-with")
         if not self.WORKER_ONLY:
-            normalized_secret = self.SECRET_KEY.strip().casefold()
-            if len(self.SECRET_KEY) < 32 or any(marker in normalized_secret for marker in placeholder_markers):
+            stripped_secret = self.SECRET_KEY.strip()
+            normalized_secret = stripped_secret.casefold()
+            if len(stripped_secret) < 32 or any(marker in normalized_secret for marker in placeholder_markers):
                 raise ValueError(
                     "SECRET_KEY must be an explicit random value of at least 32 characters"
                 )
         if self.CHT_WORKER_ENABLED or self.WORKER_ONLY:
-            normalized_worker_secret = self.CHT_WORKER_SECRET.strip().casefold()
-            if len(self.CHT_WORKER_SECRET) < 32 or any(
+            stripped_worker_secret = self.CHT_WORKER_SECRET.strip()
+            normalized_worker_secret = stripped_worker_secret.casefold()
+            if len(stripped_worker_secret) < 32 or any(
                 marker in normalized_worker_secret for marker in placeholder_markers
             ):
                 raise ValueError(
                     "CHT_WORKER_SECRET must be an explicit random value of at least 32 characters"
                 )
         if self.APP_ENV == "production" and not self.WORKER_ONLY:
-            required = ("DATABASE_URL", "SECRET_KEY", "TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY")
-            missing = [name for name in required if not getattr(self, name, "")]
+            required = (
+                "DATABASE_URL",
+                "SECRET_KEY",
+                "TURNSTILE_SECRET_KEY",
+                "TURNSTILE_SITE_KEY",
+                "PUBLIC_BASE_URL",
+            )
+            missing = [name for name in required if not str(getattr(self, name, "")).strip()]
             if missing:
                 raise ValueError(f"Missing required production settings: {', '.join(missing)}")
+            public_base_url = self.PUBLIC_BASE_URL.strip()
+            parsed_public_url = urlparse(public_base_url)
+            try:
+                parsed_port = parsed_public_url.port
+            except ValueError as exc:
+                raise ValueError("PUBLIC_BASE_URL must be a valid HTTPS origin") from exc
+            if (
+                parsed_public_url.scheme != "https"
+                or not parsed_public_url.hostname
+                or parsed_public_url.username is not None
+                or parsed_public_url.password is not None
+                or parsed_public_url.params
+                or parsed_public_url.query
+                or parsed_public_url.fragment
+                or parsed_public_url.path not in ("", "/")
+                or (parsed_port is not None and not 1 <= parsed_port <= 65535)
+            ):
+                raise ValueError("PUBLIC_BASE_URL must be a valid HTTPS origin")
             if "*" in self.cors_origins_list:
                 raise ValueError("CORS_ORIGINS must not contain '*' in production")
             if "*" in self.trusted_proxy_ips_list:

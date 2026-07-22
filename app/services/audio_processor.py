@@ -3,6 +3,7 @@ transcoding to mp3, object-storage upload, and transcription with fluency metric
 import asyncio
 import logging
 import math
+from dataclasses import dataclass
 
 from fastapi import HTTPException, UploadFile
 
@@ -22,6 +23,12 @@ _AUDIO_MAGIC = (
     b'RIFF',               # WAV (RIFF header)
 )
 _SYNC_BYTES = {b'\xff\xfb', b'\xff\xf3', b'\xff\xf2', b'\xff\xe3'}  # raw MP3 sync
+
+
+@dataclass(frozen=True)
+class PreparedAudioUpload:
+    data: bytes
+    source_filename: str
 
 
 def audio_filename_for_content(data: bytes, key_stem: str) -> str:
@@ -106,21 +113,30 @@ async def read_audio_checked(audio: UploadFile) -> bytes:
     return await audio.read(MAX_AUDIO_BYTES + 1)
 
 
-async def process_audio_upload(
-    audio: UploadFile,
+async def prepare_audio_upload(audio: UploadFile, key_stem: str) -> PreparedAudioUpload:
+    """Perform every local validation before an external-API allowance is consumed."""
+    audio_bytes = await read_audio_checked(audio)
+    validate_audio_upload(audio_bytes)
+    await validate_audio_duration(audio_bytes)
+    return PreparedAudioUpload(
+        data=audio_bytes,
+        source_filename=audio_filename_for_content(audio_bytes, key_stem),
+    )
+
+
+async def process_prepared_audio(
+    prepared: PreparedAudioUpload,
     student_id: str,
     submission_id: int,
     key_stem: str,
 ) -> tuple[str, str, dict | None]:
-    """Validate, transcode to mp3, upload to storage, and transcribe a recording.
+    """Transcode, store, and transcribe an already locally validated recording.
 
     Returns (audio_key, transcript, metrics). `key_stem` names the object under
     audio/{student_id}/{submission_id}/{key_stem}.mp3.
     """
-    audio_bytes = await read_audio_checked(audio)
-    validate_audio_upload(audio_bytes)
-    await validate_audio_duration(audio_bytes)
-    source_filename = audio_filename_for_content(audio_bytes, key_stem)
+    audio_bytes = prepared.data
+    source_filename = prepared.source_filename
     worker_result = await worker_client.process_audio(audio_bytes, source_filename)
     if worker_result is not None:
         mp3_bytes, transcript, metrics = worker_result
@@ -136,3 +152,14 @@ async def process_audio_upload(
         audio_key = f"audio/{student_id}/{submission_id}/{key_stem}.mp3"
         await storage.upload_file_async(audio_key, mp3_bytes, "audio/mpeg")
     return audio_key, transcript, metrics
+
+
+async def process_audio_upload(
+    audio: UploadFile,
+    student_id: str,
+    submission_id: int,
+    key_stem: str,
+) -> tuple[str, str, dict | None]:
+    """Compatibility wrapper for callers that do not need a pre-quota boundary."""
+    prepared = await prepare_audio_upload(audio, key_stem)
+    return await process_prepared_audio(prepared, student_id, submission_id, key_stem)

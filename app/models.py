@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from app.config import settings
 from app.database import Base
+from app.legal_documents import PRIVACY_NOTICE_VERSION, SYSTEM_TERMS_VERSION
 
 
 class User(Base):
@@ -22,6 +23,12 @@ class User(Base):
     course_num = Column(String(64), nullable=True, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     must_change_password = Column(Boolean, default=False, server_default="false", nullable=False)
+    # Kept for compatibility with the original one-time acknowledgement rollout.
+    legal_acknowledged_at = Column(DateTime, nullable=True)
+    privacy_notice_version = Column(String(32), nullable=True)
+    privacy_acknowledged_at = Column(DateTime, nullable=True)
+    system_terms_version = Column(String(32), nullable=True)
+    system_terms_accepted_at = Column(DateTime, nullable=True)
     session_version = Column(Integer, nullable=False, default=1, server_default="1")
     failed_login_count = Column(Integer, nullable=False, default=0, server_default="0")
     locked_until = Column(DateTime, nullable=True)
@@ -36,11 +43,22 @@ class User(Base):
         foreign_keys="AssignmentReminder.user_id",
         lazy="dynamic",
     )
+
     password_reset_tokens = relationship(
         "PasswordResetToken",
         back_populates="user",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def requires_legal_acknowledgement(self) -> bool:
+        """Whether this student has not acknowledged both current public versions."""
+        return self.role == "student" and (
+            self.privacy_notice_version != PRIVACY_NOTICE_VERSION
+            or self.privacy_acknowledged_at is None
+            or self.system_terms_version != SYSTEM_TERMS_VERSION
+            or self.system_terms_accepted_at is None
+        )
 
     __table_args__ = (
         CheckConstraint("role IN ('student', 'admin')", name="ck_users_role"),
@@ -50,6 +68,14 @@ class User(Base):
         ),
         CheckConstraint("session_version >= 1", name="ck_users_session_version_positive"),
         CheckConstraint("failed_login_count >= 0", name="ck_users_failed_login_count_nonnegative"),
+        CheckConstraint(
+            "(privacy_notice_version IS NULL) = (privacy_acknowledged_at IS NULL)",
+            name="ck_users_privacy_ack_pair",
+        ),
+        CheckConstraint(
+            "(system_terms_version IS NULL) = (system_terms_accepted_at IS NULL)",
+            name="ck_users_terms_ack_pair",
+        ),
         Index("ix_users_is_active_role", "is_active", "role"),
     )
 
@@ -579,7 +605,7 @@ class ApiUsageLog(Base):
     user = relationship("User", back_populates="api_logs")
 
     __table_args__ = (
-        CheckConstraint("stage IN (1, 3, 6, 7)", name="ck_api_usage_logs_stage"),
+        CheckConstraint("stage IN (1, 3, 5, 6, 7)", name="ck_api_usage_logs_stage"),
         Index("ix_api_usage_user_called", "user_id", "called_at"),
         Index("ix_api_usage_user_stage_called", "user_id", "stage", "called_at"),
     )

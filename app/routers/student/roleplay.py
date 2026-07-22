@@ -136,8 +136,7 @@ async def _generate_roleplay_report(
     submission_id = sub.id
     request = build_report_request(db, sub, turns, core_questions)
     expected_hash = request.input_hash
-    rate_limiter.check_rate_limit(db, user_id, 7)
-    rate_limiter.log_api_call(db, user_id, 7)
+    rate_limiter.reserve_api_call(user_id, 7)
     db.rollback()
     try:
         report = await generate_report(request)
@@ -201,10 +200,6 @@ async def _append_next_roleplay_question(
     if current_turn >= MAX_ROLEPLAY_TURNS:
         raise HTTPException(status_code=409, detail="角色扮演已達總輪數上限但核心題目未完成，請聯絡老師。")
 
-    if count_api_call:
-        rate_limiter.check_rate_limit(db, user_id, 6)
-        rate_limiter.log_api_call(db, user_id, 6)
-
     needs_secret_question = _all_core_questions_answered(turns, core_questions)
     expected_source_index = (
         SECRET_QUESTION_SOURCE_INDEX
@@ -235,6 +230,8 @@ async def _append_next_roleplay_question(
             expected_source_index,
             conversation_context,
         )
+    if count_api_call:
+        rate_limiter.reserve_api_call(user_id, 6)
     db.rollback()
 
     try:
@@ -429,7 +426,6 @@ async def roleplay_start(
     interviewer_tts_key = None
     persisted = False
     try:
-        rate_limiter.check_rate_limit(db, user_id, 6)
         # Build the prompt and capture every value the slow calls need as plain
         # locals, then release the ordinary row lock and pooled connection. The
         # dedicated advisory-lock connection stays checked out.
@@ -437,7 +433,7 @@ async def roleplay_start(
             db, sub, core_questions, 0
         )
         student_id = current_user.student_id
-        rate_limiter.log_api_call(db, user_id, 6)
+        rate_limiter.reserve_api_call(user_id, 6)
         db.rollback()
 
         try:
@@ -574,9 +570,10 @@ async def roleplay_turn(
                 pronunciation=None,
             )
 
-        rate_limiter.check_rate_limit(db, user_id, 6)
-        rate_limiter.log_api_call(db, user_id, 6)
+        key_stem = f"roleplay_turn{current_turn}_{uuid4().hex}"
         db.rollback()
+        prepared_audio = await audio_processor.prepare_audio_upload(audio, key_stem)
+        rate_limiter.reserve_api_call(user_id, 6)
 
         with worker_client.routing_context(
             user_id=user_id,
@@ -585,11 +582,11 @@ async def roleplay_turn(
             stage=6,
             operation="roleplay_audio",
         ):
-            audio_key, transcript, metrics = await audio_processor.process_audio_upload(
-                audio,
+            audio_key, transcript, metrics = await audio_processor.process_prepared_audio(
+                prepared_audio,
                 student_id,
                 submission_id,
-                f"roleplay_turn{current_turn}_{uuid4().hex}",
+                key_stem,
             )
 
         try:

@@ -220,6 +220,317 @@
       color: #94a3b8;
     }
     .empty-state i { font-size: 4rem; opacity: 0.4; display: block; margin-bottom: 1rem; }
+
+
+    /* ===== 變更密碼視窗美化 ===== */
+    #changePwModal {
+      --pw-primary: var(--primary);
+      --pw-primary-dark: #4338ca;
+      --pw-ink: #1f2937;
+      --pw-muted: #64748b;
+      --pw-line: #dbe3ef;
+      --pw-soft: rgba(79, 70, 229, 0.04);
+    }
+    #changePwModal .modal-dialog {
+      width: min(100% - 1rem, 520px);
+      max-width: 520px;
+      margin: 0.75rem auto;
+    }
+    #changePwModal .modal-content {
+      overflow: hidden;
+      border: 1px solid var(--glass-border) !important;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.96);
+      box-shadow: var(--shadow) !important;
+      backdrop-filter: blur(12px);
+    }
+    #changePwModal .change-pw-header {
+      position: relative;
+      align-items: flex-start;
+      padding: 1.15rem 1.25rem 0.95rem;
+      background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(247,248,255,0.95) 100%);
+      border-bottom: 1px solid #e2e8f0 !important;
+    }
+    #changePwModal .change-pw-heading {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      min-width: 0;
+    }
+    #changePwModal .change-pw-icon {
+      display: grid;
+      flex: 0 0 auto;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      color: var(--pw-primary);
+      background: #eef2ff;
+      border: 1px solid #dbe3ff;
+      font-size: 1rem;
+    }
+    #changePwModal .change-pw-kicker {
+      margin-bottom: 0.1rem;
+      color: var(--pw-primary);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+    #changePwModal .modal-title {
+      color: var(--pw-ink);
+      font-size: 1.08rem;
+      letter-spacing: 0.01em;
+    }
+    #changePwModal .change-pw-subtitle {
+      margin: 0.2rem 0 0;
+      color: var(--pw-muted);
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+    #changePwModal .btn-close {
+      flex: 0 0 auto;
+      margin: 0.05rem 0 0 0.7rem;
+      padding: 0.55rem;
+      border-radius: 999px;
+      background-color: rgba(255,255,255,0.7);
+      opacity: 0.65;
+    }
+    #changePwModal .btn-close:hover { opacity: 1; }
+    #changePwModal .modal-body {
+      padding: 1.1rem 1.25rem 0.65rem;
+      color: var(--pw-ink);
+    }
+    #changePwModal .change-pw-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.7rem;
+      margin-bottom: 1rem;
+      padding: 0.85rem 0.95rem;
+      border: 1px solid #f0e4b0;
+      border-radius: 14px;
+      color: #7c5b12;
+      background: #fffdf2;
+      font-size: 0.88rem;
+      line-height: 1.55;
+    }
+    #changePwModal .change-pw-note i {
+      flex: 0 0 auto;
+      margin-top: 0.08rem;
+      color: #ca8a04;
+      font-size: 1rem;
+    }
+    #changePwModal .change-pw-section-title {
+      margin-bottom: 0.65rem;
+      color: #64748b;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+    #changePwModal .legal-doc-list {
+      display: grid;
+      gap: 0.55rem;
+    }
+    #changePwModal .legal-doc-link {
+      display: flex;
+      align-items: center;
+      gap: 0.72rem;
+      padding: 0.78rem 0.85rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 13px;
+      color: #334155;
+      background: #fff;
+      text-decoration: none;
+      transition: border-color .18s ease, background .18s ease;
+    }
+    #changePwModal .legal-doc-link:hover {
+      border-color: #c7d2fe;
+      background: #f8faff;
+      color: var(--pw-primary-dark);
+    }
+    #changePwModal .legal-doc-link .doc-icon {
+      display: grid;
+      flex: 0 0 auto;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      color: var(--pw-primary);
+      background: #edf3ff;
+    }
+    #changePwModal .legal-doc-link .doc-text {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.88rem;
+      font-weight: 650;
+      line-height: 1.4;
+    }
+    #changePwModal .legal-doc-link .bi-box-arrow-up-right {
+      flex: 0 0 auto;
+      color: #94a3b8;
+      font-size: 0.8rem;
+    }
+    #changePwModal .consent-panel {
+      display: grid;
+      gap: 0.55rem;
+      margin-top: 0.85rem;
+    }
+    #changePwModal .consent-item {
+      position: relative;
+      margin: 0;
+      padding: 0.78rem 0.85rem 0.78rem 2.65rem;
+      border: 1px solid var(--pw-line);
+      border-radius: 13px;
+      background: #fff;
+      transition: border-color .18s ease, background .18s ease;
+    }
+    #changePwModal .consent-item:has(.form-check-input:checked) {
+      border-color: #c7d2fe;
+      background: #f8faff;
+    }
+    #changePwModal .consent-item .form-check-input {
+      position: absolute;
+      left: 0.9rem;
+      top: 0.92rem;
+      width: 1.08rem;
+      height: 1.08rem;
+      margin: 0;
+      border-color: #b6c1d2;
+      cursor: pointer;
+    }
+    #changePwModal .consent-item .form-check-label {
+      color: #354158;
+      font-size: 0.86rem;
+      line-height: 1.5;
+      cursor: pointer;
+    }
+    #changePwModal .password-group { margin-bottom: 0.9rem; }
+    #changePwModal .password-group:last-child { margin-bottom: 0; }
+    #changePwModal .form-label {
+      margin-bottom: 0.42rem;
+      color: #334155;
+      font-size: 0.86rem;
+      font-weight: 750 !important;
+    }
+    #changePwModal .password-field { position: relative; }
+    #changePwModal .password-field > .field-icon {
+      position: absolute;
+      left: 0.95rem;
+      top: 50%;
+      z-index: 3;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      pointer-events: none;
+    }
+    #changePwModal .password-field .form-control {
+      min-height: 48px;
+      padding: 0.72rem 3rem 0.72rem 2.65rem;
+      border: 1px solid var(--pw-line);
+      border-radius: 13px;
+      color: var(--pw-ink);
+      background: #fff;
+      font-size: 0.95rem;
+      box-shadow: none;
+      transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+    }
+    #changePwModal .password-field .form-control::placeholder { color: #9aa6b6; }
+    #changePwModal .password-field .form-control:focus {
+      border-color: #a5b4fc;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+    }
+    #changePwModal .password-toggle {
+      position: absolute;
+      right: 0.6rem;
+      top: 50%;
+      z-index: 4;
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      transform: translateY(-50%);
+      border: 0;
+      border-radius: 10px;
+      color: #718096;
+      background: transparent;
+    }
+    #changePwModal .password-toggle:hover {
+      color: var(--pw-primary);
+      background: #edf3ff;
+    }
+    #changePwModal .password-hint {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-top: 0.42rem;
+      color: #7b8798;
+      font-size: 0.76rem;
+    }
+    #changePwModal .modal-footer {
+      gap: 0.65rem;
+      padding: 0.9rem 1.25rem 1.15rem;
+      background: #fff;
+    }
+    #changePwModal .modal-footer .btn {
+      min-height: 46px;
+      border-radius: 12px;
+      font-weight: 750;
+    }
+    #changePwModal #changePwCancelBtn {
+      border: 1px solid var(--pw-line);
+      color: #475569;
+      background: #fff;
+    }
+    #changePwModal #changePwCancelBtn:hover { background: #f8fafc; }
+    #changePwModal #changePwSubmitBtn {
+      min-width: 142px;
+      border: 0;
+      background: linear-gradient(90deg, var(--pw-primary), #7c3aed);
+      box-shadow: 0 8px 18px rgba(79, 70, 229, 0.18);
+    }
+    #changePwModal #changePwSubmitBtn:hover {
+      background: linear-gradient(90deg, #4338ca, #6d28d9);
+      transform: translateY(-1px);
+    }
+    #changePwModal #changePwSubmitBtn:active { transform: translateY(0); }
+    #changePwModal #changePwAlert {
+      border: 0;
+      border-radius: 13px;
+      font-size: 0.86rem;
+    }
+
+    @media (max-width: 575.98px) {
+      #changePwModal .modal-dialog {
+        width: min(100% - 1rem, 520px);
+        max-width: 520px;
+        min-height: 0;
+        margin: 0.5rem auto;
+      }
+      #changePwModal .modal-content {
+        min-height: 0;
+        max-height: calc(100dvh - 1rem);
+        border: 1px solid var(--glass-border) !important;
+        border-radius: 20px;
+        overflow: hidden;
+      }
+      #changePwModal .change-pw-header { padding: 1rem 1rem 0.8rem; }
+      #changePwModal .change-pw-icon { width: 38px; height: 38px; border-radius: 12px; }
+      #changePwModal .modal-body {
+        padding: 1rem 1rem 0.5rem;
+        overflow: auto;
+      }
+      #changePwModal .modal-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+        padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+        border-top: 1px solid #e8edf5 !important;
+        background: rgba(255,255,255,0.94);
+        backdrop-filter: blur(12px);
+      }
+      #changePwModal .modal-footer .btn { flex: 1; }
+      #changePwModal #changePwSubmitBtn { min-width: 0; }
+    }
+
   </style>
 </head>
 <body>
@@ -245,35 +556,104 @@
   </nav>
 
   <!-- 變更密碼 Modal -->
-  <div class="modal fade" id="changePwModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header border-0 pb-0">
-          <h5 class="modal-title fw-bold"><i class="bi bi-key me-2 text-primary"></i>變更密碼</h5>
-          <button type="button" class="btn-close" id="changePwClose" data-bs-dismiss="modal"></button>
+  <div class="modal fade" id="changePwModal" tabindex="-1" aria-labelledby="changePwModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header change-pw-header">
+          <div class="change-pw-heading">
+            <div class="change-pw-icon" aria-hidden="true">
+              <i class="bi bi-shield-lock-fill"></i>
+            </div>
+            <div>
+              <div class="change-pw-kicker">帳戶安全與使用者權益</div>
+              <h5 class="modal-title fw-bold" id="changePwModalTitle">設定新的登入密碼</h5>
+              <p class="change-pw-subtitle" id="changePwSubtitle">定期更新登入密碼，有助於保護您的帳戶與作業資料。</p>
+            </div>
+          </div>
+          <button type="button" class="btn-close" id="changePwClose" data-bs-dismiss="modal" aria-label="關閉"></button>
         </div>
-        <div class="modal-body pt-2">
+
+        <div class="modal-body">
           <div id="changePwAlert" class="alert d-none"></div>
-          <div id="changePwFirstLoginNote" class="alert alert-warning small d-none">
-            <i class="bi bi-exclamation-triangle me-1"></i>您使用的是系統初始密碼，請立即更換新密碼以保護帳號安全。
+
+          <div id="changePwFirstLoginNote" class="change-pw-note d-none">
+            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+            <div>
+              <strong id="changePwSetupTitle">請完成帳戶設定</strong><br>
+              <span id="changePwSetupText">請完成必要設定後再繼續使用系統。</span>
+            </div>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">舊密碼</label>
-            <input type="password" class="form-control" id="oldPassword" placeholder="請輸入舊密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+
+          <div id="changePwLegalDocs" class="mb-3 d-none">
+            <div class="change-pw-section-title">使用前請閱讀</div>
+            <div class="legal-doc-list">
+              <a href="https://docs.oral.brid.pw/legal/privacy-notice/" target="_blank" rel="noopener noreferrer" class="legal-doc-link">
+                <span class="doc-icon"><i class="bi bi-person-vcard"></i></span>
+                <span class="doc-text">個人資料蒐集、處理及利用告知事項（版本 2026-07-22.1）</span>
+                <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+              </a>
+              <a href="https://docs.oral.brid.pw/legal/system-terms/" target="_blank" rel="noopener noreferrer" class="legal-doc-link">
+                <span class="doc-icon"><i class="bi bi-file-earmark-check"></i></span>
+                <span class="doc-text">AI 英語面試練習系統使用者條款暨可接受使用規範（版本 2026-07-22.1）</span>
+                <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+              </a>
+            </div>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">新密碼</label>
-            <input type="password" class="form-control" id="newPassword" placeholder="至少 8 個字元" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+
+          <div id="changePwLegalConsent" class="consent-panel mb-3 d-none">
+            <div class="form-check consent-item">
+              <input class="form-check-input" type="checkbox" id="privacyAcknowledged" name="privacyAcknowledged">
+              <label class="form-check-label" for="privacyAcknowledged">
+                我已閱讀並了解「個人資料蒐集、處理及利用告知事項」。
+              </label>
+            </div>
+            <div class="form-check consent-item">
+              <input class="form-check-input" type="checkbox" id="termsAccepted" name="termsAccepted">
+              <label class="form-check-label" for="termsAccepted">
+                我已閱讀、了解並同意遵守「AI 英語面試練習系統使用者條款暨可接受使用規範」（版本 2026-07-22.1）。
+              </label>
+            </div>
           </div>
-          <div class="mb-1">
-            <label class="form-label fw-semibold">確認新密碼</label>
-            <input type="password" class="form-control" id="confirmPassword" placeholder="再輸入一次新密碼" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+
+          <div class="password-group">
+            <label class="form-label" for="oldPassword">目前密碼</label>
+            <div class="password-field">
+              <i class="bi bi-key field-icon" aria-hidden="true"></i>
+              <input type="password" class="form-control" id="oldPassword" placeholder="輸入目前使用的密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+              <button type="button" class="password-toggle" data-password-target="oldPassword" aria-label="顯示密碼">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="password-group">
+            <label class="form-label" for="newPassword">新密碼</label>
+            <div class="password-field">
+              <i class="bi bi-lock field-icon" aria-hidden="true"></i>
+              <input type="password" class="form-control" id="newPassword" placeholder="輸入至少 8 個字元" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+              <button type="button" class="password-toggle" data-password-target="newPassword" aria-label="顯示密碼">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+            <div class="password-hint"><i class="bi bi-info-circle"></i>請勿使用與舊密碼相同的組合。</div>
+          </div>
+
+          <div class="password-group">
+            <label class="form-label" for="confirmPassword">再次確認新密碼</label>
+            <div class="password-field">
+              <i class="bi bi-shield-check field-icon" aria-hidden="true"></i>
+              <input type="password" class="form-control" id="confirmPassword" placeholder="再次輸入新密碼" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+              <button type="button" class="password-toggle" data-password-target="confirmPassword" aria-label="顯示密碼">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
           </div>
         </div>
+
         <div class="modal-footer border-0">
           <button class="btn btn-light" id="changePwCancelBtn" data-bs-dismiss="modal">稍後再說</button>
           <button class="btn btn-primary" id="changePwSubmitBtn" data-action="doChangePassword">
-            <i class="bi bi-check-lg me-1"></i>確認變更
+            <i class="bi bi-check2-circle me-1"></i>儲存新密碼
           </button>
         </div>
       </div>
@@ -322,7 +702,7 @@
   <script src="/static/pwa.js?v=7"></script>
   <script src="/static/student/workflow.js?v=4"></script>
   <script type="module" src="/static/student/controllers/index.mjs?v=4"></script>
-  <script type="module" src="/static/student/controllers/index-page.mjs?v=5"></script>
+  <script type="module" src="/static/student/controllers/index-page.mjs?v=7"></script>
 
 <div id="stageWatermark" class="stage-watermark" aria-hidden="true">Stage</div>
 <script>
@@ -331,5 +711,23 @@
   }
 </script>
 <footer style="text-align:center;padding:12px 0 8px;font-size:0.85rem;color:#888;">AI 英語面試練習系統 · Apache-2.0</footer>
+
+<script>
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-password-target]');
+    if (!button) return;
+
+    const input = document.getElementById(button.dataset.passwordTarget);
+    if (!input) return;
+
+    const isHidden = input.type === 'password';
+    input.type = isHidden ? 'text' : 'password';
+    button.setAttribute('aria-label', isHidden ? '隱藏密碼' : '顯示密碼');
+
+    const icon = button.querySelector('i');
+    if (icon) icon.className = isHidden ? 'bi bi-eye-slash' : 'bi bi-eye';
+  });
+</script>
+
 </body>
 </html>

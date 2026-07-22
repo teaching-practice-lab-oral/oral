@@ -2,9 +2,13 @@ from datetime import timedelta
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models import ApiUsageLog, LoginEvent
+from app.database import SessionLocal
+from app.models import ApiUsageLog, LoginEvent, User
 from app.config import settings
 from app.utils import taipei_now
+
+
+API_USAGE_STAGES = frozenset({1, 3, 5, 6, 7})
 
 
 def check_login_ip_rate_limit(db: Session, ip_address: str | None) -> None:
@@ -33,50 +37,65 @@ def check_login_ip_rate_limit(db: Session, ip_address: str | None) -> None:
         )
 
 
-def check_rate_limit(db: Session, user_id: int, stage: int) -> None:
+def reserve_api_call(user_id: int, stage: int) -> None:
+    """Atomically enforce and consume one external-API allowance.
+
+    The dedicated transaction deliberately does not share the route's ORM
+    session. Locking the user row serializes both the per-stage and aggregate
+    daily counters across every web worker without committing caller state.
     """
-    Raises HTTP 429 if:
-    - user exceeded STAGE_HOURLY_LIMIT calls for this stage in the past hour, or
-    - user exceeded DAILY_API_LIMIT total external API calls today.
-    """
+    if stage not in API_USAGE_STAGES:
+        raise ValueError(f"Unsupported API usage stage: {stage}")
+
     now = taipei_now()
-
-    # Hourly per-stage limit
     one_hour_ago = now - timedelta(hours=1)
-    hourly_count = (
-        db.query(ApiUsageLog)
-        .filter(
-            ApiUsageLog.user_id == user_id,
-            ApiUsageLog.stage == stage,
-            ApiUsageLog.called_at >= one_hour_ago,
-        )
-        .count()
-    )
-    if hourly_count >= settings.STAGE_HOURLY_LIMIT:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Rate limit exceeded: max {settings.STAGE_HOURLY_LIMIT} calls per hour for stage {stage}.",
-        )
-
-    # Daily total limit (stages 1, 3, 5, 6 and 7 consume AI APIs)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    daily_count = (
-        db.query(ApiUsageLog)
-        .filter(
-            ApiUsageLog.user_id == user_id,
-            ApiUsageLog.called_at >= today_start,
-        )
-        .count()
-    )
-    if daily_count >= settings.DAILY_API_LIMIT:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily API limit exceeded: max {settings.DAILY_API_LIMIT} external API calls per day.",
-        )
 
+    with SessionLocal() as quota_db:
+        try:
+            user = (
+                quota_db.query(User)
+                .filter(User.id == user_id)
+                .with_for_update()
+                .first()
+            )
+            if user is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="使用者不存在或已失效。",
+                )
 
-def log_api_call(db: Session, user_id: int, stage: int) -> None:
-    """Record an API call in api_usage_logs."""
-    log = ApiUsageLog(user_id=user_id, stage=stage, called_at=taipei_now())
-    db.add(log)
-    db.commit()
+            hourly_count = (
+                quota_db.query(ApiUsageLog)
+                .filter(
+                    ApiUsageLog.user_id == user_id,
+                    ApiUsageLog.stage == stage,
+                    ApiUsageLog.called_at >= one_hour_ago,
+                )
+                .count()
+            )
+            if hourly_count >= settings.STAGE_HOURLY_LIMIT:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Rate limit exceeded: max {settings.STAGE_HOURLY_LIMIT} calls per hour for stage {stage}.",
+                )
+
+            daily_count = (
+                quota_db.query(ApiUsageLog)
+                .filter(
+                    ApiUsageLog.user_id == user_id,
+                    ApiUsageLog.called_at >= today_start,
+                )
+                .count()
+            )
+            if daily_count >= settings.DAILY_API_LIMIT:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Daily API limit exceeded: max {settings.DAILY_API_LIMIT} external API calls per day.",
+                )
+
+            quota_db.add(ApiUsageLog(user_id=user_id, stage=stage, called_at=now))
+            quota_db.commit()
+        except Exception:
+            quota_db.rollback()
+            raise

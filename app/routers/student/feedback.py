@@ -121,10 +121,9 @@ async def get_ai_feedback_stream(
 
     lease = await acquire_operation_lock(submission_id, FEEDBACK_OPERATION)
     try:
-        rate_limiter.check_rate_limit(db, current_user.id, 3)
         system_prompt, user_message = _feedback_request_data(db, sub, draft1_answers)
         user_id = current_user.id
-        rate_limiter.log_api_call(db, user_id, 3)
+        rate_limiter.reserve_api_call(user_id, 3)
         # Release the FOR UPDATE lock before streaming to prevent deadlock with
         # _save_feedback's db2 session. The dedicated advisory-lock connection
         # remains held until the stream generator finishes or is cancelled.
@@ -257,6 +256,10 @@ async def save_final_draft(
     operation_lease = await acquire_operation_lock(submission_id, FEEDBACK_OPERATION)
 
     try:
+        # Validate/flush every local state change before consuming one allowance
+        # for the whole TTS batch. The reservation does not commit this session.
+        db.flush()
+        rate_limiter.reserve_api_call(current_user.id, 5)
         db.commit()
         assets = await asyncio.gather(
             *(

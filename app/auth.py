@@ -21,6 +21,7 @@ _PASSWORD_CHANGE_ALLOWED_PATHS = {
     "/api/auth/refresh",
     "/api/auth/logout",
     "/api/auth/change-password",
+    "/api/auth/legal-acknowledgement",
 }
 
 
@@ -120,10 +121,12 @@ def get_current_user(
     # releases could derive URL.path from an attacker-controlled Host header,
     # which made this security gate see a different path than the router.
     request_path = request.scope.get("path", "")
-    if user.must_change_password and request_path not in _PASSWORD_CHANGE_ALLOWED_PATHS:
+    if (
+        user.must_change_password or user.requires_legal_acknowledgement
+    ) and request_path not in _PASSWORD_CHANGE_ALLOWED_PATHS:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="請先變更初始密碼後再繼續使用。",
+            detail="請先完成帳戶設定後再繼續使用。",
         )
     th = _token_hash(token)
     session = db.query(ActiveSession).filter(ActiveSession.token_hash == th).first()

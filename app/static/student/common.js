@@ -43,7 +43,7 @@ function navigateStudentPage(url, { replace = false } = {}) {
 })();
 
 function clearStudentAuthState() {
-  ['role', 'name', 'user_id', 'userId', 'studentId', 'must_change_password', 'isPrivilegedAdmin']
+  ['role', 'name', 'user_id', 'userId', 'studentId', 'must_change_password', 'requires_legal_acknowledgement', 'isPrivilegedAdmin']
     .forEach(key => sessionStorage.removeItem(key));
 }
 
@@ -85,7 +85,8 @@ window.fetch = (url, options = {}) => {
     sessionStorage.setItem('role', data.role);
     sessionStorage.setItem('name', data.name);
     sessionStorage.setItem('must_change_password', data.must_change_password ? '1' : '0');
-    if (data.must_change_password && location.pathname !== '/student') {
+    sessionStorage.setItem('requires_legal_acknowledgement', data.requires_legal_acknowledgement ? '1' : '0');
+    if ((data.must_change_password || data.requires_legal_acknowledgement) && location.pathname !== '/student') {
       navigateStudentPage('/student', { replace: true });
       return;
     }

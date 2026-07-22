@@ -53,6 +53,7 @@ class LoginResponse(BaseModel):
     name: str
     user_id: int
     must_change_password: bool = False
+    requires_legal_acknowledgement: bool = False
     is_privileged_admin: bool = False
 
 
@@ -106,6 +107,7 @@ class UserMe(BaseModel):
     role: str
     is_active: bool
     must_change_password: bool = False
+    requires_legal_acknowledgement: bool = False
     is_privileged_admin: bool = False
     is_protected_admin: bool = False
 
@@ -817,11 +819,18 @@ class ResetPasswordRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
+    privacy_acknowledged: bool = False
+    terms_accepted: bool = False
 
     @field_validator("new_password")
     @classmethod
     def _check_new_password(cls, v: str) -> str:
         return validate_password(v)
+
+
+class LegalAcknowledgementRequest(BaseModel):
+    privacy_acknowledged: bool = False
+    terms_accepted: bool = False
 
 
 class MessageResponse(BaseModel):

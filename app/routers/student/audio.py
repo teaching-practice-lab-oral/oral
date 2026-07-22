@@ -8,7 +8,7 @@ from app.auth import get_current_student
 from app.database import get_db
 from app.models import User
 from app.schemas import ShadowingTTSAudioResponse
-from app.services import tts_alignment
+from app.services import rate_limiter, tts_alignment
 from app.services.shadowing_tts import generate_asset
 from app.services.submission_assets import (
     delete_uncommitted_object,
@@ -116,6 +116,7 @@ async def prepare_audio_shadowing_tts_question(
 
         student_id = current_user.student_id
         db.rollback()
+        rate_limiter.reserve_api_call(current_user.id, 5)
         asset = await generate_asset(
             final_draft_answers,
             student_id,

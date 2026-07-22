@@ -63,12 +63,13 @@ async def speaking1_shadowing_question(
     # rejected before either request spends on transcription.
     lease = await acquire_operation_lock(submission_id, SHADOWING_OPERATION)
     try:
-        # Validation is done under the row lock; the dedicated advisory-lock
-        # connection remains held while the ordinary DB session is released.
+        # The operation lease remains held while local validation and external
+        # processing run, but the ordinary row lock is released first.
         student_id = current_user.student_id
-        rate_limiter.check_rate_limit(db, current_user.id, 5)
-        rate_limiter.log_api_call(db, current_user.id, 5)
+        key_stem = f"shadowing_recording_q{question_index}_{uuid4().hex}"
         db.rollback()
+        prepared_audio = await audio_processor.prepare_audio_upload(audio, key_stem)
+        rate_limiter.reserve_api_call(current_user.id, 5)
 
         with worker_client.routing_context(
             user_id=current_user.id,
@@ -77,11 +78,11 @@ async def speaking1_shadowing_question(
             stage=5,
             operation="shadowing_audio",
         ):
-            audio_key, transcript, metrics = await audio_processor.process_audio_upload(
-                audio,
+            audio_key, transcript, metrics = await audio_processor.process_prepared_audio(
+                prepared_audio,
                 student_id,
                 submission_id,
-                f"shadowing_recording_q{question_index}_{uuid4().hex}",
+                key_stem,
             )
 
         # Re-check mutable preconditions under a fresh row lock before accepting
