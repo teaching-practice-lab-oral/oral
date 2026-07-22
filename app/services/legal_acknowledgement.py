@@ -20,12 +20,12 @@ class LegalDocument:
 
 PRIVACY_NOTICE = LegalDocument(
     title="個人資料蒐集、處理及利用告知事項",
-    version="2026-07-22.1",
+    version="2026-07-22.2",
     url="https://docs.oral.brid.pw/legal/privacy-notice/",
 )
 SYSTEM_TERMS = LegalDocument(
     title="AI 英語面試練習系統使用者條款暨可接受使用規範",
-    version="2026-07-22.1",
+    version="2026-07-22.2",
     url="https://docs.oral.brid.pw/legal/system-terms/",
 )
 
