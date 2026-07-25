@@ -264,18 +264,22 @@ class SendImportEmailsRequest(BaseModel):
     users: List[ImportedUserDetail] = Field(min_length=1, max_length=500)
 
 
-class EmailJobStartResponse(BaseModel):
+class DeliveryJobStartResponse(BaseModel):
     job_id: str
     total: int
+    state: str
 
 
-class EmailJobStatusResponse(BaseModel):
+class DeliveryJobStatusResponse(BaseModel):
     job_id: str
+    kind: str
+    state: str
     total: int
-    sent: int
+    processed: int
+    succeeded: int
     failed: int
-    done: bool
-    failed_emails: List[str] = []
+    details: dict = Field(default_factory=dict)
+    error: Optional[str] = None
 
 
 # ── Assignment ────────────────────────────────────────────────────────────────
@@ -565,6 +569,8 @@ class StudentAssignmentItem(BaseModel):
     workflow_version: int = 2
     has_job_profile: bool = False
     has_submission_history: bool = False
+    latest_submitted_submission_id: Optional[int] = None
+    result_export_submission_id: Optional[int] = None
     has_grade_history: bool = False
     rubric_version_id: int
 

@@ -18,9 +18,19 @@ _GUARDRAIL_REASK_MARKERS = (
     "let's stay focused on the interview",
 )
 _SECRET_QUESTION_FALLBACK = (
-    "Please choose one example you mentioned and explain one specific "
-    "difficulty you personally faced, what you did, and what result followed?"
+    "Please choose one situation you mentioned and explain the difficulty "
+    "you personally faced, what you did, and what result followed?"
 )
+_CONCRETE_WORD = re.compile(r"\bconcrete\b", re.IGNORECASE)
+
+
+def _uses_unrequested_concrete_word(text: str, canonical_question: str | None = None) -> bool:
+    return bool(
+        _CONCRETE_WORD.search(text)
+        and not _CONCRETE_WORD.search(canonical_question or "")
+    )
+
+
 def _normalize_interviewer_question(text: str | None) -> str:
     normalized = (text or "").lower().replace("’", "'")
     for phrase in ("let's stay focused on the interview", "please answer in english"):
@@ -134,8 +144,11 @@ def can_add_guardrail_reask(turns: list[dict], core_questions: list[str]) -> boo
 def question_request(expected_index: int, core_question: str, context: str) -> str:
     return (
         f"Ask core question {expected_index + 1} now. Preserve this intent: {core_question}\n"
-        "Keep it as one question, but make it specific: ask for a concrete example, "
-        "the candidate's own action, reasoning, difficulty, or result when appropriate. "
+        "Keep it as one natural question. Use the core question as written unless a small "
+        "spoken-English adjustment is needed. Do not automatically append an evidence probe. "
+        "Only when the core intent requires more detail, ask about one fitting element such as "
+        "a situation, the candidate's own action, reasoning, difficulty, or result. Vary the "
+        "wording across the interview and do not repeat a stock phrase. "
         "Respond in English only; do not use Chinese or any other non-Latin script. "
         "Do not ask any other question.\n" + context
     )
@@ -152,6 +165,12 @@ def validated_question(
     text = (generated or "").strip()
     if len(text) > CUSTOM_QUESTION_MAX_CHARS or contains_non_latin_script(text):
         logger.warning("Roleplay question %s was invalid; using canonical fallback", expected_index)
+        return core_questions[expected_index], expected_index
+    if _uses_unrequested_concrete_word(text, core_questions[expected_index]):
+        logger.warning(
+            "Roleplay question %s used repetitive probe wording; using canonical fallback",
+            expected_index,
+        )
         return core_questions[expected_index], expected_index
     matched = match_interview_question_index(text, core_questions)
     if matched == expected_index:
@@ -171,8 +190,10 @@ def validated_question(
 
 def validated_secret_question(generated: str | None, core_questions: list[str]) -> str:
     text = " ".join((generated or "").strip().split())
-    if contains_non_latin_script(text):
-        logger.warning("Generated verification question contained a non-Latin script; using English fallback")
+    if contains_non_latin_script(text) or _uses_unrequested_concrete_word(text):
+        logger.warning(
+            "Generated verification question violated language policy; using fallback"
+        )
         return _SECRET_QUESTION_FALLBACK
     if (
         not text

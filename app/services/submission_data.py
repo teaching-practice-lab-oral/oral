@@ -427,7 +427,7 @@ def get_reflection_data(db: Session, submission: Submission) -> dict | None:
     answers_by_index = {answer.question_index: answer.answer_text for answer in row.answers}
     return {
         "revision": row.revision,
-        "questions": REFLECTION_QUESTIONS,
+        "questions": list(REFLECTION_QUESTIONS),
         "answers": [answers_by_index.get(index, "") for index in range(len(REFLECTION_QUESTIONS))],
         "has_issue": bool(row.has_issue),
         "issue_category": row.issue_category,

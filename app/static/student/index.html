@@ -164,6 +164,20 @@
     }
     .btn-retry:hover:not(:disabled) { opacity: 0.88; color: white; }
     .btn-retry:disabled { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; opacity: 1; }
+    .btn-export-result {
+      grid-column: 1 / -1;
+      background: linear-gradient(90deg, #4f46e5, #7c3aed);
+      border: 2px solid transparent;
+      color: white;
+      font-weight: 600;
+      border-radius: 10px;
+      padding: 0.5rem 1rem;
+    }
+    .btn-export-result:hover:not(:disabled) { opacity: 0.88; color: white; }
+    .btn-export-result:disabled { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; opacity: 1; }
+    .result-export-feedback { color: #b91c1c; font-size: 0.78rem; margin-top: 0.45rem; }
+    .result-export-feedback.is-success { color: #047857; }
+    .result-export-feedback:empty { display: none; }
     .retry-feedback { color: #b91c1c; font-size: 0.78rem; margin-top: 0.45rem; }
     .retry-feedback:empty { display: none; }
     .assignment-actions { display: flex; flex-direction: column; gap: 0.6rem; }
@@ -392,7 +406,7 @@
   <script src="/static/pwa.js?v=7"></script>
   <script src="/static/student/workflow.js?v=4"></script>
   <script type="module" src="/static/student/controllers/index.mjs?v=4"></script>
-  <script type="module" src="/static/student/controllers/index-page.mjs?v=8"></script>
+  <script type="module" src="/static/student/controllers/index-page.mjs?v=10"></script>
 
 <div id="stageWatermark" class="stage-watermark" aria-hidden="true">Stage</div>
 <script>

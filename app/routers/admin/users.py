@@ -27,7 +27,7 @@ from app.schemas import (
     AdminDashboardStats,
     ImportSummary, ImportedUserDetail, SendImportEmailsRequest,
     ResetPasswordRequest, DeleteConfirmRequest,
-    EmailJobStartResponse, EmailJobStatusResponse, UserMailActionResponse,
+    DeliveryJobStartResponse, DeliveryJobStatusResponse, UserMailActionResponse,
 )
 from app.services import mail
 from app.services.admin_audit import log_admin_action, snapshot_user, summarize_imported_users
@@ -499,6 +499,11 @@ async def _run_email_job(job_id: str, users: list[ImportedUserDetail]) -> None:
     sent = 0
     failed_emails: list[str] = []
 
+    job = db.get(EmailJob, job_id)
+    if job is not None:
+        job.state = "running"
+        db.commit()
+
     async def _send_one(u: ImportedUserDetail) -> str | None:
         async with sem:
             for attempt in range(1, _EMAIL_MAX_ATTEMPTS + 1):
@@ -530,16 +535,19 @@ async def _run_email_job(job_id: str, users: list[ImportedUserDetail]) -> None:
                 sent += 1
             job = db.get(EmailJob, job_id)
             if job is not None:
-                job.sent = sent
+                job.processed = sent + len(failed_emails)
+                job.succeeded = sent
                 job.failed = len(failed_emails)
-                job.failed_emails = list(failed_emails)  # fresh object so JSON change is detected
+                job.details = {"failed_emails": list(failed_emails)}
                 db.commit()
         job = db.get(EmailJob, job_id)
         if job is not None:
-            job.sent = sent
+            job.processed = sent + len(failed_emails)
+            job.succeeded = sent
             job.failed = len(failed_emails)
-            job.failed_emails = list(failed_emails)
-            job.done = True
+            job.details = {"failed_emails": list(failed_emails)}
+            job.state = "completed"
+            job.completed_at = taipei_now()
             db.commit()
         logger.info("send-import-emails job %s done: %d sent, %d failed", job_id, sent, len(failed_emails))
     except Exception:
@@ -547,7 +555,9 @@ async def _run_email_job(job_id: str, users: list[ImportedUserDetail]) -> None:
         try:
             job = db.get(EmailJob, job_id)
             if job is not None:
-                job.done = True
+                job.state = "failed"
+                job.error = "帳號通知寄送工作意外中止"
+                job.completed_at = taipei_now()
                 db.commit()
         except Exception:
             pass
@@ -555,7 +565,7 @@ async def _run_email_job(job_id: str, users: list[ImportedUserDetail]) -> None:
         db.close()
 
 
-@router.post("/users/send-import-emails", response_model=EmailJobStartResponse)
+@router.post("/users/send-import-emails", response_model=DeliveryJobStartResponse)
 async def send_import_emails(
     payload: SendImportEmailsRequest,
     request: Request,
@@ -564,7 +574,14 @@ async def send_import_emails(
 ):
     users = _validate_imported_user_batch(payload.users, admin, db)
     job_id = uuid.uuid4().hex
-    job = EmailJob(id=job_id, kind="account", total=len(users))
+    job = EmailJob(
+        id=job_id,
+        kind="account",
+        created_by_id=admin.id,
+        state="queued",
+        total=len(users),
+        details={"failed_emails": []},
+    )
     db.add(job)
     db.commit()
     log_admin_action(
@@ -586,10 +603,10 @@ async def send_import_emails(
     # Fire-and-forget: the task keeps the user list in this worker's memory and writes
     # progress to the DB, which the status endpoint reads back (possibly from another worker).
     asyncio.create_task(_run_email_job(job_id, list(users)))
-    return EmailJobStartResponse(job_id=job_id, total=len(users))
+    return DeliveryJobStartResponse(job_id=job_id, total=len(users), state="queued")
 
 
-@router.get("/users/send-import-emails/{job_id}", response_model=EmailJobStatusResponse)
+@router.get("/users/send-import-emails/{job_id}", response_model=DeliveryJobStatusResponse)
 def get_email_job_status(
     job_id: str,
     admin: User = Depends(get_current_admin),
@@ -598,13 +615,18 @@ def get_email_job_status(
     job = db.get(EmailJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Email job not found")
-    return EmailJobStatusResponse(
+    if job.kind != "account":
+        raise HTTPException(status_code=404, detail="Email job not found")
+    return DeliveryJobStatusResponse(
         job_id=job.id,
+        kind=job.kind,
+        state=job.state,
         total=job.total,
-        sent=job.sent,
+        processed=job.processed,
+        succeeded=job.succeeded,
         failed=job.failed,
-        done=job.done,
-        failed_emails=job.failed_emails or [],
+        details=job.details or {},
+        error=job.error,
     )
 
 

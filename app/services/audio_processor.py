@@ -4,6 +4,7 @@ import asyncio
 import logging
 import math
 from dataclasses import dataclass
+from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile
 
@@ -133,8 +134,8 @@ async def process_prepared_audio(
 ) -> tuple[str, str, dict | None]:
     """Transcode, store, and transcribe an already locally validated recording.
 
-    Returns (audio_key, transcript, metrics). `key_stem` names the object under
-    audio/{student_id}/{submission_id}/{key_stem}.mp3.
+    Returns (audio_key, transcript, metrics). Every recording gets a unique key
+    inside the current database generation's storage namespace.
     """
     audio_bytes = prepared.data
     source_filename = prepared.source_filename
@@ -142,7 +143,12 @@ async def process_prepared_audio(
     worker_result = await worker_client.process_audio(audio_bytes, source_filename)
     if worker_result is not None:
         mp3_bytes, transcript, metrics = worker_result
-        audio_key = f"audio/{student_id}/{submission_id}/{key_stem}.mp3"
+        audio_key = storage.object_key(
+            "audio",
+            student_id,
+            submission_id,
+            f"{key_stem}_{uuid4().hex}.mp3",
+        )
         await storage.upload_file_async(audio_key, mp3_bytes, "audio/mpeg")
         return audio_key, transcript, metrics
 
@@ -151,6 +157,11 @@ async def process_prepared_audio(
             storage.convert_webm_to_mp3(audio_bytes),
             whisper.transcribe_with_metrics(audio_bytes, source_filename),
         )
-        audio_key = f"audio/{student_id}/{submission_id}/{key_stem}.mp3"
+        audio_key = storage.object_key(
+            "audio",
+            student_id,
+            submission_id,
+            f"{key_stem}_{uuid4().hex}.mp3",
+        )
         await storage.upload_file_async(audio_key, mp3_bytes, "audio/mpeg")
     return audio_key, transcript, metrics

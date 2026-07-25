@@ -834,23 +834,24 @@
           alertEl.textContent = e.message || '無法取得寄信進度，請稍後重試。';
           return;
         }
-        updateSendProgress(st.sent, st.failed, st.total);
-        if (!st.done) { setTimeout(poll, 1500); return; }
+        updateSendProgress(st.succeeded, st.failed, st.total);
+        if (!['completed', 'failed'].includes(st.state)) { setTimeout(poll, 1500); return; }
 
         // Finished.
         btn.disabled = false;
         spinner.classList.add('d-none');
-        const failedSet = new Set(st.failed_emails || []);
+        const failedEmails = st.details?.failed_emails || [];
+        const failedSet = new Set(failedEmails);
         if (failedSet.size) {
           // Keep only the failed users so the admin can retry just those.
           pendingImportUsers = batch.filter(u => failedSet.has(u.email));
           document.getElementById('sendEmailsBtnLabel').textContent = `重寄失敗 (${pendingImportUsers.length})`;
           alertEl.className = 'alert alert-warning mt-3';
-          alertEl.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>已寄出 <strong>${st.sent}</strong> 封，失敗 <strong>${st.failed}</strong> 封：` +
-            `<div class="small mt-1">${escHtml((st.failed_emails || []).join('、'))}</div>`;
+          alertEl.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>已寄出 <strong>${st.succeeded}</strong> 封，失敗 <strong>${st.failed}</strong> 封：` +
+            `<div class="small mt-1">${escHtml(failedEmails.join('、'))}</div>`;
         } else {
           alertEl.className = 'alert alert-success mt-3';
-          alertEl.innerHTML = `<i class="bi bi-check-circle me-2"></i>已成功寄出全部 <strong>${st.sent}</strong> 封信件。`;
+          alertEl.innerHTML = `<i class="bi bi-check-circle me-2"></i>已成功寄出全部 <strong>${st.succeeded}</strong> 封信件。`;
           btn.classList.add('d-none');
           progressWrap.classList.add('d-none');
           pendingImportUsers = [];

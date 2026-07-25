@@ -36,3 +36,5 @@ dist-source/
 oral.code-workspace
 /.local-tests/
 **/tests/
+!/tests/
+!/tests/**

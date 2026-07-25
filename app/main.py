@@ -13,7 +13,7 @@ import os
 
 from app.auth import decode_token
 from app.config import settings
-from app.routers import auth, student, admin, workflow
+from app.routers import auth, student, admin, workflow, result_downloads
 from app.services.maintenance import maintenance_scheduler_loop
 from app.services.reminders import reminder_scheduler_loop
 from app.middleware import RequestBodyLimitMiddleware
@@ -156,6 +156,7 @@ app.include_router(auth.router)
 app.include_router(student.router)
 app.include_router(admin.router)
 app.include_router(workflow.router)
+app.include_router(result_downloads.router)
 
 class CachedStaticFiles(StaticFiles):
     """StaticFiles that lets browsers cache assets for an hour instead of

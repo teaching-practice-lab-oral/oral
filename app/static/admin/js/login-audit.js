@@ -44,6 +44,9 @@ const AA_ACTION_LABELS = {
   'admin.export.assignment_words_latest': '匯出作業最新 Word',
   'admin.export.assignment_words_all': '匯出作業全部 Word',
   'admin.export.assignment_xlsx': '匯出作業成績 XLSX',
+  'admin.assignment.send_result_packages': '寄送學生學習成果',
+  'admin.assignment.retry_result_packages': '重寄失敗學習成果',
+  'admin.assignment.result_packages_completed': '學生學習成果寄送結果',
 };
 const AA_TARGET_LABELS = {
   user: '使用者',

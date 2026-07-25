@@ -7,6 +7,7 @@ from .roleplay import router as roleplay_router
 from .audio import router as audio_router
 from .job_profiles import router as job_profiles_router
 from .records import router as records_router
+from .exports import router as exports_router
 from .reflections import router as reflections_router
 from .proctoring import router as proctoring_router
 
@@ -18,6 +19,7 @@ router.include_router(roleplay_router)
 router.include_router(audio_router)
 router.include_router(job_profiles_router)
 router.include_router(records_router)
+router.include_router(exports_router)
 router.include_router(reflections_router)
 router.include_router(proctoring_router)
 

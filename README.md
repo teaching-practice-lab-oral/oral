@@ -164,6 +164,12 @@ OCI_ACCESS_KEY_ID=your-oci-access-key-id
 OCI_SECRET_ACCESS_KEY=your-oci-secret-access-key
 OCI_BUCKET_NAME=oral-audio
 OCI_REGION=ap-tokyo-1
+# 每次重建 PostgreSQL 都必須換一個新的 8–64 字元亂數 namespace，
+# 讓新資料不會覆寫仍保留在 OCI 的舊學生媒體：
+# python3 -c "import secrets; print('oral-' + secrets.token_hex(12))"
+OBJECT_STORAGE_NAMESPACE=oral-貼上剛產生的亂數
+RESULT_PACKAGE_EXPIRE_DAYS=14
+RESULT_DOWNLOAD_REDIRECT_SECONDS=300
 
 # ── 郵件設定 ─────────────────────────────────────────────────
 MAIL_HOST=smtp.example.com

@@ -11,6 +11,7 @@ from app.database import SessionLocal
 from app.models import (
     ActiveSession, AdminAuditLog, ApiUsageLog, LoginEvent, PasswordResetToken,
     ObjectDeletionTask, StudentPresence, SubmissionProctorEvent, WorkerRoutingEvent,
+    ResultPackage,
 )
 from app.utils import taipei_now
 from app.services.submission_assets import process_object_deletion_queue
@@ -39,6 +40,19 @@ def cleanup_expired_records(db: Session, now=None) -> dict[str, int]:
         "password_reset_tokens": db.query(PasswordResetToken)
         .filter(PasswordResetToken.expires_at <= now)
         .delete(synchronize_session=False),
+        "result_packages_expired": db.query(ResultPackage)
+        .filter(
+            ResultPackage.expires_at.isnot(None),
+            ResultPackage.expires_at <= now,
+            ResultPackage.state != "expired",
+        )
+        .update(
+            {
+                ResultPackage.state: "expired",
+                ResultPackage.updated_at: now,
+            },
+            synchronize_session=False,
+        ),
         "login_events": _delete_older_than(
             db,
             LoginEvent,

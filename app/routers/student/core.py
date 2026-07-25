@@ -38,7 +38,7 @@ from app.schemas import (
     StudentGradeHistoryItem,
     Draft1AnswersRequest,
 )
-from app.services.grading import grade_student_history_payload
+from app.services.grading import grade_student_history_payload, latest_grades_by_submission
 from app.services.input_validator import validate_draft_text
 from app.services.operation_lock import FEEDBACK_OPERATION, acquire_operation_lock
 from app.services.workflow_policy import workflow_limits_payload
@@ -82,18 +82,37 @@ def _assignment_history_flags(
     db: Session,
     user_id: int,
     assignment_ids: list[int],
-) -> tuple[set[int], set[int]]:
-    """Batch-load whether each assignment has submitted attempts or grades."""
-    submitted_assignment_ids = {
-        row[0]
-        for row in (
-            db.query(Submission.assignment_id)
-            .filter(
-                Submission.user_id == user_id,
-                Submission.assignment_id.in_(assignment_ids),
-                Submission.submitted_at.isnot(None),
+) -> tuple[dict[int, int], set[int]]:
+    """Batch-load each latest submitted attempt and whether grades exist."""
+    from sqlalchemy import and_, func
+
+    latest_submitted_attempt_sq = (
+        db.query(
+            Submission.assignment_id,
+            func.max(Submission.attempt_number).label("max_attempt"),
+        )
+        .filter(
+            Submission.user_id == user_id,
+            Submission.assignment_id.in_(assignment_ids),
+            Submission.submitted_at.isnot(None),
+        )
+        .group_by(Submission.assignment_id)
+        .subquery()
+    )
+    latest_submitted_submission_ids = {
+        assignment_id: submission_id
+        for assignment_id, submission_id in (
+            db.query(Submission.assignment_id, Submission.id)
+            .join(
+                latest_submitted_attempt_sq,
+                and_(
+                    Submission.assignment_id
+                    == latest_submitted_attempt_sq.c.assignment_id,
+                    Submission.attempt_number
+                    == latest_submitted_attempt_sq.c.max_attempt,
+                ),
             )
-            .distinct()
+            .filter(Submission.user_id == user_id)
             .all()
         )
     }
@@ -114,7 +133,7 @@ def _assignment_history_flags(
             .all()
         )
     }
-    return submitted_assignment_ids, graded_assignment_ids
+    return latest_submitted_submission_ids, graded_assignment_ids
 
 
 @router.get("/assignments", response_model=List[StudentAssignmentItem])
@@ -173,10 +192,14 @@ def list_assignments(
         .all()
     )
     sub_map = {s.assignment_id: s for s in latest_subs}
-    submitted_assignment_ids, graded_assignment_ids = _assignment_history_flags(
+    latest_submitted_submission_ids, graded_assignment_ids = _assignment_history_flags(
         db,
         current_user.id,
         assignment_ids,
+    )
+    latest_submitted_grades = latest_grades_by_submission(
+        db,
+        latest_submitted_submission_ids.values(),
     )
 
     result = []
@@ -195,7 +218,13 @@ def list_assignments(
                 is_submitted=sub.submitted_at is not None if sub else False,
                 workflow_version=sub.workflow_version if sub else 2,
                 has_job_profile=bool(sub and sub.job_profile),
-                has_submission_history=a.id in submitted_assignment_ids,
+                has_submission_history=a.id in latest_submitted_submission_ids,
+                latest_submitted_submission_id=latest_submitted_submission_ids.get(a.id),
+                result_export_submission_id=(
+                    latest_submitted_submission_ids.get(a.id)
+                    if latest_submitted_submission_ids.get(a.id) in latest_submitted_grades
+                    else None
+                ),
                 has_grade_history=a.id in graded_assignment_ids,
                 rubric_version_id=sub.rubric_version_id if sub else a.rubric_version_id,
             )

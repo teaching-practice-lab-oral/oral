@@ -273,9 +273,11 @@ async def _append_next_roleplay_question(
                 next_question,
                 tts.SpeechProfile.ROLEPLAY,
             )
-        next_tts_key = (
-            f"audio/{student_id}/{submission_id}/"
-            f"roleplay_tts_turn{next_turn_number}_{uuid4().hex}.mp3"
+        next_tts_key = storage.object_key(
+            "audio",
+            student_id,
+            submission_id,
+            f"roleplay_tts_turn{next_turn_number}_{uuid4().hex}.mp3",
         )
         await storage.upload_file_async(next_tts_key, tts_audio, "audio/mpeg")
     except Exception as exc:
@@ -458,9 +460,11 @@ async def roleplay_start(
                     first_question,
                     tts.SpeechProfile.ROLEPLAY,
                 )
-            interviewer_tts_key = (
-                f"audio/{student_id}/{submission_id}/"
-                f"roleplay_tts_turn1_{uuid4().hex}.mp3"
+            interviewer_tts_key = storage.object_key(
+                "audio",
+                student_id,
+                submission_id,
+                f"roleplay_tts_turn1_{uuid4().hex}.mp3",
             )
             await storage.upload_file_async(interviewer_tts_key, tts_audio, "audio/mpeg")
         except Exception as exc:

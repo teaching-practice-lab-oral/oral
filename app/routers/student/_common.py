@@ -97,7 +97,7 @@ def get_editable_submission_locked(db, submission_id: int, user_id: int) -> Subm
 
 def presigned_or_404(key: str | None) -> dict:
     """Return a presigned-URL response for an object key, or raise 404 if absent."""
-    if not key:
+    if not key or not storage.is_current_object_key(key, "audio"):
         raise HTTPException(status_code=404, detail="Audio not found")
     return {"url": storage.generate_presigned_url(key, expiration=PRESIGNED_URL_EXPIRATION)}
 

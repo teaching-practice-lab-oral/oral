@@ -88,7 +88,12 @@ async def upload_reflection_photo(
     if len(data) > MAX_REFLECTION_PHOTO_BYTES:
         raise HTTPException(status_code=413, detail="照片不可超過 10 MB")
     content_type, extension = _detect_image(data)
-    key = f"reflection/{student_id}/{owned_submission_id}/{uuid4().hex}.{extension}"
+    key = storage.object_key(
+        "reflection",
+        student_id,
+        owned_submission_id,
+        f"{uuid4().hex}.{extension}",
+    )
     await storage.upload_file_async(key, data, content_type)
     try:
         submission = get_editable_submission_locked(db, submission_id, current_user.id)
@@ -148,7 +153,10 @@ def get_reflection_photo_url(
 ):
     submission = get_own_submission(db, submission_id, current_user.id)
     row = _reflection_or_404(db, submission.id)
-    if not row.photo_key:
+    if (
+        not row.photo_key
+        or not storage.is_current_object_key(row.photo_key, "reflection")
+    ):
         raise HTTPException(status_code=404, detail="沒有上傳照片")
     return {"url": storage.generate_presigned_url(row.photo_key, expiration=PRESIGNED_URL_EXPIRATION)}
 

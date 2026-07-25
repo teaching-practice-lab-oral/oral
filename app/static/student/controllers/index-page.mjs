@@ -99,17 +99,96 @@ function retryAvailability(assignment, dateState = dateStatus(assignment)) {
   return { allowed: true, reason: '' };
 }
 
-function renderCompletedActions(assignment, sectionUrl, dateState) {
+function reportViewUrl(assignmentId, submissionId) {
+  const normalizedAssignmentId = Number(assignmentId);
+  const normalizedSubmissionId = Number(submissionId);
+  if (!Number.isInteger(normalizedAssignmentId) || normalizedAssignmentId < 1
+      || !Number.isInteger(normalizedSubmissionId) || normalizedSubmissionId < 1) {
+    return '';
+  }
+  return `/student/assignment/${normalizedAssignmentId}/report?view=${normalizedSubmissionId}`;
+}
+
+function renderCompletedActions(assignment, dateState) {
   const availability = retryAvailability(assignment, dateState);
   const assignmentId = Number(assignment.id);
+  const resultUrl = reportViewUrl(assignmentId, assignment.latest_submitted_submission_id);
+  const exportSubmissionId = Number(assignment.result_export_submission_id);
+  const canExport = Number.isInteger(exportSubmissionId) && exportSubmissionId > 0;
+  const resultAction = resultUrl
+    ? `<a href="${resultUrl}" class="btn btn-view"><i class="bi bi-eye me-1"></i>查看成果</a>`
+    : '<button type="button" class="btn btn-view" disabled title="找不到已完成的提交紀錄"><i class="bi bi-eye me-1"></i>查看成果</button>';
+  const exportAction = canExport
+    ? `<button type="button" class="btn btn-export-result" data-action="exportResultPackage" data-args='[${assignmentId},${exportSubmissionId}]' data-export-submission-id="${exportSubmissionId}"><i class="bi bi-file-earmark-zip me-1"></i>作業匯出</button>`
+    : '<button type="button" class="btn btn-export-result" disabled title="老師完成批改後即可匯出"><i class="bi bi-file-earmark-zip me-1"></i>作業匯出</button>';
   const retryAttributes = availability.allowed
     ? `data-action="retryAssignment" data-args='[${assignmentId}]' data-retry-assignment-id="${assignmentId}"`
     : `disabled title="${escHtml(availability.reason)}"`;
   return `<div class="completed-actions">
-    <a href="${sectionUrl}" class="btn btn-view"><i class="bi bi-eye me-1"></i>查看成果</a>
+    ${resultAction}
     <button type="button" class="btn btn-retry" ${retryAttributes}><i class="bi bi-arrow-repeat me-1"></i>再次練習</button>
+    ${exportAction}
   </div>
+  <div id="resultExportFeedback-${assignmentId}" class="result-export-feedback" role="status" aria-live="polite"></div>
   <div id="retryFeedback-${assignmentId}" class="retry-feedback" role="status" aria-live="polite">${availability.allowed ? '' : escHtml(availability.reason)}</div>`;
+}
+
+function setResultExportFeedback(assignmentId, message, success = false) {
+  const feedback = document.getElementById(`resultExportFeedback-${Number(assignmentId)}`);
+  if (!feedback) return;
+  feedback.textContent = message || '';
+  feedback.classList.toggle('is-success', success);
+}
+
+function resultPackageFilename(response, fallback) {
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (!match) return fallback;
+  try { return decodeURIComponent(match[1].trim()); } catch (_) { return fallback; }
+}
+
+async function exportResultPackage(assignmentId, submissionId) {
+  const normalizedAssignmentId = Number(assignmentId);
+  const normalizedSubmissionId = Number(submissionId);
+  const button = document.querySelector(`[data-export-submission-id="${normalizedSubmissionId}"]`);
+  const originalHtml = button?.innerHTML || '';
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>正在打包…';
+  }
+  setResultExportFeedback(normalizedAssignmentId, '');
+
+  try {
+    const response = await fetch(
+      `/api/student/submissions/${normalizedSubmissionId}/export-result-package`,
+      { credentials: 'include', headers: authHeaders() },
+    );
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      throw new Error(error?.detail || '成果包匯出失敗，請稍後再試。');
+    }
+    const blob = await response.blob();
+    const filename = resultPackageFilename(response, `學習成果_${normalizedSubmissionId}.zip`);
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    setResultExportFeedback(normalizedAssignmentId, '成果包下載已開始。', true);
+  } catch (error) {
+    setResultExportFeedback(
+      normalizedAssignmentId,
+      error?.message || '成果包匯出失敗，請稍後再試。',
+    );
+  } finally {
+    if (button?.isConnected) {
+      button.disabled = false;
+      button.innerHTML = originalHtml;
+    }
+  }
 }
 
 function setRetryFeedback(assignmentId, message) {
@@ -196,7 +275,7 @@ async function openSubmissionHistory(assignmentId) {
       const attemptNumber = Number(attempt.attempt_number);
       return `<div class="record-list-item d-flex align-items-center justify-content-between gap-3 flex-wrap">
         <div><div class="fw-bold">第 ${attemptNumber} 次練習</div><div class="small text-muted mt-1">完成時間：${escHtml(fmtDatetime(attempt.submitted_at))}</div></div>
-        <a class="btn btn-outline-primary btn-sm" href="/student/assignment/${Number(assignmentId)}/report?view=${submissionId}"><i class="bi bi-eye me-1"></i>查看完整結果</a>
+        <a class="btn btn-outline-primary btn-sm" href="${reportViewUrl(assignmentId, submissionId)}"><i class="bi bi-eye me-1"></i>查看完整結果</a>
       </div>`;
     }).join('')}</div>`;
   } catch (error) {
@@ -348,7 +427,7 @@ async function loadAssignments() {
 
     let btnHtml;
     if (isCompleted) {
-      btnHtml = renderCompletedActions(a, sectionUrl, ds);
+      btnHtml = renderCompletedActions(a, ds);
     } else if (ds.state === 'pending') {
       btnHtml = `<button class="btn btn-locked" disabled><i class="bi bi-lock me-1"></i>尚未開放</button>`;
     } else if (ds.state === 'late') {
@@ -418,7 +497,11 @@ Object.assign(window, {
   fmtDatetime,
   dateStatus,
   retryAvailability,
+  reportViewUrl,
   renderCompletedActions,
+  setResultExportFeedback,
+  resultPackageFilename,
+  exportResultPackage,
   setRetryFeedback,
   retryAssignment,
   openRecordsModal,

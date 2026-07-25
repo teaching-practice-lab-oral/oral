@@ -22,9 +22,11 @@ async def generate_asset(
         return None
     answer = answers[question_index]
     spoken_text = tts_alignment.build_shadowing_tts_text(answer, question_index)
-    key = (
-        f"audio/{student_id}/{submission_id}/"
-        f"shadowing_tts_answer_q{question_index}_{uuid4().hex}.mp3"
+    key = storage.object_key(
+        "audio",
+        student_id,
+        submission_id,
+        f"shadowing_tts_answer_q{question_index}_{uuid4().hex}.mp3",
     )
     upload_started = False
     try:

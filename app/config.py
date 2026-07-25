@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     OCI_SECRET_ACCESS_KEY: str = ""
     OCI_BUCKET_NAME: str = ""
     OCI_REGION: str = ""
+    OBJECT_STORAGE_NAMESPACE: str = ""
+    RESULT_PACKAGE_EXPIRE_DAYS: int = 14
+    RESULT_DOWNLOAD_REDIRECT_SECONDS: int = 300
 
     # Email
     MAIL_USER: str = ""
@@ -188,6 +191,7 @@ class Settings(BaseSettings):
                 "TURNSTILE_SECRET_KEY",
                 "TURNSTILE_SITE_KEY",
                 "PUBLIC_BASE_URL",
+                "OBJECT_STORAGE_NAMESPACE",
             )
             missing = [name for name in required if not str(getattr(self, name, "")).strip()]
             if missing:
@@ -216,6 +220,22 @@ class Settings(BaseSettings):
                 raise ValueError("TRUSTED_PROXY_IPS must not contain '*' in production")
             if not self.trusted_hosts_list or "*" in self.trusted_hosts_list:
                 raise ValueError("TRUSTED_HOSTS must list explicit production host names")
+        namespace = self.OBJECT_STORAGE_NAMESPACE.strip()
+        if namespace and (
+            len(namespace) < 8
+            or len(namespace) > 64
+            or not all(
+                character.isascii() and (character.isalnum() or character in "._-")
+                for character in namespace
+            )
+        ):
+            raise ValueError(
+                "OBJECT_STORAGE_NAMESPACE must be 8-64 letters, numbers, dots, underscores, or hyphens"
+            )
+        if self.RESULT_PACKAGE_EXPIRE_DAYS < 1:
+            raise ValueError("RESULT_PACKAGE_EXPIRE_DAYS must be positive")
+        if not 60 <= self.RESULT_DOWNLOAD_REDIRECT_SECONDS <= 900:
+            raise ValueError("RESULT_DOWNLOAD_REDIRECT_SECONDS must be between 60 and 900")
         if self.MAX_REQUEST_BODY_BYTES < 1024 * 1024:
             raise ValueError("MAX_REQUEST_BODY_BYTES must be at least 1 MiB")
         if self.WORKER_MAX_REQUEST_BODY_BYTES < 1024 * 1024:

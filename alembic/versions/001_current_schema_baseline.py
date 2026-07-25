@@ -14,22 +14,7 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-SCHEMA_STATEMENTS = ['CREATE TABLE email_jobs (\n'
- '\tid VARCHAR(36) NOT NULL, \n'
- '\tkind VARCHAR(32) NOT NULL, \n'
- '\ttotal INTEGER NOT NULL, \n'
- '\tsent INTEGER NOT NULL, \n'
- '\tfailed INTEGER NOT NULL, \n'
- "\tdone BOOLEAN DEFAULT 'false' NOT NULL, \n"
- '\tfailed_emails JSONB, \n'
- '\tcreated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, \n'
- '\tupdated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, \n'
- '\tPRIMARY KEY (id), \n'
- '\tCONSTRAINT ck_email_jobs_total_nonnegative CHECK (total >= 0), \n'
- '\tCONSTRAINT ck_email_jobs_sent_nonnegative CHECK (sent >= 0), \n'
- '\tCONSTRAINT ck_email_jobs_failed_nonnegative CHECK (failed >= 0)\n'
- ')',
- 'CREATE TABLE object_deletion_tasks (\n'
+SCHEMA_STATEMENTS = ['CREATE TABLE object_deletion_tasks (\n'
  '\tid SERIAL NOT NULL, \n'
  "\ttarget_type VARCHAR(16) DEFAULT 'prefix' NOT NULL, \n"
  '\ttarget VARCHAR(512) NOT NULL, \n'
@@ -275,6 +260,34 @@ SCHEMA_STATEMENTS = ['CREATE TABLE email_jobs (\n'
  '\tFOREIGN KEY(rubric_version_id) REFERENCES rubric_versions (id) ON DELETE RESTRICT, \n'
  '\tFOREIGN KEY(created_by) REFERENCES users (id) ON DELETE SET NULL\n'
  ')',
+ 'CREATE TABLE email_jobs (\n'
+ '\tid VARCHAR(36) NOT NULL, \n'
+ '\tkind VARCHAR(32) NOT NULL, \n'
+ '\tassignment_id INTEGER, \n'
+ '\tcreated_by_id INTEGER, \n'
+ "\tstate VARCHAR(16) DEFAULT 'queued' NOT NULL, \n"
+ '\ttotal INTEGER NOT NULL, \n'
+ '\tprocessed INTEGER NOT NULL, \n'
+ '\tsucceeded INTEGER NOT NULL, \n'
+ '\tfailed INTEGER NOT NULL, \n'
+ "\tdetails JSONB DEFAULT '{}' NOT NULL, \n"
+ '\terror TEXT, \n'
+ '\tcreated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, \n'
+ '\tupdated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, \n'
+ '\tcompleted_at TIMESTAMP WITHOUT TIME ZONE, \n'
+ '\tPRIMARY KEY (id), \n'
+ "\tCONSTRAINT ck_email_jobs_kind CHECK (kind IN ('account', 'result_package')), \n"
+ "\tCONSTRAINT ck_email_jobs_state CHECK (state IN ('queued', 'running', 'completed', 'failed')), \n"
+ '\tCONSTRAINT ck_email_jobs_total_nonnegative CHECK (total >= 0), \n'
+ '\tCONSTRAINT ck_email_jobs_processed_nonnegative CHECK (processed >= 0), \n'
+ '\tCONSTRAINT ck_email_jobs_succeeded_nonnegative CHECK (succeeded >= 0), \n'
+ '\tCONSTRAINT ck_email_jobs_failed_nonnegative CHECK (failed >= 0), \n'
+ '\tCONSTRAINT ck_email_jobs_processed_within_total CHECK (processed <= total), \n'
+ '\tCONSTRAINT ck_email_jobs_results_within_processed CHECK (succeeded + failed <= processed), \n'
+ "\tCONSTRAINT ck_email_jobs_details_object CHECK (jsonb_typeof(details) = 'object'), \n"
+ '\tFOREIGN KEY(assignment_id) REFERENCES assignments (id) ON DELETE SET NULL, \n'
+ '\tFOREIGN KEY(created_by_id) REFERENCES users (id) ON DELETE SET NULL\n'
+ ')',
  'CREATE TABLE assignment_reminders (\n'
  '\tid SERIAL NOT NULL, \n'
  '\tassignment_id INTEGER NOT NULL, \n'
@@ -315,6 +328,39 @@ SCHEMA_STATEMENTS = ['CREATE TABLE email_jobs (\n'
  '\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE, \n'
  '\tFOREIGN KEY(assignment_id) REFERENCES assignments (id) ON DELETE CASCADE, \n'
  '\tFOREIGN KEY(rubric_version_id) REFERENCES rubric_versions (id) ON DELETE RESTRICT\n'
+ ')',
+ 'CREATE TABLE result_packages (\n'
+ '\tid VARCHAR(36) NOT NULL, \n'
+ '\tjob_id VARCHAR(36) NOT NULL, \n'
+ '\tassignment_id INTEGER, \n'
+ '\tuser_id INTEGER, \n'
+ '\tsubmission_id INTEGER, \n'
+ '\tgrade_revision_id INTEGER NOT NULL, \n'
+ '\tstudent_id_snapshot VARCHAR(64) NOT NULL, \n'
+ '\tstudent_name_snapshot VARCHAR(128) NOT NULL, \n'
+ '\tassignment_title_snapshot VARCHAR(256) NOT NULL, \n'
+ '\tattempt_number INTEGER NOT NULL, \n'
+ '\tfilename VARCHAR(256) NOT NULL, \n'
+ '\tobject_key VARCHAR(512), \n'
+ '\ttoken_hash VARCHAR(64), \n'
+ "\tstate VARCHAR(16) DEFAULT 'queued' NOT NULL, \n"
+ "\trecipients JSONB DEFAULT '[]' NOT NULL, \n"
+ '\terror TEXT, \n'
+ '\texpires_at TIMESTAMP WITHOUT TIME ZONE, \n'
+ '\tcreated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, \n'
+ '\tupdated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, \n'
+ '\tPRIMARY KEY (id), \n'
+ '\tCONSTRAINT ck_result_packages_attempt_positive CHECK (attempt_number >= 1), \n'
+ "\tCONSTRAINT ck_result_packages_state CHECK (state IN ('queued', 'building', 'sending', 'sent', 'partial', 'failed', 'expired')), \n"
+ "\tCONSTRAINT ck_result_packages_recipients_array CHECK (jsonb_typeof(recipients) = 'array'), \n"
+ '\tCONSTRAINT ck_result_packages_object_token_pair CHECK ((object_key IS NULL) = (token_hash IS NULL)), \n'
+ '\tCONSTRAINT ck_result_packages_object_expiry CHECK (object_key IS NULL OR expires_at IS NOT NULL), \n'
+ '\tFOREIGN KEY(job_id) REFERENCES email_jobs (id) ON DELETE CASCADE, \n'
+ '\tFOREIGN KEY(assignment_id) REFERENCES assignments (id) ON DELETE SET NULL, \n'
+ '\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE SET NULL, \n'
+ '\tFOREIGN KEY(submission_id) REFERENCES submissions (id) ON DELETE SET NULL, \n'
+ '\tFOREIGN KEY(grade_revision_id) REFERENCES submission_grade_revisions (id) ON DELETE RESTRICT, \n'
+ '\tUNIQUE (object_key)\n'
  ')',
  'CREATE TABLE roleplay_turns (\n'
  '\tid SERIAL NOT NULL, \n'
@@ -479,6 +525,19 @@ SCHEMA_STATEMENTS = ['CREATE TABLE email_jobs (\n'
  'CREATE INDEX ix_object_deletion_tasks_next_attempt_at ON object_deletion_tasks (next_attempt_at)',
  'CREATE INDEX ix_object_deletion_tasks_pending ON object_deletion_tasks (next_attempt_at) WHERE completed_at IS '
  'NULL',
+ 'CREATE INDEX ix_email_jobs_assignment_id ON email_jobs (assignment_id)',
+ 'CREATE INDEX ix_email_jobs_created_by_id ON email_jobs (created_by_id)',
+ 'CREATE INDEX ix_email_jobs_assignment_created ON email_jobs (assignment_id, created_at DESC)',
+ "CREATE UNIQUE INDEX uq_email_jobs_active_result_assignment ON email_jobs (assignment_id) WHERE kind = 'result_package' AND state IN ('queued', 'running')",
+ 'CREATE INDEX ix_result_packages_job_id ON result_packages (job_id)',
+ 'CREATE INDEX ix_result_packages_assignment_id ON result_packages (assignment_id)',
+ 'CREATE INDEX ix_result_packages_user_id ON result_packages (user_id)',
+ 'CREATE INDEX ix_result_packages_submission_id ON result_packages (submission_id)',
+ 'CREATE INDEX ix_result_packages_grade_revision_id ON result_packages (grade_revision_id)',
+ 'CREATE UNIQUE INDEX ix_result_packages_token_hash ON result_packages (token_hash)',
+ 'CREATE INDEX ix_result_packages_expires_at ON result_packages (expires_at)',
+ 'CREATE INDEX ix_result_packages_job_state ON result_packages (job_id, state)',
+ 'CREATE INDEX ix_result_packages_expires_state ON result_packages (expires_at, state)',
  'CREATE INDEX ix_grade_revisions_assignment_created ON submission_grade_revisions (origin_assignment_id, created_at '
  'DESC)',
  'CREATE INDEX ix_grade_revisions_submission_latest ON submission_grade_revisions (origin_submission_id, created_at '
@@ -544,8 +603,7 @@ SCHEMA_STATEMENTS = ['CREATE TABLE email_jobs (\n'
  'CREATE INDEX ix_reflection_answers_reflection_index ON submission_reflection_answers (reflection_id, '
  'question_index)']
 
-TABLE_NAMES = ['email_jobs',
- 'object_deletion_tasks',
+TABLE_NAMES = ['object_deletion_tasks',
  'submission_grade_revisions',
  'users',
  'active_sessions',
@@ -558,8 +616,10 @@ TABLE_NAMES = ['email_jobs',
  'rubric_versions',
  'student_presence',
  'assignments',
+ 'email_jobs',
  'assignment_reminders',
  'submissions',
+ 'result_packages',
  'roleplay_turns',
  'shadowing_records',
  'submission_answers',

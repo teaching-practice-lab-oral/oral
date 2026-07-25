@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import ObjectDeletionTask, Submission, User
+from app.services import storage
 from app.utils import taipei_now
 
 logger = logging.getLogger(__name__)
@@ -42,8 +43,8 @@ def _prefixes(refs: list[SubmissionAssetRef]) -> list[str]:
         prefix
         for ref in refs
         for prefix in (
-            f"audio/{ref.student_id}/{ref.submission_id}/",
-            f"reflection/{ref.student_id}/{ref.submission_id}/",
+            storage.object_prefix("audio", ref.student_id, ref.submission_id),
+            storage.object_prefix("reflection", ref.student_id, ref.submission_id),
         )
     ]
 
@@ -52,6 +53,9 @@ def _enqueue_targets(db: Session, target_type: str, targets: list[str]) -> int:
     clean_targets = sorted({target for target in targets if target})
     if not clean_targets:
         return 0
+    invalid = [target for target in clean_targets if not storage.is_current_owned_key(target)]
+    if invalid:
+        raise ValueError("refusing to clean an object outside OBJECT_STORAGE_NAMESPACE")
     existing = {
         row[0]
         for row in db.query(ObjectDeletionTask.target)
@@ -70,6 +74,31 @@ def _enqueue_targets(db: Session, target_type: str, targets: list[str]) -> int:
 def enqueue_object_cleanup(db: Session, keys: list[str]) -> int:
     """Queue exact objects in the caller's transaction."""
     return _enqueue_targets(db, "key", keys)
+
+
+def enqueue_object_cleanup_at(db: Session, key: str, not_before) -> None:
+    """Queue one exact object for deletion no earlier than ``not_before``."""
+    if not key or not storage.is_current_owned_key(key):
+        raise ValueError("cleanup key must belong to OBJECT_STORAGE_NAMESPACE")
+    existing = (
+        db.query(ObjectDeletionTask)
+        .filter(
+            ObjectDeletionTask.target_type == "key",
+            ObjectDeletionTask.target == key,
+        )
+        .first()
+    )
+    if existing:
+        if existing.completed_at is None and existing.next_attempt_at < not_before:
+            existing.next_attempt_at = not_before
+        return
+    db.add(
+        ObjectDeletionTask(
+            target_type="key",
+            target=key,
+            next_attempt_at=not_before,
+        )
+    )
 
 
 def enqueue_submission_asset_cleanup(db: Session, refs: list[SubmissionAssetRef]) -> int:
@@ -119,6 +148,10 @@ def process_object_deletion_queue(*, limit: int = 100) -> dict[str, int]:
         )
         for task in tasks:
             try:
+                if not storage.is_current_owned_key(task.target):
+                    raise RuntimeError(
+                        "refusing to delete an object outside OBJECT_STORAGE_NAMESPACE"
+                    )
                 if task.target_type == "key":
                     storage.delete_file(task.target)
                     object_count = 1

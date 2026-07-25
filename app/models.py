@@ -1,7 +1,7 @@
 from app.utils import taipei_now
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Text, Numeric,
-    ForeignKey, UniqueConstraint, Index, CheckConstraint, func
+    ForeignKey, UniqueConstraint, Index, CheckConstraint, func, text
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -756,28 +756,139 @@ class AdminAuditLog(Base):
 
 
 class EmailJob(Base):
-    """Tracks an async batch email send so progress survives across gunicorn workers.
+    """Shared database-backed progress for account and result deliveries."""
 
-    The background task lives in one worker process but writes progress here, and the
-    status-poll endpoint reads it back — an in-memory dict would be invisible to the
-    other 3 workers a poll might land on.
-    """
     __tablename__ = "email_jobs"
 
-    id = Column(String(36), primary_key=True)  # uuid4 hex
-    kind = Column(String(32), nullable=False, default="account")  # future-proofing
+    id = Column(String(36), primary_key=True)
+    kind = Column(String(32), nullable=False)
+    assignment_id = Column(
+        Integer,
+        ForeignKey("assignments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_by_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    state = Column(String(16), nullable=False, default="queued", server_default="queued")
     total = Column(Integer, nullable=False, default=0)
-    sent = Column(Integer, nullable=False, default=0)
+    processed = Column(Integer, nullable=False, default=0)
+    succeeded = Column(Integer, nullable=False, default=0)
     failed = Column(Integer, nullable=False, default=0)
-    done = Column(Boolean, nullable=False, default=False, server_default="false")
-    failed_emails = Column(JSONB, nullable=True)  # list[str]
+    details = Column(JSONB, nullable=False, default=dict, server_default="{}")
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=taipei_now, nullable=False)
+    updated_at = Column(DateTime, default=taipei_now, onupdate=taipei_now, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('account', 'result_package')",
+            name="ck_email_jobs_kind",
+        ),
+        CheckConstraint(
+            "state IN ('queued', 'running', 'completed', 'failed')",
+            name="ck_email_jobs_state",
+        ),
+        CheckConstraint("total >= 0", name="ck_email_jobs_total_nonnegative"),
+        CheckConstraint("processed >= 0", name="ck_email_jobs_processed_nonnegative"),
+        CheckConstraint("succeeded >= 0", name="ck_email_jobs_succeeded_nonnegative"),
+        CheckConstraint("failed >= 0", name="ck_email_jobs_failed_nonnegative"),
+        CheckConstraint("processed <= total", name="ck_email_jobs_processed_within_total"),
+        CheckConstraint(
+            "succeeded + failed <= processed",
+            name="ck_email_jobs_results_within_processed",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(details) = 'object'",
+            name="ck_email_jobs_details_object",
+        ),
+        Index("ix_email_jobs_assignment_created", "assignment_id", created_at.desc()),
+        Index(
+            "uq_email_jobs_active_result_assignment",
+            "assignment_id",
+            unique=True,
+            postgresql_where=text(
+                "kind = 'result_package' AND state IN ('queued', 'running')"
+            ),
+        ),
+    )
+
+
+class ResultPackage(Base):
+    """A private, expiring result ZIP plus per-mailbox delivery state."""
+
+    __tablename__ = "result_packages"
+
+    id = Column(String(36), primary_key=True)
+    job_id = Column(
+        String(36),
+        ForeignKey("email_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    assignment_id = Column(
+        Integer,
+        ForeignKey("assignments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    submission_id = Column(
+        Integer,
+        ForeignKey("submissions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    grade_revision_id = Column(
+        Integer,
+        ForeignKey("submission_grade_revisions.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    student_id_snapshot = Column(String(64), nullable=False)
+    student_name_snapshot = Column(String(128), nullable=False)
+    assignment_title_snapshot = Column(String(256), nullable=False)
+    attempt_number = Column(Integer, nullable=False)
+    filename = Column(String(256), nullable=False)
+    object_key = Column(String(512), nullable=True, unique=True)
+    token_hash = Column(String(64), nullable=True, unique=True, index=True)
+    state = Column(String(16), nullable=False, default="queued", server_default="queued")
+    recipients = Column(JSONB, nullable=False, default=list, server_default="[]")
+    error = Column(Text, nullable=True)
+    expires_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, default=taipei_now, nullable=False)
     updated_at = Column(DateTime, default=taipei_now, onupdate=taipei_now, nullable=False)
 
     __table_args__ = (
-        CheckConstraint("total >= 0", name="ck_email_jobs_total_nonnegative"),
-        CheckConstraint("sent >= 0", name="ck_email_jobs_sent_nonnegative"),
-        CheckConstraint("failed >= 0", name="ck_email_jobs_failed_nonnegative"),
+        CheckConstraint("attempt_number >= 1", name="ck_result_packages_attempt_positive"),
+        CheckConstraint(
+            "state IN ('queued', 'building', 'sending', 'sent', 'partial', 'failed', 'expired')",
+            name="ck_result_packages_state",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(recipients) = 'array'",
+            name="ck_result_packages_recipients_array",
+        ),
+        CheckConstraint(
+            "(object_key IS NULL) = (token_hash IS NULL)",
+            name="ck_result_packages_object_token_pair",
+        ),
+        CheckConstraint(
+            "object_key IS NULL OR expires_at IS NOT NULL",
+            name="ck_result_packages_object_expiry",
+        ),
+        Index("ix_result_packages_job_state", "job_id", "state"),
+        Index("ix_result_packages_expires_state", "expires_at", "state"),
     )
 
 

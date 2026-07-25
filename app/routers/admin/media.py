@@ -16,7 +16,11 @@ router = APIRouter(prefix="/api/admin", tags=["admin-media"])
 
 
 def _find_submission_id_for_audio_key(db: Session, key: str) -> int | None:
-    if not key or len(key) > 512 or not key.startswith("audio/"):
+    if (
+        not key
+        or len(key) > 512
+        or not storage.is_current_object_key(key, "audio")
+    ):
         return None
     row = db.query(ShadowingRecord.submission_id).filter(
         or_(ShadowingRecord.tts_key == key, ShadowingRecord.audio_key == key)
@@ -55,6 +59,10 @@ def get_reflection_photo_url(
     reflection = db.query(SubmissionReflection).filter(
         SubmissionReflection.submission_id == submission.id
     ).first()
-    if not reflection or not reflection.photo_key:
+    if (
+        not reflection
+        or not reflection.photo_key
+        or not storage.is_current_object_key(reflection.photo_key, "reflection")
+    ):
         raise HTTPException(status_code=404, detail="學生沒有上傳問題照片")
     return {"url": storage.generate_presigned_url(reflection.photo_key, expiration=PRESIGNED_URL_EXPIRATION)}

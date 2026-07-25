@@ -246,6 +246,64 @@ async def _send_student_message(
     return delivery
 
 
+async def _deliver_student_message(
+    *,
+    subject: str,
+    recipients: list[str],
+    body: str,
+) -> dict[str, bool]:
+    """Deliver independently and always return every mailbox result."""
+    conf = _get_mail_config()
+    delivery: dict[str, bool] = {}
+    for recipient in recipients:
+        message = MailMessage(
+            subject=subject,
+            recipients=[recipient],
+            body=body,
+            headers=_reply_to_headers(),
+        )
+        try:
+            await _send_message(message, conf)
+            delivery[recipient] = True
+        except Exception:
+            delivery[recipient] = False
+            logger.exception("Result email delivery failed for recipient=%s", recipient)
+    return delivery
+
+
+async def send_result_package_email(
+    *,
+    recipients: list[str],
+    name: str,
+    assignment_title: str,
+    attempt_number: int,
+    download_url: str,
+    expires_at: datetime,
+) -> dict[str, bool]:
+    expiry_label = expires_at.strftime("%Y-%m-%d %H:%M")
+    body_inner = f'''<p style="margin:0 0 14px;">老師已完成 <strong>{html.escape(assignment_title)}</strong> 的批改，您的完整學習成果包已準備完成。</p>
+                        {_cred_card([("作答版本", f"第 {attempt_number} 次"), ("下載期限", f"{expiry_label}（台北時間）")])}
+                        {_cta_button(download_url, "下載完整學習成果包")}
+                        <p style="margin:18px 0 8px; font-size:14px; color:#374151;">成果包包含：</p>
+                        <ul style="margin:0 0 16px; padding-left:22px; color:#4b5563;">
+                            <li>專業版學習成果 Word 報告</li>
+                            <li>跟讀示範與學生跟讀錄音</li>
+                            <li>面試官語音與學生面試錄音</li>
+                        </ul>
+                        <p style="margin:18px 0 0; font-size:14px; color:#6b7280;">連結在期限內可重複下載，也可以被持有連結的人開啟；請妥善保存，不要轉寄給他人。</p>'''
+    html_body = _email_shell(
+        preheader=f"{assignment_title} 的完整學習成果包已可下載。",
+        heading="學習成果與批改結果",
+        name=name,
+        body_inner=body_inner,
+    )
+    return await _deliver_student_message(
+        subject=f"{assignment_title} — 學習成果與批改結果",
+        recipients=recipients,
+        body=html_body,
+    )
+
+
 async def send_password_email(
     email: str,
     name: str,

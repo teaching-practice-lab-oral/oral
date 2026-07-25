@@ -474,6 +474,252 @@ async function confirmLateDeadline() {
   }
 }
 
+let _resultDeliveryJobId = sessionStorage.getItem(`result_delivery_job_${assignmentId}`) || null;
+let _resultDeliveryPollTimer = null;
+
+function resultDeliveryMessage(detail, fallback) {
+  if (typeof detail === 'string') return detail;
+  if (detail && typeof detail === 'object') return detail.message || fallback;
+  return fallback;
+}
+
+function setResultDeliveryError(message) {
+  const element = document.getElementById('resultDeliveryError');
+  if (!message) {
+    element.textContent = '';
+    element.classList.add('d-none');
+    return;
+  }
+  element.textContent = message;
+  element.classList.remove('d-none');
+}
+
+function showResultDeliveryPreview(preview) {
+  document.getElementById('resultDeliveryPreview').classList.remove('d-none');
+  document.getElementById('resultDeliveryProgress').classList.add('d-none');
+  document.getElementById('resultDeliveryEligible').textContent = `${preview.eligible} 人`;
+  document.getElementById('resultDeliveryNotCompleted').textContent = `${preview.not_completed} 人`;
+  document.getElementById('resultDeliveryNotGraded').textContent = `${preview.not_graded} 人`;
+  const confirmButton = document.getElementById('btnConfirmResultDelivery');
+  confirmButton.classList.remove('d-none');
+  confirmButton.disabled = preview.eligible < 1;
+  confirmButton.innerHTML = '<i class="bi bi-send me-1"></i>確認寄送';
+  document.getElementById('btnRetryResultDelivery').classList.add('d-none');
+  document.getElementById('btnCloseResultDelivery').textContent = '取消';
+}
+
+function renderResultDeliveryJob(job) {
+  document.getElementById('resultDeliveryPreview').classList.add('d-none');
+  document.getElementById('resultDeliveryProgress').classList.remove('d-none');
+  const processed = Number(job.processed || 0);
+  const total = Number(job.total || 0);
+  const pct = total ? Math.round((processed / total) * 100) : 0;
+  const running = ['queued', 'running'].includes(job.state);
+  const packageStates = job.details?.package_states || {};
+  const mailboxSucceeded = Number(job.details?.mailboxes_succeeded || 0);
+  const mailboxTotal = Number(job.details?.mailboxes_total || 0);
+  const allFailed = !running && total > 0 && mailboxSucceeded === 0;
+  const bar = document.getElementById('resultDeliveryProgressBar');
+  bar.style.width = `${pct}%`;
+  bar.classList.toggle('progress-bar-animated', running);
+  bar.classList.toggle('progress-bar-striped', running);
+  bar.classList.toggle('bg-danger', job.state === 'failed' || allFailed);
+  bar.classList.toggle('bg-success', job.state === 'completed' && !job.failed);
+  document.getElementById('resultDeliveryProgressTitle').textContent =
+    job.state === 'queued' ? '等待開始…'
+      : job.state === 'running' && Number(packageStates.sending || 0) > 0
+        ? '正在寄送學習成果…'
+        : job.state === 'running' ? '正在產生完整成果包…'
+        : job.state === 'failed' ? '寄送工作意外中止'
+          : allFailed ? '成果寄送失敗'
+            : job.failed ? '寄送完成，部分項目失敗' : '全部寄送完成';
+  document.getElementById('resultDeliveryProgressCount').textContent = `${processed} / ${total}`;
+  document.getElementById('resultDeliverySucceeded').textContent = Number(job.succeeded || 0);
+  document.getElementById('resultDeliveryFailed').textContent = Number(job.failed || 0);
+  document.getElementById('resultDeliveryMailboxes').textContent =
+    `${mailboxSucceeded} / ${mailboxTotal}`;
+
+  const failures = Array.isArray(job.details?.failures) ? job.details.failures : [];
+  const failureElement = document.getElementById('resultDeliveryFailures');
+  failureElement.innerHTML = failures.length
+    ? `<div class="alert alert-warning mb-0">
+        <div class="fw-semibold mb-2">需要處理的學生</div>
+        ${failures.map(item => `
+          <div class="border-top pt-2 mt-2">
+            <strong>${escHtml(item.name)}（${escHtml(item.student_id)}）</strong>
+            <div>${escHtml(item.error || '成果寄送失敗')}</div>
+            ${(item.failed_addresses || []).length
+              ? `<div class="text-muted">${escHtml(item.failed_addresses.join('、'))}</div>`
+              : ''}
+          </div>`).join('')}
+      </div>`
+    : '';
+
+  const confirmButton = document.getElementById('btnConfirmResultDelivery');
+  const retryButton = document.getElementById('btnRetryResultDelivery');
+  confirmButton.classList.add('d-none');
+  retryButton.classList.toggle('d-none', running || !Number(job.failed || 0));
+  document.getElementById('btnCloseResultDelivery').textContent = running ? '關閉視窗' : '關閉';
+
+  const headerButton = document.getElementById('btnSendResults');
+  headerButton.querySelector('span').textContent = running ? `寄送中（${processed}/${total}）` : '寄給學生';
+  headerButton.disabled = false;
+  if (running || Number(job.failed || 0)) {
+    sessionStorage.setItem(`result_delivery_job_${assignmentId}`, job.job_id);
+  } else {
+    sessionStorage.removeItem(`result_delivery_job_${assignmentId}`);
+  }
+  setResultDeliveryError(job.error || '');
+}
+
+async function fetchResultDeliveryJob(jobId) {
+  const response = await fetch(
+    `/api/admin/assignments/${assignmentId}/result-delivery/${encodeURIComponent(jobId)}`,
+    { headers: authHeaders() }
+  );
+  if (response.status === 401) {
+    redirectAdminToLogin();
+    return null;
+  }
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(resultDeliveryMessage(data.detail, '無法取得寄送進度'));
+  }
+  return response.json();
+}
+
+function scheduleResultDeliveryPoll() {
+  if (_resultDeliveryPollTimer) clearTimeout(_resultDeliveryPollTimer);
+  _resultDeliveryPollTimer = setTimeout(pollResultDelivery, 1500);
+}
+
+async function pollResultDelivery() {
+  if (!_resultDeliveryJobId) return;
+  try {
+    const job = await fetchResultDeliveryJob(_resultDeliveryJobId);
+    if (!job) return;
+    renderResultDeliveryJob(job);
+    if (['queued', 'running'].includes(job.state)) scheduleResultDeliveryPoll();
+  } catch (error) {
+    setResultDeliveryError(error.message || '無法取得寄送進度');
+    scheduleResultDeliveryPoll();
+  }
+}
+
+async function resumeResultDeliveryJob() {
+  if (!_resultDeliveryJobId) return;
+  try {
+    const job = await fetchResultDeliveryJob(_resultDeliveryJobId);
+    if (!job) return;
+    renderResultDeliveryJob(job);
+    if (['queued', 'running'].includes(job.state)) scheduleResultDeliveryPoll();
+  } catch (_) {
+    sessionStorage.removeItem(`result_delivery_job_${assignmentId}`);
+    _resultDeliveryJobId = null;
+  }
+}
+
+async function openResultDeliveryModal() {
+  setResultDeliveryError('');
+  const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('resultDeliveryModal'));
+  modal.show();
+  if (_resultDeliveryJobId) {
+    try {
+      const existing = await fetchResultDeliveryJob(_resultDeliveryJobId);
+      if (existing) {
+        renderResultDeliveryJob(existing);
+        if (['queued', 'running'].includes(existing.state)) scheduleResultDeliveryPoll();
+        return;
+      }
+    } catch (_) {
+      sessionStorage.removeItem(`result_delivery_job_${assignmentId}`);
+      _resultDeliveryJobId = null;
+    }
+  }
+  const confirmButton = document.getElementById('btnConfirmResultDelivery');
+  confirmButton.disabled = true;
+  confirmButton.classList.remove('d-none');
+  confirmButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>檢查中…';
+  try {
+    const response = await fetch(
+      `/api/admin/assignments/${assignmentId}/result-delivery/preview`,
+      { headers: authHeaders() }
+    );
+    if (response.status === 401) {
+      redirectAdminToLogin();
+      return;
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(resultDeliveryMessage(data.detail, '無法檢查寄送範圍'));
+    if (data.active_job_id) {
+      _resultDeliveryJobId = data.active_job_id;
+      sessionStorage.setItem(`result_delivery_job_${assignmentId}`, _resultDeliveryJobId);
+      await pollResultDelivery();
+      return;
+    }
+    _resultDeliveryJobId = null;
+    showResultDeliveryPreview(data);
+  } catch (error) {
+    setResultDeliveryError(error.message || '無法檢查寄送範圍');
+    confirmButton.disabled = true;
+    confirmButton.innerHTML = '<i class="bi bi-send me-1"></i>確認寄送';
+  }
+}
+
+async function confirmResultDelivery() {
+  const button = document.getElementById('btnConfirmResultDelivery');
+  button.disabled = true;
+  button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>啟動中…';
+  setResultDeliveryError('');
+  try {
+    const response = await fetch(
+      `/api/admin/assignments/${assignmentId}/result-delivery`,
+      { method: 'POST', headers: authHeaders() }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (response.status === 409 && data.detail?.job_id) {
+        _resultDeliveryJobId = data.detail.job_id;
+        sessionStorage.setItem(`result_delivery_job_${assignmentId}`, _resultDeliveryJobId);
+        await pollResultDelivery();
+        return;
+      }
+      throw new Error(resultDeliveryMessage(data.detail, '無法啟動成果寄送'));
+    }
+    _resultDeliveryJobId = data.job_id;
+    sessionStorage.setItem(`result_delivery_job_${assignmentId}`, _resultDeliveryJobId);
+    renderResultDeliveryJob(data);
+    scheduleResultDeliveryPoll();
+  } catch (error) {
+    setResultDeliveryError(error.message || '無法啟動成果寄送');
+    button.disabled = false;
+    button.innerHTML = '<i class="bi bi-send me-1"></i>確認寄送';
+  }
+}
+
+async function retryResultDelivery() {
+  if (!_resultDeliveryJobId) return;
+  const button = document.getElementById('btnRetryResultDelivery');
+  button.disabled = true;
+  button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>啟動中…';
+  setResultDeliveryError('');
+  try {
+    const response = await fetch(
+      `/api/admin/assignments/${assignmentId}/result-delivery/${encodeURIComponent(_resultDeliveryJobId)}/retry`,
+      { method: 'POST', headers: authHeaders() }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(resultDeliveryMessage(data.detail, '無法重寄失敗項目'));
+    renderResultDeliveryJob(data);
+    scheduleResultDeliveryPoll();
+  } catch (error) {
+    setResultDeliveryError(error.message || '無法重寄失敗項目');
+  } finally {
+    button.disabled = false;
+    button.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>重寄失敗';
+  }
+}
+
 async function exportLatestWords() {
   const btn = document.getElementById('btnExportLatest');
   btn.disabled = true;
@@ -558,7 +804,10 @@ async function exportAllWords() {
   }
 }
 
-AdminWorkflow.ready().then(loadResults);
+AdminWorkflow.ready().then(async () => {
+  await loadResults();
+  await resumeResultDeliveryJob();
+});
 
 Object.assign(window, {
   getFilename,
@@ -583,6 +832,9 @@ Object.assign(window, {
   openLateDeadlineModal,
   openBulkLateDeadlineModal,
   confirmLateDeadline,
+  openResultDeliveryModal,
+  confirmResultDelivery,
+  retryResultDelivery,
   exportLatestWords,
   exportGradesXlsx,
   exportAllWords,

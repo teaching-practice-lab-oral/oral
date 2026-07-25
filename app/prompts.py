@@ -77,14 +77,15 @@ _STAGE6_SHARED_GUIDELINES = [
     "Ask one question at a time",
     "Be professional but encouraging for non-native English speakers (TOEIC 300-450 level)",
     "Briefly acknowledge their answer before asking the next question",
+    "Do not attach the same evidence-probe phrase to multiple questions",
 ]
 _STAGE6_OUTPUT_RULE = (
     "Output one short interviewer turn containing only an optional brief acknowledgement "
     "and the next question. Use English only, with no Chinese or other non-Latin script. "
     "No labels or narration."
 )
-STAGE6_ROLEPLAY_POLICY = """\nSTRICT CORE-QUESTION POLICY:\n- Ask only the explicitly requested core-question number for this turn.\n- Preserve the exact intent; one question only, with an optional concrete-example probe.\n- Use English only; never output Chinese or any other non-Latin script.\n- Output one interviewer turn only.\n"""
-STAGE6_SECRET_QUESTION_POLICY = """\nUNANNOUNCED VERIFICATION QUESTION POLICY:\n- Ask exactly one new question based on a concrete claim in the candidate's answers.\n- Probe for personal action, reasoning, difficulty, or result.\n- Use English only; never output Chinese or any other non-Latin script.\n- Do not mention that this is a secret, verification, anti-cheating, or AI-generated question.\n- Do not provide an answer, hint, label, narration, or more than one question.\n"""
+STAGE6_ROLEPLAY_POLICY = """\nSTRICT CORE-QUESTION POLICY:\n- Ask only the explicitly requested core-question number for this turn.\n- Preserve the exact intent and keep it to one natural question.\n- Do not automatically add an example request or reuse a stock probe phrase.\n- If the core intent needs evidence, choose only one fitting angle: situation, action, reasoning, difficulty, or result.\n- Use English only; never output Chinese or any other non-Latin script.\n- Output one interviewer turn only.\n"""
+STAGE6_SECRET_QUESTION_POLICY = """\nUNANNOUNCED VERIFICATION QUESTION POLICY:\n- Ask exactly one new question based on a verifiable detail in the candidate's answers.\n- Choose one fitting angle: personal action, reasoning, difficulty, or result.\n- Use natural wording that has not already been repeated in the interview.\n- Use English only; never output Chinese or any other non-Latin script.\n- Do not mention that this is a secret, verification, anti-cheating, or AI-generated question.\n- Do not provide an answer, hint, label, narration, or more than one question.\n"""
 
 # 面試官提示詞 — guardrails merged in, used as the system default for Stage 6.
 # {context} is filled from Assignment.prompt_context at runtime.

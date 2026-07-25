@@ -16,7 +16,11 @@ from app.models import (
     User,
     Submission,
 )
-from app.services.export_builders import _build_submission_docx, _build_submission_audio_zip
+from app.services.export_builders import (
+    build_submission_audio_zip,
+    build_submission_docx,
+    safe_export_name,
+)
 from app.services.assignment_grade_export import (
     _build_assignment_grade_workbook,
     _get_visible_students_for_assignment,
@@ -44,9 +48,10 @@ def export_submission_word(
 ):
     sub, student, assignment = _get_accessible_submission_context(db, admin, submission_id)
 
-    word_bytes = _build_submission_docx(student, assignment, sub)
-    safe_title = (assignment.title if assignment else "作業").translate(str.maketrans('', '', r'/\:*?"<>|'))[:40]
-    safe_name = f"{safe_title}_{student.student_id}_第{sub.attempt_number}次.docx"
+    word_bytes = build_submission_docx(student, assignment, sub)
+    safe_title = safe_export_name(assignment.title if assignment else "作業", limit=40)
+    safe_student_id = safe_export_name(student.student_id, "student", 40)
+    safe_name = f"{safe_title}_{safe_student_id}_第{sub.attempt_number}次.docx"
     log_admin_action(
         db,
         admin,
@@ -75,8 +80,9 @@ def export_submission_audio(
 ):
     sub, student, _ = _get_accessible_submission_context(db, admin, submission_id)
 
-    zip_bytes = _build_submission_audio_zip(student, sub)
-    safe_name = f"{student.student_id}_{sub.attempt_number}_audio.zip"
+    zip_bytes = build_submission_audio_zip(student, sub)
+    safe_student_id = safe_export_name(student.student_id, "student", 40)
+    safe_name = f"{safe_student_id}_第{sub.attempt_number}次_音檔.zip"
     log_admin_action(
         db,
         admin,
@@ -92,7 +98,9 @@ def export_submission_audio(
     return StreamingResponse(
         io.BytesIO(zip_bytes),
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(safe_name)}"
+        },
     )
 
 
@@ -125,12 +133,13 @@ def export_student_all_words(
 
     if not submissions:
         raise HTTPException(status_code=404, detail="沒有已完成的提交可匯出")
-    safe_archive_title = assignment.title.translate(str.maketrans('', '', r'/\:*?"<>|'))[:40]
+    safe_archive_title = safe_export_name(assignment.title, limit=40)
+    safe_student_id = safe_export_name(student.student_id, "student", 40)
 
     def render_submission(sub: Submission) -> tuple[str, bytes]:
         _hydrate_for_export(db, sub)
-        filename = f"{safe_archive_title}_{student.student_id}_第{sub.attempt_number}次.docx"
-        return filename, _build_submission_docx(student, assignment, sub)
+        filename = f"{safe_archive_title}_{safe_student_id}_第{sub.attempt_number}次.docx"
+        return filename, build_submission_docx(student, assignment, sub)
 
     try:
         result = build_zip_with_manifest(
@@ -141,8 +150,7 @@ def export_student_all_words(
     except BatchExportFailed as exc:
         raise HTTPException(status_code=500, detail="全部 Word 文件匯出失敗，請檢查資料後重試") from exc
 
-    safe_title = assignment.title.replace(" ", "_")[:40]
-    download_name = f"{safe_title}_{student.student_id}_all.zip"
+    download_name = f"{safe_archive_title}_{safe_student_id}_所有版本.zip"
     encoded_filename = quote(download_name)
     log_admin_action(
         db,
@@ -191,9 +199,10 @@ def export_student_latest_word(
         raise HTTPException(status_code=404, detail="No submitted attempt found")
 
     _hydrate_for_export(db, sub)
-    word_bytes = _build_submission_docx(student, assignment, sub)
-    safe_title = assignment.title.translate(str.maketrans('', '', r'/\:*?"<>|'))[:40]
-    download_name = f"{safe_title}_{student.student_id}_第{sub.attempt_number}次.docx"
+    word_bytes = build_submission_docx(student, assignment, sub)
+    safe_title = safe_export_name(assignment.title, limit=40)
+    safe_student_id = safe_export_name(student.student_id, "student", 40)
+    download_name = f"{safe_title}_{safe_student_id}_第{sub.attempt_number}次.docx"
     encoded_filename = quote(download_name)
     log_admin_action(
         db,
@@ -249,7 +258,7 @@ def export_latest_words(
 
     if not latest_submissions:
         raise HTTPException(status_code=404, detail="沒有已完成的提交可匯出")
-    safe_archive_title = assignment.title.translate(str.maketrans('', '', r'/\:*?"<>|'))[:40]
+    safe_archive_title = safe_export_name(assignment.title, limit=40)
 
     def render_latest(sub: Submission) -> tuple[str, bytes]:
         student = users_by_id.get(sub.user_id)
@@ -257,7 +266,7 @@ def export_latest_words(
             raise ValueError("student row is missing")
         _hydrate_for_export(db, sub)
         filename = f"{safe_archive_title}_{student.student_id}_第{sub.attempt_number}次.docx"
-        return filename, _build_submission_docx(student, assignment, sub)
+        return filename, build_submission_docx(student, assignment, sub)
 
     try:
         result = build_zip_with_manifest(
@@ -268,8 +277,7 @@ def export_latest_words(
     except BatchExportFailed as exc:
         raise HTTPException(status_code=500, detail="全部 Word 文件匯出失敗，請檢查資料後重試") from exc
 
-    safe_title = assignment.title.replace(" ", "_")[:40]
-    download_name = f"{safe_title}_latest.zip"
+    download_name = f"{safe_archive_title}_最新版本.zip"
     encoded_filename = quote(download_name)
     log_admin_action(
         db,
@@ -323,7 +331,7 @@ def export_all_words(
 
     if not submissions:
         raise HTTPException(status_code=404, detail="沒有已完成的提交可匯出")
-    safe_archive_title = assignment.title.translate(str.maketrans('', '', r'/\:*?"<>|'))[:40]
+    safe_archive_title = safe_export_name(assignment.title, limit=40)
 
     def render_all(sub: Submission) -> tuple[str, bytes]:
         student = sub_users_by_id.get(sub.user_id)
@@ -331,7 +339,7 @@ def export_all_words(
             raise ValueError("student row is missing")
         _hydrate_for_export(db, sub)
         filename = f"{safe_archive_title}_{student.student_id}_第{sub.attempt_number}次.docx"
-        return filename, _build_submission_docx(student, assignment, sub)
+        return filename, build_submission_docx(student, assignment, sub)
 
     try:
         result = build_zip_with_manifest(
@@ -342,8 +350,7 @@ def export_all_words(
     except BatchExportFailed as exc:
         raise HTTPException(status_code=500, detail="全部 Word 文件匯出失敗，請檢查資料後重試") from exc
 
-    safe_title = assignment.title.replace(" ", "_")[:40]
-    download_name = f"{safe_title}_words.zip"
+    download_name = f"{safe_archive_title}_所有版本.zip"
     encoded_filename = quote(download_name)
     log_admin_action(
         db,
