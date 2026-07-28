@@ -66,9 +66,8 @@ on how the distributed binary was configured, so image redistributors must keep
 the Debian copyright files and verify the final image rather than assuming the
 project's Apache-2.0 license applies to FFmpeg.
 
-PostgreSQL and Cloudflare Tunnel run as separate container images in the
-provided Compose examples. They are not part of this project's Apache-2.0
-licensed source and remain governed by their respective upstream terms.
+PostgreSQL runs as a separate container image in the provided Compose examples.
+It is not part of this project's Apache-2.0 licensed source and remains governed by its upstream terms.
 
 This document is informational and is not legal advice. If a source or binary
 distribution adds vendored code or bundled assets, update this inventory and
