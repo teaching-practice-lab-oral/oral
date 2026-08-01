@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.models import Rubric, RubricVersion
 from app.rubrics import DEFAULT_RUBRIC_DEFINITION
-from app.services.prompt_templates import ensure_system_templates
 from app.utils import taipei_now
 
 
@@ -69,8 +68,6 @@ def ensure_system_rubric(db: Session, actor_id: int | None = None) -> RubricVers
 
 def bootstrap_system_data(db: Session, actor_id: int | None = None) -> dict:
     rubric_version = ensure_system_rubric(db, actor_id)
-    prompt_template_ids = ensure_system_templates(db, actor_id)
     return {
         "rubric_version_id": rubric_version.id,
-        "prompt_template_ids": prompt_template_ids,
     }

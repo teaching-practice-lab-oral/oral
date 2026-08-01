@@ -38,7 +38,7 @@ def record_proctor_event(
     expected_prefix = f"/student/assignment/{sub.assignment_id}/"
     if not payload.page_path.startswith(expected_prefix):
         raise HTTPException(status_code=400, detail="作答事件頁面不屬於此作業。")
-    details = payload.details or None
+    details = payload.details.model_dump(exclude_none=True) if payload.details else None
     if details is not None and len(json.dumps(details, ensure_ascii=False)) > 2000:
         raise HTTPException(status_code=400, detail="作答事件內容過長。")
     db.add(

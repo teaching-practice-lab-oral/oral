@@ -2,7 +2,7 @@
 
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,7 @@ from app.db_helpers import get_assignment_or_404
 from app.models import EmailJob, ResultPackage, User
 from app.services.admin_audit import log_admin_action
 from app.services.admin_scope import ensure_admin_can_access_assignment
+from app.services.input_validator import normalize_http_text
 from app.services.result_delivery import (
     ActiveResultDeliveryJob,
     create_result_delivery_job,
@@ -169,10 +170,11 @@ def latest_result_delivery(
 @router.get("/assignments/{assignment_id}/result-delivery/{job_id}")
 def get_result_delivery(
     assignment_id: int,
-    job_id: str,
+    job_id: str = Path(min_length=1, max_length=64),
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    job_id = normalize_http_text(job_id, field_name="job_id") or ""
     _assignment(db, admin, assignment_id)
     job = _job(db, assignment_id, job_id)
     payload = result_delivery_job_payload(db, job)
@@ -183,11 +185,12 @@ def get_result_delivery(
 @router.post("/assignments/{assignment_id}/result-delivery/{job_id}/retry")
 async def retry_result_delivery(
     assignment_id: int,
-    job_id: str,
     request: Request,
+    job_id: str = Path(min_length=1, max_length=64),
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    job_id = normalize_http_text(job_id, field_name="job_id") or ""
     assignment = _assignment(db, admin, assignment_id)
     job = _job(db, assignment_id, job_id, lock=True)
     if job.state in {"queued", "running"}:

@@ -30,7 +30,6 @@ function _adminPageContext() {
   if (path === '/admin/grading') return { key: 'grading', gradingHref: path };
   if (path === '/admin/login-audit') return { key: 'audit', gradingHref: '/admin/grading' };
   if (path === '/admin/rubrics') return { key: 'rubrics', gradingHref: '/admin/grading' };
-  if (path === '/admin/prompts') return { key: 'prompts', gradingHref: '/admin/grading' };
   if (path === '/admin/create-assignment' || path.startsWith('/admin/assignments')) {
     return { key: 'assignments', gradingHref: '/admin/grading' };
   }
@@ -79,7 +78,6 @@ function _renderAdminChrome() {
           ${_adminNavLink(context, 'audit', '/admin/login-audit', 'bi-shield-check', '稽核')}
           <span class="admin-nav-divider" aria-hidden="true"></span>
           ${_adminNavLink(context, 'rubrics', '/admin/rubrics', 'bi-ui-checks-grid', '評分規準', 'admin-settings-link')}
-          ${_adminNavLink(context, 'prompts', '/admin/prompts', 'bi-chat-square-text', '提示詞設定', 'admin-settings-link')}
         </div>
         <div class="admin-account">
           <span class="admin-account-name" title="目前登入的管理員">
@@ -171,12 +169,12 @@ async function _forceAdminPasswordChange() {
             <p class="text-secondary small">目前使用的是管理員設定的臨時密碼。完成更換後，才會開放管理功能。</p>
             <div id="adminForcedPasswordAlert" class="alert alert-danger d-none" role="alert"></div>
             <label class="form-label fw-semibold" for="adminOldPassword">目前密碼</label>
-            <input class="form-control mb-3" id="adminOldPassword" type="password" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+            <input class="form-control mb-3" id="adminOldPassword" type="password" maxlength="256" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
             <label class="form-label fw-semibold" for="adminNewPassword">新密碼</label>
-            <input class="form-control mb-2" id="adminNewPassword" type="password" minlength="8" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+            <input class="form-control mb-2" id="adminNewPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
             <div class="form-text mb-3">至少 8 個字元，請勿沿用臨時密碼。</div>
             <label class="form-label fw-semibold" for="adminConfirmPassword">再次輸入新密碼</label>
-            <input class="form-control" id="adminConfirmPassword" type="password" minlength="8" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+            <input class="form-control" id="adminConfirmPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
           </div>
           <div class="modal-footer border-0 pt-0">
             <button class="btn btn-primary w-100" id="adminForcedPasswordSubmit" type="button">更換密碼並進入管理後台</button>

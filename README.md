@@ -356,6 +356,11 @@ docker compose --env-file .env.production -f docker-compose-production.yml logs 
 
 部署者可透過 `STAGE_HOURLY_LIMIT`、`DAILY_API_LIMIT` 與 `MAX_AUDIO_SECONDS` 調整這些限制。
 
+音訊上傳、心得照片與學生成果包匯出另使用短期的
+`costly_action_usage_logs` 做跨 worker 原子限流；建議正式環境沿用
+[`.env.security-limits.example`](.env.security-limits.example) 的平衡型預設。
+這些紀錄預設保留兩天，和付費 API 的 `api_usage_logs` 分開計算。
+
 ---
 
 ## 系統架構

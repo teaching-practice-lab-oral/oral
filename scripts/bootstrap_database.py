@@ -31,8 +31,7 @@ def main() -> int:
     command.check(config)
     print(
         "Database bootstrap complete: "
-        f"rubric_version_id={result['rubric_version_id']}, "
-        f"prompt_template_ids={result['prompt_template_ids']}"
+        f"rubric_version_id={result['rubric_version_id']}"
     )
     return 0
 

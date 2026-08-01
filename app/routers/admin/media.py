@@ -1,6 +1,6 @@
 """Authorized admin access to student media objects."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import RoleplayTurn, ShadowingRecord, SubmissionReflection, User
 from app.services import storage
 from app.services.admin_submission_access import get_accessible_submission_context
+from app.services.input_validator import normalize_http_text
 from app.utils import PRESIGNED_URL_EXPIRATION
 
 
@@ -35,10 +36,11 @@ def _find_submission_id_for_audio_key(db: Session, key: str) -> int | None:
 
 @router.get("/audio-url")
 def get_audio_url(
-    key: str,
+    key: str = Query(min_length=1, max_length=512),
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    key = normalize_http_text(key, field_name="key") or ""
     submission_id = _find_submission_id_for_audio_key(db, key)
     if submission_id is None:
         raise HTTPException(status_code=404, detail="Audio file not found")
@@ -52,6 +54,7 @@ def get_audio_url(
 @router.get("/submissions/{submission_id}/reflection/photo-url")
 def get_reflection_photo_url(
     submission_id: int,
+    response: Response,
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -62,7 +65,17 @@ def get_reflection_photo_url(
     if (
         not reflection
         or not reflection.photo_key
+        or reflection.photo_validation_version != 1
         or not storage.is_current_object_key(reflection.photo_key, "reflection")
     ):
         raise HTTPException(status_code=404, detail="學生沒有上傳問題照片")
-    return {"url": storage.generate_presigned_url(reflection.photo_key, expiration=PRESIGNED_URL_EXPIRATION)}
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return {
+        "url": storage.generate_presigned_url(
+            reflection.photo_key,
+            expiration=PRESIGNED_URL_EXPIRATION,
+            inline_filename="reflection-photo.jpg",
+            response_content_type="image/jpeg",
+        )
+    }

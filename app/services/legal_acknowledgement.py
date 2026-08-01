@@ -19,13 +19,13 @@ class LegalDocument:
 
 
 PRIVACY_NOTICE = LegalDocument(
-    title="個人資料蒐集、處理及利用告知事項",
-    version="2026-07-22.2",
+    title="隱私權政策",
+    version="2026-08-01.1",
     url="https://docs.oral.brid.pw/legal/privacy-notice/",
 )
 SYSTEM_TERMS = LegalDocument(
-    title="AI 英語面試練習系統使用者條款暨可接受使用規範",
-    version="2026-07-22.2",
+    title="使用者條款",
+    version="2026-08-01.1",
     url="https://docs.oral.brid.pw/legal/system-terms/",
 )
 
@@ -48,7 +48,7 @@ def requires_acknowledgement(user) -> bool:
 
 def validate_acknowledgement(payload) -> None:
     if not payload.privacy_acknowledged:
-        raise HTTPException(status_code=400, detail="請先閱讀並勾選個人資料告知事項")
+        raise HTTPException(status_code=400, detail="請先閱讀並勾選隱私權政策")
     if not payload.terms_accepted:
         raise HTTPException(status_code=400, detail=f"請先閱讀並同意「{SYSTEM_TERMS.title}」")
     if (
@@ -57,7 +57,7 @@ def validate_acknowledgement(payload) -> None:
     ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="法遵文件已有新版本，請重新載入並閱讀後再確認。",
+            detail="使用者條款或隱私權政策已有新版本，請重新載入並閱讀後再確認。",
         )
 
 
@@ -83,7 +83,7 @@ def record_acknowledgement(
         target_type="user",
         target_id=user.id,
         target_label=user.student_id,
-        summary="確認現行個資告知事項與系統使用者條款",
+        summary="確認現行隱私權政策與使用者條款",
         details={
             "privacy_notice_version": PRIVACY_NOTICE.version,
             "system_terms_version": SYSTEM_TERMS.version,

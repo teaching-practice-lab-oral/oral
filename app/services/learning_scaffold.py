@@ -196,7 +196,7 @@ def build_scaffold_request(
     context = _public_context(db, submission)
     profile = _profile_row(db, submission)
     if context is None:
-        raise ValueError("此功能只適用於完整的公版四題快照")
+        raise ValueError("此功能只適用於資料完整的公版四題題組")
     if profile is None:
         raise ValueError("請先完成欲應徵的職位資料")
     key, _questions, blueprints = context

@@ -2,9 +2,10 @@
 
 import logging
 from pathlib import Path
+import unicodedata
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_student
@@ -12,7 +13,8 @@ from app.config import settings
 from app.database import get_db
 from app.models import SubmissionReflection, User
 from app.schemas import ReflectionPayload, ReflectionResponse, ReflectionSubmitRequest
-from app.services import mail, reflection as reflection_service, storage
+from app.services import image_upload, mail, rate_limiter, reflection as reflection_service, storage
+from app.services.operation_lock import REFLECTION_PHOTO_OPERATION, acquire_operation_lock
 from app.services.submission_assets import delete_uncommitted_object, enqueue_object_cleanup
 from app.services.submission_data import get_job_profile_data, get_reflection_data, report_input_hash
 from app.utils import PRESIGNED_URL_EXPIRATION, taipei_now
@@ -21,7 +23,7 @@ from ._common import get_editable_submission_locked, get_own_submission
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/student", tags=["student-reflection"])
-MAX_REFLECTION_PHOTO_BYTES = 10 * 1024 * 1024
+MAX_REFLECTION_PHOTO_BYTES = image_upload.MAX_SOURCE_BYTES
 
 
 async def _send_issue_notice_safe(*args) -> None:
@@ -38,18 +40,10 @@ def _reflection_or_404(db: Session, submission_id: int) -> SubmissionReflection:
     return row
 
 
-def _detect_image(data: bytes) -> tuple[str, str]:
-    if data.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg", "jpg"
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png", "png"
-    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-        return "image/webp", "webp"
-    if len(data) >= 12 and data[4:8] == b"ftyp":
-        brand = data[8:12]
-        if brand in {b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"mif1", b"msf1", b"heif"}:
-            return ("image/heif", "heif") if brand == b"heif" else ("image/heic", "heic")
-    raise HTTPException(status_code=400, detail="照片只接受 JPEG、PNG、WebP、HEIC 或 HEIF")
+def _safe_original_photo_name(value: str | None) -> str:
+    name = unicodedata.normalize("NFC", Path(value or "photo.jpg").name)
+    name = "".join(character for character in name if unicodedata.category(character)[0] != "C")
+    return (name.strip() or "photo.jpg")[:256]
 
 
 @router.put("/submissions/{submission_id}/reflection", response_model=ReflectionResponse)
@@ -71,6 +65,7 @@ def save_reflection_draft(
 @router.post("/submissions/{submission_id}/reflection/photo", response_model=ReflectionResponse)
 async def upload_reflection_photo(
     submission_id: int,
+    response: Response,
     photo: UploadFile = File(...),
     expected_revision: int = Form(..., ge=0),
     current_user: User = Depends(get_current_student),
@@ -82,46 +77,65 @@ async def upload_reflection_photo(
     owned_submission_id = submission.id
     student_id = current_user.student_id
     db.rollback()
-    data = await photo.read(MAX_REFLECTION_PHOTO_BYTES + 1)
-    if not data:
-        raise HTTPException(status_code=400, detail="照片檔案不可為空")
-    if len(data) > MAX_REFLECTION_PHOTO_BYTES:
-        raise HTTPException(status_code=413, detail="照片不可超過 10 MB")
-    content_type, extension = _detect_image(data)
-    key = storage.object_key(
-        "reflection",
-        student_id,
-        owned_submission_id,
-        f"{uuid4().hex}.{extension}",
-    )
-    await storage.upload_file_async(key, data, content_type)
+    lease = await acquire_operation_lock(submission_id, REFLECTION_PHOTO_OPERATION)
     try:
-        submission = get_editable_submission_locked(db, submission_id, current_user.id)
-    except Exception:
-        await delete_uncommitted_object(key)
-        raise
-    try:
-        row = reflection_service.get_or_create_for_photo(db, submission, expected_revision)
-        db.flush()
-    except Exception:
-        db.rollback()
-        await delete_uncommitted_object(key)
-        raise
-    old_key = row.photo_key
-    row.photo_key = key
-    row.photo_content_type = content_type
-    row.photo_original_name = Path(photo.filename or f"photo.{extension}").name[:256]
-    row.photo_size = len(data)
-    row.updated_at = taipei_now()
-    try:
-        if old_key and old_key != key:
-            enqueue_object_cleanup(db, [old_key])
-        db.commit()
-    except Exception:
-        db.rollback()
-        await delete_uncommitted_object(key)
-        raise
-    return ReflectionResponse(**get_reflection_data(db, submission))
+        data = await photo.read(MAX_REFLECTION_PHOTO_BYTES + 1)
+        if not data:
+            raise HTTPException(status_code=422, detail="照片檔案不可為空")
+        if len(data) > MAX_REFLECTION_PHOTO_BYTES:
+            raise HTTPException(status_code=413, detail="照片不可超過 10 MB")
+        rate_limiter.reserve_costly_action(
+            current_user.id,
+            rate_limiter.CostlyAction.PHOTO_UPLOAD,
+            resource_id=submission_id,
+            units_bytes=len(data),
+        )
+        normalized = await image_upload.normalize_reflection_photo_async(data, photo.content_type)
+        key = storage.object_key(
+            "reflection",
+            student_id,
+            owned_submission_id,
+            f"{uuid4().hex}.jpg",
+        )
+        await storage.upload_file_async(
+            key,
+            normalized.data,
+            image_upload.OUTPUT_CONTENT_TYPE,
+            cache_control="private, no-store",
+            content_disposition="inline; filename=reflection-photo.jpg",
+        )
+        try:
+            submission = get_editable_submission_locked(db, submission_id, current_user.id)
+        except Exception:
+            await delete_uncommitted_object(key)
+            raise
+        try:
+            row = reflection_service.get_or_create_for_photo(db, submission, expected_revision)
+            db.flush()
+        except Exception:
+            db.rollback()
+            await delete_uncommitted_object(key)
+            raise
+        old_key = row.photo_key
+        row.photo_key = key
+        row.photo_content_type = image_upload.OUTPUT_CONTENT_TYPE
+        row.photo_original_name = _safe_original_photo_name(photo.filename)
+        row.photo_size = len(normalized.data)
+        row.photo_validation_version = 1
+        row.updated_at = taipei_now()
+        try:
+            if old_key and old_key != key:
+                enqueue_object_cleanup(db, [old_key])
+            db.commit()
+        except Exception:
+            db.rollback()
+            await delete_uncommitted_object(key)
+            raise
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return ReflectionResponse(**get_reflection_data(db, submission))
+    finally:
+        await lease.release()
 
 
 @router.delete("/submissions/{submission_id}/reflection/photo", response_model=ReflectionResponse)
@@ -138,6 +152,7 @@ async def remove_reflection_photo(
     row.photo_content_type = None
     row.photo_original_name = None
     row.photo_size = None
+    row.photo_validation_version = None
     if old_key:
         enqueue_object_cleanup(db, [old_key])
     db.commit()
@@ -148,6 +163,7 @@ async def remove_reflection_photo(
 @router.get("/submissions/{submission_id}/reflection/photo-url")
 def get_reflection_photo_url(
     submission_id: int,
+    response: Response,
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db),
 ):
@@ -155,10 +171,20 @@ def get_reflection_photo_url(
     row = _reflection_or_404(db, submission.id)
     if (
         not row.photo_key
+        or row.photo_validation_version != 1
         or not storage.is_current_object_key(row.photo_key, "reflection")
     ):
         raise HTTPException(status_code=404, detail="沒有上傳照片")
-    return {"url": storage.generate_presigned_url(row.photo_key, expiration=PRESIGNED_URL_EXPIRATION)}
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return {
+        "url": storage.generate_presigned_url(
+            row.photo_key,
+            expiration=PRESIGNED_URL_EXPIRATION,
+            inline_filename="reflection-photo.jpg",
+            response_content_type="image/jpeg",
+        )
+    }
 
 
 @router.post("/submissions/{submission_id}/reflection/submit", response_model=ReflectionResponse)

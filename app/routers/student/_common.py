@@ -26,7 +26,7 @@ def bind_answers_to_snapshot(db, submission: Submission, items, *, require_all: 
     if len(questions) != CORE_QUESTION_COUNT:
         raise HTTPException(
             status_code=409,
-            detail=f"此嘗試的 {CORE_QUESTION_COUNT} 題快照不完整，請聯絡老師。",
+            detail=f"此嘗試開始時使用的 {CORE_QUESTION_COUNT} 題資料不完整，請聯絡老師。",
         )
     answers = []
     seen = set()
@@ -108,22 +108,3 @@ def entry_key(items, match_value, key_field, match_field="index"):
         if item.get(match_field) == match_value:
             return item.get(key_field)
     return None
-
-
-def build_questions_block(answers: list) -> str:
-    """Format per-question answers into a block for the AI prompt."""
-    return "\n".join(
-        f"Q{i+1}: {a['question']}\nA{i+1}: {a['text']}"
-        for i, a in enumerate(answers)
-    )
-
-
-def inject_questions(system_prompt: str, answers: list) -> tuple[str, str]:
-    """Return (system_prompt_with_questions, user_message)."""
-    if answers:
-        block = build_questions_block(answers)
-        prompt = system_prompt.replace("{questions}", block)
-        return prompt, block
-    # No answers means the placeholder line is omitted from the prompt.
-    lines = [l for l in system_prompt.splitlines() if "{questions}" not in l]
-    return "\n".join(lines), ""

@@ -11,11 +11,10 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_student
 from app.database import get_db
 from app.models import User, Submission
-from app.services.prompt_composition import compose_stage_prompt
+from app.services.prompt_composition import compose_stage_request
 from app.services.submission_data import (
     hydrate_submission_from_normalized,
     get_job_profile_data,
-    job_profile_context,
     list_answers,
     list_shadowing_tts_keys,
     replace_answers,
@@ -48,7 +47,6 @@ from ._common import (
     bind_answers_to_snapshot,
     ensure_submission_stage,
     get_editable_submission_locked,
-    inject_questions,
 )
 
 logger = logging.getLogger(__name__)
@@ -91,9 +89,16 @@ def _feedback_request_data(
     sub: Submission,
     draft1_answers: list[dict],
 ) -> tuple[str, str]:
-    base_prompt = compose_stage_prompt(db, sub.assignment_id, 3)
-    system_prompt, user_message = inject_questions(base_prompt, draft1_answers)
-    return system_prompt, user_message + job_profile_context(db, sub)
+    return compose_stage_request(
+        db,
+        sub.assignment_id,
+        3,
+        label="student_draft",
+        payload={
+            "answers": draft1_answers,
+            "job_profile": get_job_profile_data(db, sub),
+        },
+    )
 
 
 def _require_feedback_ready(sub: Submission) -> None:

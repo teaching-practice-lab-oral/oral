@@ -91,7 +91,7 @@
       </div>
       <div class="step-item" id="step-ind-3">
         <div class="step-circle" id="step-circle-3">3</div>
-        <div class="step-label">提示詞設定</div>
+        <div class="step-label">評分設定</div>
       </div>
       <div class="step-item" id="step-ind-4">
         <div class="step-circle" id="step-circle-4">4</div>
@@ -169,21 +169,22 @@
 
       <div class="mb-3">
         <label class="form-label fw-semibold">標題 <span class="text-danger">*</span></label>
-        <input class="form-control" id="s2Title" placeholder="例：自我介紹英語面試練習" />
+        <input class="form-control" id="s2Title" maxlength="256" placeholder="例：自我介紹英語面試練習" />
       </div>
       <div class="mb-3">
         <label class="form-label fw-semibold">說明</label>
-        <textarea class="form-control" id="s2Desc" rows="2" placeholder="作業說明（可留空）"></textarea>
+        <textarea class="form-control" id="s2Desc" rows="2" maxlength="4000" placeholder="作業說明（可留空）"></textarea>
       </div>
       <div class="mb-3">
         <label class="form-label fw-semibold">AI 情境主題說明 <span class="text-muted small fw-normal">（English，供 AI 了解面試情境）</span></label>
-        <textarea class="form-control" id="s2Context" rows="2" placeholder="e.g. Personal background, self-introduction, motivation for applying, strengths and weaknesses"></textarea>
+        <textarea class="form-control" id="s2Context" rows="2" maxlength="3000" placeholder="e.g. Personal background, self-introduction, motivation for applying, strengths and weaknesses"></textarea>
       </div>
       <div class="mb-3">
         <label class="form-label fw-semibold">
-          寫作、跟讀與角色扮演題組
-          <span class="badge bg-primary ms-1">共用 4 題</span>
+          寫作、跟讀與角色扮演核心題意
+          <span class="badge bg-primary ms-1">核心 4 題</span>
         </label>
+        <div class="form-text mb-3">寫作與跟讀使用原題；角色扮演第 1～4 題由 AI 保留題意自然改問，第 5 題則依學生內容個人化追問。</div>
         <select class="form-select" id="s2QuestionSet" data-action-change="updateQuestionSetUI">
           <option value="">載入公版題組中...</option>
         </select>
@@ -201,7 +202,7 @@
       <div class="mb-3">
         <label class="form-label fw-semibold">指定班級 <span class="text-muted small fw-normal">（留空則開放全部學生）</span></label>
         <div id="s2ClassWrap" class="tags-input-wrap border rounded p-2 d-flex flex-wrap gap-1 align-items-center" style="min-height:38px;cursor:text" data-action="focusTagInput" data-args='["s2ClassInput"]'>
-          <input id="s2ClassInput" class="border-0 flex-grow-1" style="min-width:80px;outline:none" placeholder="輸入課號後按 Enter 新增" data-action-keydown="handleTagKeyH" data-args='["s2ClassWrap","s2ClassInput"]' autocomplete="off" readonly data-action-focus="clearReadonlyAttr" />
+          <input id="s2ClassInput" class="border-0 flex-grow-1" maxlength="64" style="min-width:80px;outline:none" placeholder="輸入課號後按 Enter 新增" data-action-keydown="handleTagKeyH" data-args='["s2ClassWrap","s2ClassInput"]' autocomplete="off" readonly data-action-focus="clearReadonlyAttr" />
         </div>
         <div id="s2ClassHint" class="form-text text-muted mt-1"></div>
       </div>
@@ -222,36 +223,14 @@
 
       <div class="d-flex justify-content-between mt-4">
         <button class="btn btn-outline-secondary" data-action="goStep" data-args='[1]'><i class="bi bi-arrow-left me-1"></i>上一步</button>
-        <button class="btn btn-primary px-4" data-action="validateStep2">下一步：提示詞設定 <i class="bi bi-arrow-right ms-1"></i></button>
+        <button class="btn btn-primary px-4" data-action="validateStep2">下一步：評分設定 <i class="bi bi-arrow-right ms-1"></i></button>
       </div>
     </div>
 
-    <!-- ── STEP 3: 提示詞設定 ── -->
+    <!-- ── STEP 3: 評分設定 ── -->
     <div id="step3" class="panel d-none">
-      <h6 class="fw-bold mb-3">AI 提示詞設定</h6>
-      <p class="text-muted small mb-4">選擇各階段使用的 AI 提示詞模板。留空使用系統預設。如需自訂模板，請至 <a href="/admin/prompts" target="_blank">提示詞管理</a> 建立。</p>
-
-      <!-- Stage 3 template (always shown) -->
-      <div class="mb-4">
-        <label class="form-label fw-semibold"><i class="bi bi-pencil-square me-1 text-primary"></i>草稿寫作提示詞（Stage 3）</label>
-        <select class="form-select" id="s3TemplateSelect">
-          <option value="">使用系統預設 — 面試主題寫作回饋提示詞</option>
-        </select>
-        <div class="form-text text-muted">AI 對學生草稿提供英文文法與表達回饋</div>
-      </div>
-
-      <!-- Stage 6 template (only if roleplay enabled) -->
-      <div class="mb-4" id="step3-s6-wrap">
-        <label class="form-label fw-semibold"><i class="bi bi-person-badge me-1 text-primary"></i>面試官提示詞（Stage 6）</label>
-        <select class="form-select" id="s6TemplateSelect">
-          <option value="">使用系統預設 — 面試官提示詞</option>
-        </select>
-        <div class="form-text text-muted">AI 扮演英文面試官，依面試官提問順序進行對話</div>
-      </div>
-      <div class="mb-4">
-        <label class="form-label fw-semibold"><i class="bi bi-bar-chart-line me-1 text-primary"></i>口語回饋提示詞（Stage 8）</label>
-        <select class="form-select" id="s8TemplateSelect"><option value="">使用系統預設 — 英語面試學習回饋提示詞</option></select>
-      </div>
+      <h6 class="fw-bold mb-3">評分設定</h6>
+      <p class="text-muted small mb-4">AI 練習與角色扮演使用系統統一規則；老師只需選擇正式批改使用的評分規準。</p>
 
       <div class="mb-4">
         <label class="form-label fw-semibold"><i class="bi bi-ui-checks-grid me-1 text-primary"></i>批改用評分規準</label>

@@ -1,5 +1,4 @@
 """Internal stateless worker app for CHT/Taiwan VM audio offload."""
-import asyncio
 import base64
 import secrets
 
@@ -41,13 +40,17 @@ class TTSResponse(BaseModel):
 
 
 class AudioProcessRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     audio_base64: str = Field(min_length=1, max_length=settings.WORKER_MAX_AUDIO_BASE64_CHARS)
     filename: str = Field(default="audio.webm", max_length=255)
 
 
 class AudioProcessResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     mp3_base64: str
-    transcript: str
+    transcript: str = Field(max_length=12_000)
     metrics: dict | None = None
 
 
@@ -84,19 +87,22 @@ async def worker_tts(payload: TTSRequest) -> TTSResponse:
     dependencies=[Depends(require_worker_secret)],
 )
 async def worker_audio_process(payload: AudioProcessRequest) -> AudioProcessResponse:
-    from app.services import storage, whisper
-    from app.services.audio_processor import validate_audio_duration, validate_audio_upload
+    from app.services import whisper
+    from app.services.audio_processor import validate_canonical_mp3
 
     try:
         audio_bytes = base64.b64decode(payload.audio_base64, validate=True)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid audio_base64") from exc
 
-    validate_audio_upload(audio_bytes)
-    await validate_audio_duration(audio_bytes)
-    mp3_bytes, (transcript, metrics) = await asyncio.gather(
-        storage.convert_webm_to_mp3(audio_bytes),
-        whisper.transcribe_with_metrics(audio_bytes, payload.filename or "audio.webm"),
+    # The internal protocol accepts only the canonical MP3 produced by the web
+    # service.  Revalidate independently; accepting and re-encoding arbitrary
+    # raw containers here would weaken that protocol and add a lossy pass.
+    await validate_canonical_mp3(audio_bytes)
+    mp3_bytes = audio_bytes
+    transcript, metrics = await whisper.transcribe_with_metrics(
+        mp3_bytes,
+        "audio.mp3",
     )
     return AudioProcessResponse(
         mp3_base64=base64.b64encode(mp3_bytes).decode("ascii"),

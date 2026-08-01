@@ -40,7 +40,7 @@
       <div class="d-flex gap-2 align-items-center flex-wrap">
         <div class="input-group input-group-sm search-bar">
           <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
-          <input type="text" class="form-control" id="searchInput" placeholder="搜尋學號或姓名..." data-action-input="filterTable" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" />
+          <input type="text" class="form-control" id="searchInput" maxlength="256" placeholder="搜尋學號或姓名..." data-action-input="filterTable" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" />
         </div>
         <select class="form-select form-select-sm" id="classFilter" style="max-width:160px" data-action-change="filterTable">
           <option value="">全部班級</option>
@@ -93,28 +93,28 @@
           <form id="createForm">
             <div class="mb-3">
               <label class="form-label fw-semibold">學號 <span class="text-danger">*</span></label>
-              <input class="form-control" id="newStudentId" placeholder="例：B10101001" required />
+              <input class="form-control" id="newStudentId" maxlength="64" placeholder="例：B10101001" required />
             </div>
             <div class="mb-3">
               <label class="form-label fw-semibold">姓名 <span class="text-danger">*</span></label>
-              <input class="form-control" id="newName" required />
+              <input class="form-control" id="newName" maxlength="128" required />
             </div>
             <div class="mb-3">
               <label class="form-label fw-semibold">電子郵件 <span class="text-danger">*</span></label>
-              <input type="email" class="form-control" id="newEmail" required />
+              <input type="email" class="form-control" id="newEmail" maxlength="256" required />
             </div>
             <div class="mb-3">
               <label class="form-label fw-semibold">備用信箱 <span class="text-muted fw-normal">（選填）</span></label>
-              <input type="email" class="form-control" id="newBackupEmail" placeholder="推薦使用 gmail.com" />
+              <input type="email" class="form-control" id="newBackupEmail" maxlength="256" placeholder="推薦使用 gmail.com" />
             </div>
             <div class="mb-3">
               <label class="form-label fw-semibold">班級（課號）</label>
-              <input class="form-control" id="newClassName" placeholder="例：A1234" />
+              <input class="form-control" id="newClassName" maxlength="64" placeholder="例：A1234" />
             </div>
             <div class="mb-3">
               <label class="form-label fw-semibold">密碼 <span class="text-danger">*</span></label>
               <div class="input-group">
-                <input type="password" class="form-control" id="newPassword" required autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+                <input type="password" class="form-control" id="newPassword" minlength="8" maxlength="128" required autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
                 <button class="btn btn-outline-secondary" type="button" data-action="fillRandomCreatePassword">
                   <i class="bi bi-shuffle me-1"></i>隨機產生
                 </button>
@@ -155,7 +155,7 @@
         <div class="modal-body pt-2">
           <div id="editBackupEmailAlert" class="alert d-none"></div>
           <p class="text-muted small mb-2">對象：<strong id="editBackupEmailName"></strong></p>
-          <input type="email" class="form-control" id="editBackupEmailValue" placeholder="留空則清除" />
+          <input type="email" class="form-control" id="editBackupEmailValue" maxlength="256" placeholder="留空則清除" />
         </div>
         <div class="modal-footer border-0">
           <button class="btn btn-light" data-bs-dismiss="modal">取消</button>
@@ -176,7 +176,7 @@
         <div class="modal-body pt-2">
           <div id="editClassAlert" class="alert d-none"></div>
           <p class="text-muted small mb-2">對象：<strong id="editClassName"></strong></p>
-          <input class="form-control" id="editClassValue" placeholder="課號（留空則清除）" />
+          <input class="form-control" id="editClassValue" maxlength="64" placeholder="課號（留空則清除）" />
         </div>
         <div class="modal-footer border-0">
           <button class="btn btn-light" data-bs-dismiss="modal">取消</button>
@@ -277,7 +277,7 @@
           <div id="resetAlert" class="alert d-none"></div>
           <p class="text-muted small mb-3">重設密碼對象：<strong class="text-dark" id="resetUserName"></strong></p>
           <div class="input-group mb-2">
-            <input type="password" class="form-control" id="newResetPassword" placeholder="請輸入新密碼" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+            <input type="password" class="form-control" id="newResetPassword" minlength="8" maxlength="128" placeholder="請輸入新密碼" autocomplete="new-password" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
             <button class="btn btn-outline-secondary" type="button" data-action="fillRandomResetPassword">
               <i class="bi bi-shuffle me-1"></i>隨機產生
             </button>
@@ -285,7 +285,7 @@
               <i class="bi bi-eye me-1"></i><span>顯示</span>
             </button>
           </div>
-          <input type="password" class="form-control" id="resetAdminPassword" placeholder="請輸入您自己的管理員密碼以確認" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+          <input type="password" class="form-control" id="resetAdminPassword" maxlength="256" placeholder="請輸入您自己的管理員密碼以確認" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
         </div>
         <div class="modal-footer border-0">
           <button class="btn btn-light" data-bs-dismiss="modal">取消</button>
@@ -314,7 +314,7 @@
             此操作<strong>無法復原</strong>，該學生的所有作業紀錄將一併刪除。
           </div>
           <label class="form-label fw-semibold">請輸入您的管理員密碼以確認</label>
-          <input type="password" class="form-control" id="deleteUserPassword" placeholder="管理員密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+          <input type="password" class="form-control" id="deleteUserPassword" maxlength="256" placeholder="管理員密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
         </div>
         <div class="modal-footer border-0">
           <button class="btn btn-light" data-bs-dismiss="modal">取消</button>

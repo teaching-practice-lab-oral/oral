@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 
 from .users import router as users_router
-from .prompts import router as prompts_router
 from .assignments import router as assignments_router
 from .exports import router as exports_router
 from .audit import router as audit_router
@@ -13,7 +12,6 @@ from .result_delivery import router as result_delivery_router
 
 router = APIRouter()
 router.include_router(users_router)
-router.include_router(prompts_router)
 router.include_router(assignments_router)
 router.include_router(exports_router)
 router.include_router(audit_router)

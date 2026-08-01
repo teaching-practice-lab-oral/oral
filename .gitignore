@@ -35,6 +35,8 @@ media/
 dist-source/
 oral.code-workspace
 /.local-tests/
+/security-audit/
 **/tests/
 !/tests/
 !/tests/**
+tests/**

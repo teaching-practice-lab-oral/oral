@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import SessionLocal
 from app.models import (
-    ActiveSession, AdminAuditLog, ApiUsageLog, LoginEvent, PasswordResetToken,
+    ActiveSession, AdminAuditLog, ApiUsageLog, CostlyActionUsageLog, LoginEvent, PasswordResetToken,
     ObjectDeletionTask, StudentPresence, SubmissionProctorEvent, WorkerRoutingEvent,
     ResultPackage,
 )
@@ -72,6 +72,13 @@ def cleanup_expired_records(db: Session, now=None) -> dict[str, int]:
             ApiUsageLog,
             ApiUsageLog.called_at,
             settings.API_USAGE_RETENTION_DAYS,
+            now,
+        ),
+        "costly_action_usage_logs": _delete_older_than(
+            db,
+            CostlyActionUsageLog,
+            CostlyActionUsageLog.called_at,
+            settings.COSTLY_ACTION_RETENTION_DAYS,
             now,
         ),
         "worker_routing_events": _delete_older_than(

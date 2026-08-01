@@ -189,14 +189,14 @@
             <label for="studentId" class="form-label fw-semibold text-secondary small">學號</label>
             <div class="input-group">
               <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
-              <input type="text" class="form-control" id="studentId" name="username" placeholder="例：B10101001" autocomplete="username" required />
+              <input type="text" class="form-control" id="studentId" name="username" maxlength="64" placeholder="例：B10101001" autocomplete="username" required />
             </div>
           </div>
           <div class="mb-4">
             <label for="password" class="form-label fw-semibold text-secondary small">密碼</label>
             <div class="input-group">
               <span class="input-group-text"><i class="bi bi-lock"></i></span>
-              <input type="password" class="form-control" id="password" name="password" placeholder="請輸入密碼" autocomplete="current-password" required />
+              <input type="password" class="form-control" id="password" name="password" maxlength="256" placeholder="請輸入密碼" autocomplete="current-password" required />
               <button type="button" class="btn btn-outline-secondary" id="togglePassword" aria-label="顯示密碼" aria-pressed="false">
                 <i class="bi bi-eye" aria-hidden="true"></i>
               </button>
@@ -212,9 +212,9 @@
               <i class="bi bi-key me-1"></i>忘記密碼／重設密碼
             </a>
           </div>
-          <div class="legal-links small" aria-label="系統使用者條款與個資告知">
-            <a id="loginSystemTerms" href="#" target="_blank" rel="noopener noreferrer">系統使用者條款</a>
-            <a id="loginPrivacyNotice" href="#" target="_blank" rel="noopener noreferrer">個資告知事項</a>
+          <div class="legal-links small" aria-label="使用者條款與隱私權政策">
+            <a id="loginSystemTerms" href="#" target="_blank" rel="noopener noreferrer">使用者條款</a>
+            <a id="loginPrivacyNotice" href="#" target="_blank" rel="noopener noreferrer">隱私權政策</a>
           </div>
         </form>
       </div>

@@ -356,11 +356,6 @@ def admin_edit_assignment(assignment_id: int):
     return FileResponse(os.path.join(static_dir, "admin", "edit-assignment.html"), headers=_NO_CACHE)
 
 
-@app.get("/admin/prompts", include_in_schema=False)
-def admin_prompts():
-    return FileResponse(os.path.join(static_dir, "admin", "prompt-management.html"), headers=_NO_CACHE)
-
-
 @app.get("/admin/login-audit", include_in_schema=False)
 def admin_login_audit():
     return FileResponse(os.path.join(static_dir, "admin", "login-audit.html"), headers=_NO_CACHE)

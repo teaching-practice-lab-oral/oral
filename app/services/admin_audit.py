@@ -6,12 +6,11 @@ from typing import Any
 from fastapi import Request
 from sqlalchemy.orm import Session
 
-from app.models import AdminAuditLog, Assignment, PromptTemplate, Submission, User
+from app.models import AdminAuditLog, Assignment, Submission, User
 from app.utils import get_client_ip
 
 
 _AUDIT_STRING_LIMIT = 500
-_PROMPT_PREVIEW_LIMIT = 240
 
 
 def _trim_string(value: str, limit: int = _AUDIT_STRING_LIMIT) -> str:
@@ -39,13 +38,6 @@ def _json_safe(value: Any) -> Any:
 
 def _request_ip(request: Request | None) -> str | None:
     return get_client_ip(request)
-
-
-
-def prompt_preview(text: str | None, limit: int = _PROMPT_PREVIEW_LIMIT) -> str | None:
-    if text is None:
-        return None
-    return _trim_string(text, limit=limit)
 
 
 
@@ -100,9 +92,6 @@ def snapshot_assignment(assignment: Assignment | None) -> dict[str, Any] | None:
         "is_active": assignment.is_active,
         "rubric_version_id": assignment.rubric_version_id,
         "prompt_context": assignment.prompt_context,
-        "stage3_template_id": assignment.stage3_template_id,
-        "stage6_template_id": assignment.stage6_template_id,
-        "stage8_template_id": assignment.stage8_template_id,
         "questions": assignment.questions,
         "question_set_key": assignment.question_set_key,
     }
@@ -124,23 +113,6 @@ def snapshot_submission(submission: Submission | None) -> dict[str, Any] | None:
         "has_report": bool(getattr(submission, "report_data", None)),
     }
 
-
-
-def snapshot_prompt(template: PromptTemplate | None) -> dict[str, Any] | None:
-    if template is None:
-        return None
-    return {
-        "id": template.id,
-        "stage": template.stage,
-        "name": template.name,
-        "is_system": template.is_system,
-        "prompt_preview": prompt_preview(template.system_prompt),
-        "prompt_length": len(template.system_prompt or ""),
-        "roleplay_policy_length": len(template.roleplay_policy or ""),
-        "secret_question_policy_length": len(template.secret_question_policy or ""),
-        "updated_at": template.updated_at,
-        "updated_by": template.updated_by,
-    }
 
 
 

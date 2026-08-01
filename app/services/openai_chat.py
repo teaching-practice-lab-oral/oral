@@ -133,9 +133,9 @@ def draft_feedback_response_format(question_count: int) -> dict[str, Any]:
     correction = {
         "type": "object",
         "properties": {
-            "original": {"type": "string"},
-            "corrected": {"type": "string"},
-            "explanation": {"type": "string"},
+            "original": {"type": "string", "minLength": 1, "maxLength": 2000},
+            "corrected": {"type": "string", "minLength": 1, "maxLength": 2000},
+            "explanation": {"type": "string", "minLength": 1, "maxLength": 2000},
         },
         "required": ["original", "corrected", "explanation"],
         "additionalProperties": False,
@@ -153,7 +153,7 @@ def draft_feedback_response_format(question_count: int) -> dict[str, Any]:
                 "items": correction,
                 "maxItems": 3,
             },
-            "polished_sample": {"type": "string"},
+            "polished_sample": {"type": "string", "minLength": 1, "maxLength": 4000},
         },
         "required": ["index", "grammar_corrections", "polished_sample"],
         "additionalProperties": False,
@@ -174,7 +174,7 @@ def draft_feedback_response_format(question_count: int) -> dict[str, Any]:
                     },
                     "organization_suggestions": {
                         "type": "array",
-                        "items": {"type": "string"},
+                        "items": {"type": "string", "minLength": 1, "maxLength": 1000},
                         "minItems": 3,
                         "maxItems": 5,
                     },
@@ -188,37 +188,44 @@ def draft_feedback_response_format(question_count: int) -> dict[str, Any]:
 
 def is_complete_draft_feedback(data: Any, question_count: int) -> bool:
     """Reject incomplete/refused/truncated output before it reaches persistence."""
-    if not isinstance(data, dict):
+    if not isinstance(data, dict) or set(data) != {"questions", "organization_suggestions"}:
         return False
     questions = data.get("questions")
     suggestions = data.get("organization_suggestions")
     if not isinstance(questions, list) or len(questions) != question_count:
         return False
-    if not isinstance(suggestions, list) or not all(
-        isinstance(item, str) and item.strip() for item in suggestions
+    if not isinstance(suggestions, list) or not 3 <= len(suggestions) <= 5 or not all(
+        isinstance(item, str) and 1 <= len(item.strip()) <= 1000 for item in suggestions
     ):
         return False
+    seen_indices: set[int] = set()
     for item in questions:
-        if not isinstance(item, dict):
+        if not isinstance(item, dict) or set(item) != {"index", "grammar_corrections", "polished_sample"}:
             return False
+        index = item.get("index")
+        if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < question_count:
+            return False
+        seen_indices.add(index)
         corrections = item.get("grammar_corrections")
-        if not isinstance(corrections, list):
+        if not isinstance(corrections, list) or len(corrections) > 3:
             return False
         if (
             not isinstance(item.get("polished_sample"), str)
-            or not item["polished_sample"].strip()
+            or not 1 <= len(item["polished_sample"].strip()) <= 4000
         ):
             return False
         if not all(
             isinstance(correction, dict)
+            and set(correction) == {"original", "corrected", "explanation"}
             and all(
                 isinstance(correction.get(field), str)
+                and 1 <= len(correction[field].strip()) <= 2000
                 for field in ("original", "corrected", "explanation")
             )
             for correction in corrections
         ):
             return False
-    return True
+    return seen_indices == set(range(question_count))
 
 
 _client: AsyncOpenAI | None = None

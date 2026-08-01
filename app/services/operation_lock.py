@@ -47,6 +47,7 @@ ROLEPLAY_TURN_OPERATION = 1202
 # exclusive.  The final-turn request already holds this lease through report
 # generation, so it never needs a second dedicated DB connection.
 ROLEPLAY_REPORT_OPERATION = ROLEPLAY_TURN_OPERATION
+REFLECTION_PHOTO_OPERATION = 1301
 
 _BUSY_DETAIL = "這項操作正在處理中，請勿重複送出，稍後重新整理即可。"
 _local_guard = threading.Lock()

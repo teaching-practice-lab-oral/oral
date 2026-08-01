@@ -107,7 +107,7 @@ function renderRoleplayTaskGuide(vs, stage, isCompleted, turns, currentTurn) {
     title:`第 ${currentTurn} 輪：先回答面試官現在問的重點`,
     progress,
     actions:['沒聽清楚時，先用播放按鈕再聽一次。','只記 1–3 個英文關鍵字，不寫完整句子。','先直接回答，再補理由或例子；適合時再連結目標職位。'],
-    support:{title:`Q${sourceIndex+1} 的即席回答鷹架`,items:[`你的目標職位是「${profile.desired_position||'尚未填寫'}」；想展現的能力是「${profile.required_competencies||'尚未填寫'}」。`,'例子可用課堂專題、社團、打工、實習或日常合作經驗。'],html:learningScaffoldQuestionHtml(vs,sourceIndex,'roleplay')},
+    support:{title:`Q${sourceIndex+1} 的即席回答提示`,items:[`你的目標職位是「${profile.desired_position||'尚未填寫'}」；想展現的能力是「${profile.required_competencies||'尚未填寫'}」。`,'例子可用課堂專題、社團、打工、實習或日常合作經驗。'],html:learningScaffoldQuestionHtml(vs,sourceIndex,'roleplay')},
     starters:learningScaffoldStarters(vs,sourceIndex,['I would say…','One reason is…','For example…']),
     persistentHtml:roleplayKeywordField(currentTurn,false),
     checks:['開頭有直接回應面試官的問題。','回答包含真實理由、做法或例子。','我用自己的話回答，沒有朗讀完整稿件。'],
@@ -527,7 +527,18 @@ async function submitAudio() {
   spinnerEl.classList.add('d-none');
 
   if (!res.ok) {
-    showAlert(data.detail || '音訊處理時發生錯誤');
+    const detail = data && data.detail;
+    if (detail && typeof detail === 'object' && detail.code === 'roleplay_response_rejected') {
+      showAlert(detail.message || "Let's stay focused on the interview. Please answer the current question in English.");
+      reRecord();
+      const conversation = tryParseJson(submission.roleplay_conversation) || { current_turn: 1, turns: [] };
+      const current = conversation.turns.find(turn => turn.turn_number === conversation.current_turn);
+      if (detail.replay_current_question && current?.interviewer_tts_key) {
+        setTimeout(() => playInterviewerTTS(conversation.current_turn || 1), 300);
+      }
+      return;
+    }
+    showAlert(typeof detail === 'string' ? detail : '音訊處理時發生錯誤');
     if (res.status === 503) {
       const refreshed = await apiCall(`/api/student/submissions/${submission.id}`);
       if (refreshed.ok) {

@@ -488,7 +488,7 @@ def change_password(
     needs_legal_acknowledgement = requires_acknowledgement(current_user)
     if needs_legal_acknowledgement:
         if payload.legal_acknowledgement is None:
-            raise HTTPException(status_code=400, detail="請先完成法遵文件確認")
+            raise HTTPException(status_code=400, detail="請先完成使用者條款與隱私權政策確認")
         record_acknowledgement(
             db,
             request,
@@ -496,7 +496,7 @@ def change_password(
             payload.legal_acknowledgement,
         )
     elif payload.legal_acknowledgement is not None:
-        raise HTTPException(status_code=400, detail="目前不需要重新確認法遵文件")
+        raise HTTPException(status_code=400, detail="目前不需要重新確認使用者條款或隱私權政策")
     current_user.hashed_password = hash_password(payload.new_password)
     current_user.must_change_password = False
     if current_user.role != "admin":
@@ -555,10 +555,10 @@ def acknowledge_legal_documents(
     if current_user.role != "student":
         raise HTTPException(status_code=400, detail="此確認流程僅適用於學生帳號")
     if not requires_acknowledgement(current_user):
-        return MessageResponse(message="法遵事項已是最新版本")
+        return MessageResponse(message="使用者條款與隱私權政策已是最新版本")
     record_acknowledgement(db, request, current_user, payload)
     db.commit()
-    return MessageResponse(message="法遵事項確認完成")
+    return MessageResponse(message="使用者條款與隱私權政策確認完成")
 
 
 @router.post("/refresh")

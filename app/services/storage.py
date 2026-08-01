@@ -90,19 +90,31 @@ def _get_client():
     return _s3_client
 
 
-def upload_file(key: str, data: bytes, content_type: str = "application/octet-stream") -> str:
+def upload_file(
+    key: str,
+    data: bytes,
+    content_type: str = "application/octet-stream",
+    *,
+    cache_control: str | None = None,
+    content_disposition: str | None = None,
+) -> str:
     """
     Upload bytes to OCI Object Storage.
     Returns the object key.
     """
     _require_current_owned_key(key)
     client = _get_client()
-    client.put_object(
+    params = dict(
         Bucket=settings.OCI_BUCKET_NAME,
         Key=key,
         Body=data,
         ContentType=content_type,
     )
+    if cache_control:
+        params["CacheControl"] = cache_control
+    if content_disposition:
+        params["ContentDisposition"] = content_disposition
+    client.put_object(**params)
     return key
 
 
@@ -120,6 +132,8 @@ def generate_presigned_url(
     expiration: int = 300,
     *,
     download_filename: str | None = None,
+    inline_filename: str | None = None,
+    response_content_type: str | None = None,
 ) -> str:
     """
     Generate a pre-signed URL for temporary access to a private object.
@@ -133,6 +147,12 @@ def generate_presigned_url(
             params["ResponseContentDisposition"] = (
                 f"attachment; filename*=UTF-8''{quote(safe_filename)}"
             )
+        elif inline_filename:
+            safe_filename = inline_filename.replace('"', "_").replace("\r", "_").replace("\n", "_")
+            params["ResponseContentDisposition"] = f"inline; filename*=UTF-8''{quote(safe_filename)}"
+            params["ResponseCacheControl"] = "private, no-store"
+        if response_content_type:
+            params["ResponseContentType"] = response_content_type
         url = client.generate_presigned_url(
             "get_object",
             Params=params,
@@ -151,6 +171,45 @@ def download_file(key: str) -> bytes:
     client = _get_client()
     response = client.get_object(Bucket=settings.OCI_BUCKET_NAME, Key=key)
     return response["Body"].read()
+
+
+def object_size(key: str) -> int:
+    """Return the trusted storage-side object length without downloading it."""
+    _require_current_owned_key(key)
+    response = _get_client().head_object(Bucket=settings.OCI_BUCKET_NAME, Key=key)
+    size = int(response.get("ContentLength", -1))
+    if size < 0:
+        raise RuntimeError("Object Storage did not return a valid ContentLength")
+    return size
+
+
+def download_file_to(key: str, target, *, max_bytes: int) -> int:
+    """Stream one bounded private object into a writable binary file-like object."""
+    _require_current_owned_key(key)
+    expected = object_size(key)
+    if expected < 1:
+        raise RuntimeError("Object Storage audio is empty")
+    if expected > max_bytes:
+        raise ValueError("Object Storage audio exceeds the export asset limit")
+    response = _get_client().get_object(Bucket=settings.OCI_BUCKET_NAME, Key=key)
+    body = response["Body"]
+    written = 0
+    try:
+        while True:
+            chunk = body.read(64 * 1024)
+            if not chunk:
+                break
+            written += len(chunk)
+            if written > max_bytes or written > expected:
+                raise ValueError("Object Storage audio exceeded its declared length")
+            target.write(chunk)
+    finally:
+        close = getattr(body, "close", None)
+        if close:
+            close()
+    if written != expected:
+        raise RuntimeError("Object Storage audio was truncated during export")
+    return written
 
 
 def object_exists(key: str) -> bool:
@@ -185,8 +244,13 @@ def list_objects_with_prefix(prefix: str) -> list:
     return keys
 
 
-async def upload_file_async(key: str, data: bytes, content_type: str = "application/octet-stream") -> str:
-    return await asyncio.to_thread(upload_file, key, data, content_type)
+async def upload_file_async(
+    key: str,
+    data: bytes,
+    content_type: str = "application/octet-stream",
+    **kwargs,
+) -> str:
+    return await asyncio.to_thread(upload_file, key, data, content_type, **kwargs)
 
 
 async def download_file_async(key: str) -> bytes:
@@ -197,8 +261,8 @@ async def delete_file_async(key: str) -> None:
     await asyncio.to_thread(delete_file, key)
 
 
-async def generate_presigned_url_async(key: str, expiration: int = 300) -> str:
-    return await asyncio.to_thread(generate_presigned_url, key, expiration)
+async def generate_presigned_url_async(key: str, expiration: int = 300, **kwargs) -> str:
+    return await asyncio.to_thread(generate_presigned_url, key, expiration, **kwargs)
 
 
 async def list_objects_with_prefix_async(prefix: str) -> list:

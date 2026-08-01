@@ -7,7 +7,7 @@ import uuid
 from datetime import timedelta
 from zipfile import BadZipFile, ZipFile
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Path, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -19,7 +19,7 @@ from app.auth import get_current_admin, verify_admin_password_or_raise, hash_pas
 from app.config import settings
 from app.database import get_db, SessionLocal
 from app.models import (
-    User, Assignment, Submission, ApiUsageLog, LoginEvent, ActiveSession,
+    User, Assignment, Submission, ApiUsageLog, CostlyActionUsageLog, LoginEvent, ActiveSession,
     StudentPresence, EmailJob, AssignmentReminder,
 )
 from app.schemas import (
@@ -46,6 +46,7 @@ from app.services.import_credentials import (
     issue_import_credential_proof,
     verify_import_credential_proof,
 )
+from app.services.input_validator import normalize_http_text, normalize_user_text
 from app.services.submission_assets import (
     enqueue_submission_asset_cleanup,
     list_submission_asset_refs,
@@ -57,7 +58,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-MAX_IMPORT_XLSX_BYTES = 10 * 1024 * 1024
+MAX_IMPORT_XLSX_BYTES = 6 * 1024 * 1024
 MAX_IMPORT_XLSX_EXPANDED_BYTES = 50 * 1024 * 1024
 MAX_IMPORT_XLSX_MEMBER_BYTES = 20 * 1024 * 1024
 MAX_IMPORT_XLSX_MEMBERS = 100
@@ -270,10 +271,11 @@ def list_classes(
 def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    course_num: str = None,
+    course_num: str = Query(None, max_length=64),
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    course_num = normalize_http_text(course_num, field_name="course_num")
     query = apply_user_visibility_filter(db.query(User), admin)
     if course_num:
         query = query.filter(User.course_num == course_num)
@@ -344,9 +346,15 @@ async def import_users(
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    try:
+        original_filename = normalize_user_text(file.filename or "xlsx-import", field_name="匯入檔名")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not original_filename or len(original_filename) > 256:
+        raise HTTPException(status_code=422, detail="匯入檔名不可為空且不得超過 256 個字元。")
     content = await file.read(MAX_IMPORT_XLSX_BYTES + 1)
     if len(content) > MAX_IMPORT_XLSX_BYTES:
-        raise HTTPException(status_code=413, detail="匯入檔案過大，上限為 10 MB。")
+        raise HTTPException(status_code=413, detail="匯入檔案過大，上限為 6 MiB。")
     _validate_xlsx_archive(content)
     try:
         wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
@@ -401,19 +409,38 @@ async def import_users(
                     backup_email = str(row[4]).strip() if len(row) > 4 and row[4] is not None else None
                     course_num = course_num or None
                     backup_email = backup_email or None
-                    ensure_admin_can_assign_course_num(admin, course_num)
 
                     if not student_id or not name or not email:
                         errors.append(f"第 {row_idx} 列：學號、姓名與電子郵件不可空白")
                         skipped += 1
                         continue
 
+                    password = _generate_password()
+                    validated_input = UserCreate(
+                        student_id=student_id,
+                        name=name,
+                        email=email,
+                        backup_email=backup_email,
+                        password=password,
+                        role="student",
+                        course_num=course_num,
+                    )
+                    student_id = validated_input.student_id
+                    name = validated_input.name
+                    email = str(validated_input.email)
+                    backup_email = (
+                        str(validated_input.backup_email)
+                        if validated_input.backup_email
+                        else None
+                    )
+                    course_num = validated_input.course_num
+                    ensure_admin_can_assign_course_num(admin, course_num)
+
                     existing = db.query(User).filter(User.student_id == student_id).first()
                     if existing:
                         skipped += 1
                         continue
 
-                    password = _generate_password()
                     # bcrypt is deliberately off the event-loop thread.  The
                     # module semaphore caps total concurrent import CPU work.
                     hashed_password = await asyncio.to_thread(hash_password, password)
@@ -461,10 +488,10 @@ async def import_users(
         "admin.user.import_xlsx",
         request=request,
         target_type="user_batch",
-        target_label=file.filename or "xlsx-import",
+        target_label=original_filename,
         summary=f"匯入 XLSX 使用者：建立 {created} 筆，略過 {skipped} 筆",
         details={
-            "filename": file.filename,
+            "filename": original_filename,
             "created": created,
             "skipped": skipped,
             "error_count": len(errors),
@@ -608,10 +635,11 @@ async def send_import_emails(
 
 @router.get("/users/send-import-emails/{job_id}", response_model=DeliveryJobStatusResponse)
 def get_email_job_status(
-    job_id: str,
+    job_id: str = Path(min_length=1, max_length=64),
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    job_id = normalize_http_text(job_id, field_name="job_id") or ""
     job = db.get(EmailJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Email job not found")
@@ -804,6 +832,7 @@ def delete_user_confirmed(
     db.query(LoginEvent).filter(LoginEvent.user_id == user.id).update({"user_id": None})
     db.query(ActiveSession).filter(ActiveSession.user_id == user.id).delete()
     db.query(ApiUsageLog).filter(ApiUsageLog.user_id == user.id).delete()
+    db.query(CostlyActionUsageLog).filter(CostlyActionUsageLog.user_id == user.id).delete()
     db.query(AssignmentReminder).filter(AssignmentReminder.user_id == user.id).delete()
     db.query(Submission).filter(Submission.user_id == user.id).delete()
     log_admin_action(

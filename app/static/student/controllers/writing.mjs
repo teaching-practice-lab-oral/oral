@@ -243,7 +243,7 @@ function renderSection1(container, stage, isCompleted) {
       if (isSaved && !draft1Editable) {
         draft1Html += `<div class="feedback-box"><pre>${escHtml(saved || '')}</pre></div>`;
       } else if (draft1Editable) {
-        draft1Html += `<textarea class="form-control form-control-modern mb-2" id="draft1Input_${i}" rows="5"
+        draft1Html += `<textarea class="form-control form-control-modern mb-2" id="draft1Input_${i}" rows="5" maxlength="2000"
           placeholder="請針對此題撰寫你的答案... / Write your answer here...">${escHtml(saved || '')}</textarea>
           <button class="btn btn-primary-custom btn-sm" id="draft1Btn_${i}" data-action="saveDraft1Answer" data-args='[${i}]'>
             <i class="bi bi-save me-1"></i>${isSaved ? '更新儲存' : '儲存此題'}
@@ -342,7 +342,7 @@ function renderSection1(container, stage, isCompleted) {
           Q${i+1}：${escHtml(q)}
           ${isSaved ? '<span class="ms-2 badge bg-success" style="font-size:0.7rem;">已儲存</span>' : ''}
         </p>${learningScaffoldInlineHtml(vs,i,'writing')}
-        <textarea class="form-control form-control-modern mb-2" id="finalDraftInput_${i}" rows="5"
+        <textarea class="form-control form-control-modern mb-2" id="finalDraftInput_${i}" rows="5" maxlength="2000"
           placeholder="請撰寫修改後的答案... / Write your revised answer here...">${escHtml(savedText || polishedMap[i] || '')}</textarea>
         <button class="btn btn-primary-custom btn-sm" id="finalDraftSaveBtn_${i}" data-action="saveFinalDraftAnswer" data-args='[${i}]'>
           <i class="bi bi-save me-1"></i>${isSaved ? '更新儲存' : '儲存此題'}

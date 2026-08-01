@@ -95,6 +95,17 @@ class Settings(BaseSettings):
     DAILY_API_LIMIT: int = 40
     MAX_AUDIO_SECONDS: int = 300
     STAGE3_MAX_RESPONSE_CHARS: int = 15000
+    AUDIO_UPLOAD_WINDOW_MINUTES: int = 15
+    AUDIO_UPLOAD_WINDOW_LIMIT: int = 30
+    PHOTO_UPLOAD_HOURLY_LIMIT: int = 10
+    PHOTO_UPLOAD_DAILY_BYTES: int = 50 * 1024 * 1024
+    STUDENT_EXPORT_RESOURCE_WINDOW_MINUTES: int = 10
+    STUDENT_EXPORT_RESOURCE_WINDOW_LIMIT: int = 3
+    STUDENT_EXPORT_HOURLY_LIMIT: int = 10
+    STUDENT_EXPORT_MAX_ASSET_BYTES: int = 50 * 1024 * 1024
+    STUDENT_EXPORT_MAX_TOTAL_SOURCE_BYTES: int = 256 * 1024 * 1024
+    STUDENT_EXPORT_MAX_CONCURRENCY: int = 2
+    COSTLY_ACTION_RETENTION_DAYS: int = 2
 
     # External-API concurrency
     OPENAI_MAX_CONCURRENCY: int = 15
@@ -244,6 +255,23 @@ class Settings(BaseSettings):
             raise ValueError("worker audio payload limit must be positive")
         if self.MAX_AUDIO_SECONDS < 1:
             raise ValueError("MAX_AUDIO_SECONDS must be positive")
+        positive_cost_limits = (
+            self.AUDIO_UPLOAD_WINDOW_MINUTES,
+            self.AUDIO_UPLOAD_WINDOW_LIMIT,
+            self.PHOTO_UPLOAD_HOURLY_LIMIT,
+            self.PHOTO_UPLOAD_DAILY_BYTES,
+            self.STUDENT_EXPORT_RESOURCE_WINDOW_MINUTES,
+            self.STUDENT_EXPORT_RESOURCE_WINDOW_LIMIT,
+            self.STUDENT_EXPORT_HOURLY_LIMIT,
+            self.STUDENT_EXPORT_MAX_ASSET_BYTES,
+            self.STUDENT_EXPORT_MAX_TOTAL_SOURCE_BYTES,
+            self.STUDENT_EXPORT_MAX_CONCURRENCY,
+            self.COSTLY_ACTION_RETENTION_DAYS,
+        )
+        if any(value < 1 for value in positive_cost_limits):
+            raise ValueError("costly-action limits must be positive")
+        if self.STUDENT_EXPORT_MAX_TOTAL_SOURCE_BYTES < self.STUDENT_EXPORT_MAX_ASSET_BYTES:
+            raise ValueError("student export total limit must be at least the per-asset limit")
         if self.OPERATION_LOCK_POOL_SIZE < 1 or self.OPERATION_LOCK_POOL_TIMEOUT < 1:
             raise ValueError("operation lock pool settings must be positive")
         if not 0 <= self.CHT_WORKER_WEIGHT <= 100:

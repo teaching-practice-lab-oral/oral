@@ -34,7 +34,7 @@
         <div class="filter-bar d-flex flex-wrap gap-2 align-items-end">
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">學號搜尋</label>
-            <input type="text" id="la-filterStudentId" class="form-control form-control-sm" style="min-width:140px" placeholder="輸入學號…">
+            <input type="text" id="la-filterStudentId" class="form-control form-control-sm" maxlength="64" style="min-width:140px" placeholder="輸入學號…">
           </div>
           <div class="audit-date-field">
             <label class="form-label small fw-semibold text-muted mb-1">開始日期</label>
@@ -100,7 +100,7 @@
         <div class="filter-bar d-flex flex-wrap gap-2 align-items-end">
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">操作者學號</label>
-            <input type="text" id="aa-filterAdminStudentId" class="form-control form-control-sm" style="min-width:140px" placeholder="輸入操作者學號…">
+            <input type="text" id="aa-filterAdminStudentId" class="form-control form-control-sm" maxlength="64" style="min-width:140px" placeholder="輸入操作者學號…">
           </div>
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">操作類型</label>
@@ -130,12 +130,6 @@
               <option value="admin.rubric.clone_version">建立評分規準新版</option>
               <option value="admin.rubric.archive">封存評分規準</option>
               <option value="admin.submission.grade">登錄或更新成績</option>
-              <option value="admin.prompt.create">建立全域提示詞</option>
-              <option value="admin.prompt.update">更新全域提示詞</option>
-              <option value="admin.prompt.delete">刪除全域提示詞</option>
-              <option value="admin.prompt.duplicate">複製全域提示詞</option>
-              <option value="admin.prompt.sync_defaults">同步系統預設提示詞</option>
-              <option value="admin.assignment.prompt_update">更新作業提示詞</option>
               <option value="admin.submission.rescore">重新產生學習回饋</option>
               <option value="admin.export.submission_word">匯出提交 Word</option>
               <option value="admin.export.submission_audio">匯出提交音檔</option>
@@ -160,7 +154,6 @@
               <option value="assignment">作業</option>
               <option value="assignment_batch">批次作業</option>
               <option value="reminder_job">提醒工作</option>
-              <option value="prompt_template">提示詞</option>
               <option value="submission">提交紀錄</option>
               <option value="rubric">評分規準</option>
               <option value="rubric_version">評分規準版本</option>
@@ -227,7 +220,7 @@
         <div class="filter-bar d-flex flex-wrap gap-2 align-items-end">
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">學號搜尋</label>
-            <input type="text" id="ul-filterStudentId" class="form-control form-control-sm" style="min-width:140px" placeholder="輸入學號…">
+            <input type="text" id="ul-filterStudentId" class="form-control form-control-sm" maxlength="64" style="min-width:140px" placeholder="輸入學號…">
           </div>
           <div class="audit-date-field">
             <label class="form-label small fw-semibold text-muted mb-1">開始日期</label>
@@ -290,16 +283,16 @@
         <div class="filter-bar d-flex flex-wrap gap-2 align-items-end">
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">學號搜尋</label>
-            <input type="text" id="wr-filterStudentId" class="form-control form-control-sm" style="min-width:140px" placeholder="輸入學號…">
+            <input type="text" id="wr-filterStudentId" class="form-control form-control-sm" maxlength="64" style="min-width:140px" placeholder="輸入學號…">
           </div>
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">分流結果</label>
             <select id="wr-filterStatus" class="form-select form-select-sm" style="min-width:160px">
               <option value="">全部</option>
-              <option value="worker_success">台灣 worker</option>
-              <option value="fallback_error">worker 失敗回主站</option>
+              <option value="worker_success">由台灣語音處理伺服器完成</option>
+              <option value="fallback_error">處理失敗，已由主系統接手</option>
               <option value="local_weight">本次留在主站</option>
-              <option value="local_cooldown">worker 冷卻中</option>
+              <option value="local_cooldown">語音處理伺服器暫停分流</option>
               <option value="local_disabled">分流未啟用</option>
             </select>
           </div>
@@ -342,7 +335,7 @@
 
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
           <span id="wr-enabledBadge" class="badge bg-light text-secondary border">—</span>
-          <span id="wr-healthBadge" class="badge bg-light text-secondary border">樹莓派狀態：未檢查</span>
+          <span id="wr-healthBadge" class="badge bg-light text-secondary border">台灣語音處理伺服器：未檢查</span>
           <span id="wr-weightBadge" class="badge bg-light text-secondary border">—</span>
           <span id="wr-workerUrl" class="text-muted small audit-text-wrap"></span>
           <span id="wr-healthDetail" class="text-muted small audit-text-wrap"></span>
@@ -359,7 +352,7 @@
                   <th>當前練習</th>
                   <th>分流狀態</th>
                   <th>工作類型</th>
-                  <th>Worker</th>
+                  <th>處理伺服器</th>
                   <th>最近更新</th>
                 </tr>
               </thead>

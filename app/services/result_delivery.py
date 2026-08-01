@@ -34,6 +34,7 @@ from app.services.assignment_grade_export import (
 )
 from app.services.export_builders import (
     build_submission_result_package,
+    write_submission_result_package,
     safe_export_name,
 )
 from app.services.grading import grade_admin_payload, latest_grades_by_submission
@@ -92,6 +93,26 @@ def build_graded_submission_result_package(
     hydrate_submission_from_normalized(db, submission)
     setattr(submission, "latest_grade_data", grade_admin_payload(grade))
     return build_submission_result_package(student, assignment, submission)
+
+
+def write_graded_submission_result_package(
+    output,
+    db: Session,
+    student: User,
+    assignment: Assignment,
+    submission: Submission,
+    grade: SubmissionGradeRevision,
+) -> int:
+    """Write the student download variant to anonymous local storage."""
+    if submission.submitted_at is None:
+        raise ValueError("作業尚未完成，無法匯出成果包")
+    if submission.user_id != student.id or submission.assignment_id != assignment.id:
+        raise ValueError("成果包來源資料不一致")
+    if grade.origin_submission_id != submission.id:
+        raise ValueError("批改版本與提交資料不一致")
+    hydrate_submission_from_normalized(db, submission)
+    setattr(submission, "latest_grade_data", grade_admin_payload(grade))
+    return write_submission_result_package(output, student, assignment, submission)
 
 
 def _visible_students(

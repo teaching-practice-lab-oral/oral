@@ -1,5 +1,6 @@
 from datetime import datetime
 from io import BytesIO
+import json
 from types import SimpleNamespace
 from urllib.parse import quote
 from zipfile import ZipFile
@@ -122,6 +123,40 @@ def test_professional_docx_contains_current_sections_and_branding():
     assert "NUMPAGES" in footer_xml
 
 
+def test_professional_docx_includes_personalized_fifth_roleplay_turn():
+    submission = current_submission()
+    submission.roleplay_conversation = json.dumps({
+        "current_turn": 5,
+        "turns": [
+            {
+                "turn_number": number,
+                "source_question_index": number - 1,
+                "interviewer_question": (
+                    "What did helping that customer teach you about staying calm?"
+                    if number == 5
+                    else f"Core interview question {number}?"
+                ),
+                "student_transcript": f"Spoken answer {number}.",
+                "interviewer_tts_key": None,
+                "student_audio_key": None,
+            }
+            for number in range(1, 6)
+        ],
+    })
+
+    payload = export_builders.build_submission_docx(
+        User(name="王小明", student_id="S001"),
+        Assignment(title="作業"),
+        submission,
+    )
+
+    with ZipFile(BytesIO(payload)) as archive:
+        document_xml = archive.read("word/document.xml").decode("utf-8")
+    assert "第 5 輪" in document_xml
+    assert "What did helping that customer teach you about staying calm?" in document_xml
+    assert "Spoken answer 5." in document_xml
+
+
 def test_professional_docx_handles_long_content_and_keeps_layout_rules():
     submission = current_submission()
     long_text = "This is a detailed interview answer with evidence and reflection. " * 120
@@ -235,6 +270,62 @@ def test_result_package_is_all_or_nothing_when_audio_is_missing(monkeypatch):
             User(name="王小明", student_id="S001"),
             Assignment(title="作業"),
             current_submission(),
+        )
+
+
+def test_student_streaming_package_never_uploads_and_does_not_buffer_audio(monkeypatch):
+    submission = current_submission()
+    monkeypatch.setattr(export_builders.storage.settings, "OBJECT_STORAGE_NAMESPACE", "generation")
+    payloads = {}
+    for asset in export_builders.submission_audio_assets(submission):
+        payloads[asset.key] = f"streamed:{asset.key}".encode()
+    monkeypatch.setattr(export_builders.storage, "object_size", lambda key: len(payloads[key]))
+
+    def stream_to(key, target, *, max_bytes):
+        assert len(payloads[key]) <= max_bytes
+        target.write(payloads[key])
+        return len(payloads[key])
+
+    monkeypatch.setattr(export_builders.storage, "download_file_to", stream_to)
+    monkeypatch.setattr(
+        export_builders.storage,
+        "upload_file",
+        lambda *_args, **_kwargs: pytest.fail("student export must never upload an object"),
+    )
+    output = BytesIO()
+
+    size = export_builders.write_submission_result_package(
+        output,
+        User(name="王小明", student_id="S001"),
+        Assignment(title="作業"),
+        submission,
+    )
+
+    assert size == len(output.getvalue())
+    with ZipFile(output) as archive:
+        assert archive.read("音檔/學生面試錄音/學生_第1輪.mp3").startswith(b"streamed:")
+
+
+def test_student_streaming_package_rejects_large_source_before_download(monkeypatch):
+    submission = current_submission()
+    monkeypatch.setattr(export_builders.storage.settings, "OBJECT_STORAGE_NAMESPACE", "generation")
+    monkeypatch.setattr(
+        export_builders.storage,
+        "object_size",
+        lambda _key: export_builders.settings.STUDENT_EXPORT_MAX_ASSET_BYTES + 1,
+    )
+    monkeypatch.setattr(
+        export_builders.storage,
+        "download_file_to",
+        lambda *_args, **_kwargs: pytest.fail("oversized source must not be downloaded"),
+    )
+
+    with pytest.raises(ValueError, match="單檔限制"):
+        export_builders.write_submission_result_package(
+            BytesIO(),
+            User(name="王小明", student_id="S001"),
+            Assignment(title="作業"),
+            submission,
         )
 
 

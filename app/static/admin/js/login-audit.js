@@ -30,12 +30,6 @@ const AA_ACTION_LABELS = {
   'admin.rubric.clone_version': '建立評分規準新版',
   'admin.rubric.archive': '封存評分規準',
   'admin.submission.grade': '登錄或更新成績',
-  'admin.prompt.create': '建立全域提示詞',
-  'admin.prompt.update': '更新全域提示詞',
-  'admin.prompt.delete': '刪除全域提示詞',
-  'admin.prompt.duplicate': '複製全域提示詞',
-  'admin.prompt.sync_defaults': '同步系統預設提示詞',
-  'admin.assignment.prompt_update': '更新作業提示詞',
   'admin.submission.rescore': '重新產生學習回饋',
   'admin.export.submission_word': '匯出提交 Word',
   'admin.export.submission_audio': '匯出提交音檔',
@@ -56,7 +50,6 @@ const AA_TARGET_LABELS = {
   assignment: '作業',
   assignment_batch: '批次作業',
   reminder_job: '提醒工作',
-  prompt_template: '提示詞',
   submission: '提交紀錄',
   rubric: '評分規準',
   rubric_version: '評分規準版本',
@@ -379,10 +372,10 @@ function ulResetFilters() {
 // 分流狀態
 // ──────────────────────────────────────────
 const WR_STATUS_LABELS = {
-  worker_success: '台灣 worker',
-  fallback_error: 'worker 失敗，已回主站',
+  worker_success: '由台灣語音處理伺服器完成',
+  fallback_error: '語音處理伺服器失敗，已由主系統接手',
   local_weight: '本次留在主站',
-  local_cooldown: 'worker 冷卻中',
+  local_cooldown: '語音處理伺服器暫停分流',
   local_disabled: '分流未啟用',
 };
 const WR_STATUS_CLASSES = {
@@ -400,9 +393,9 @@ const WR_STATUS_ICONS = {
   local_disabled: 'bi-slash-circle',
 };
 const WR_OPERATION_LABELS = {
-  shadowing_tts: '跟讀示範 TTS',
+  shadowing_tts: '產生跟讀示範語音',
   shadowing_audio: '跟讀錄音處理',
-  roleplay_tts: '角色扮演 TTS',
+  roleplay_tts: '產生角色扮演語音',
   roleplay_audio: '角色扮演錄音處理',
 };
 let wrInitialized = false;
@@ -434,27 +427,27 @@ async function wrLoadHealth() {
   const badge = document.getElementById('wr-healthBadge');
   const detail = document.getElementById('wr-healthDetail');
   badge.className = 'badge bg-light text-secondary border';
-  badge.textContent = '樹莓派狀態：檢查中…';
+  badge.textContent = '台灣語音處理伺服器：檢查中…';
   detail.textContent = '';
 
   try {
     const res = await apiCall('/api/admin/worker-health');
     if (!res.ok) {
       badge.className = 'badge bg-danger bg-opacity-75';
-      badge.textContent = '樹莓派離線';
-      detail.textContent = 'health API 載入失敗';
+      badge.textContent = '台灣語音處理伺服器離線';
+      detail.textContent = '無法取得伺服器狀態';
       return;
     }
     const health = await res.json();
     if (!health.configured) {
       badge.className = 'badge bg-secondary bg-opacity-75';
-      badge.textContent = '樹莓派未啟用';
+      badge.textContent = '台灣語音處理伺服器未啟用';
     } else if (health.online) {
       badge.className = 'badge bg-success bg-opacity-75';
-      badge.textContent = `樹莓派在線${health.duration_ms != null ? ` · ${health.duration_ms} ms` : ''}`;
+      badge.textContent = `台灣語音處理伺服器在線${health.duration_ms != null ? ` · ${health.duration_ms} ms` : ''}`;
     } else {
       badge.className = 'badge bg-danger bg-opacity-75';
-      badge.textContent = `樹莓派離線${health.status_code ? ` · HTTP ${health.status_code}` : ''}`;
+      badge.textContent = `台灣語音處理伺服器離線${health.status_code ? ` · HTTP ${health.status_code}` : ''}`;
     }
     const checkedAt = health.checked_at
       ? new Date(health.checked_at).toLocaleTimeString('zh-TW', { hour12: false })
@@ -462,8 +455,8 @@ async function wrLoadHealth() {
     detail.textContent = `${health.base_url || ''}${health.detail ? ` · ${health.detail}` : ''}${checkedAt ? ` · ${checkedAt}` : ''}`;
   } catch (e) {
     badge.className = 'badge bg-danger bg-opacity-75';
-    badge.textContent = '樹莓派離線';
-    detail.textContent = e.message || 'health check failed';
+    badge.textContent = '台灣語音處理伺服器離線';
+    detail.textContent = e.message || '狀態檢查失敗';
   }
 }
 
@@ -488,7 +481,7 @@ async function wrLoad() {
     : 'badge bg-secondary bg-opacity-75';
   document.getElementById('wr-enabledBadge').textContent = data.enabled ? '分流已啟用' : '分流未啟用';
   document.getElementById('wr-weightBadge').textContent = `權重 ${Math.round((data.weight || 0) * 100)}%`;
-  document.getElementById('wr-workerUrl').textContent = data.base_url ? `Worker：${data.base_url}` : '';
+  document.getElementById('wr-workerUrl').textContent = data.base_url ? `語音處理伺服器：${data.base_url}` : '';
   document.getElementById('wr-lastRefresh').textContent = `更新於 ${new Date().toLocaleTimeString('zh-TW', { hour12: false })}`;
 
   const items = data.items || [];

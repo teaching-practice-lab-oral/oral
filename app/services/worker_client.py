@@ -141,14 +141,14 @@ async def check_health() -> dict[str, Any]:
             "online": False,
             "configured": False,
             "base_url": settings.CHT_WORKER_BASE_URL,
-            "detail": "CHT worker offload is disabled",
+            "detail": "台灣語音處理伺服器分流未啟用",
         }
     if not settings.CHT_WORKER_BASE_URL.strip() or not settings.CHT_WORKER_SECRET:
         return {
             "online": False,
             "configured": False,
             "base_url": settings.CHT_WORKER_BASE_URL,
-            "detail": "CHT worker URL or secret is not configured",
+            "detail": "台灣語音處理伺服器網址或連線金鑰尚未設定",
         }
 
     url = f"{_base_url()}/internal/worker/health"
@@ -166,7 +166,7 @@ async def check_health() -> dict[str, Any]:
                     "base_url": _base_url(),
                     "status_code": response.status_code,
                     "duration_ms": duration_ms,
-                    "detail": "Worker health check passed",
+                    "detail": "台灣語音處理伺服器狀態正常",
                 }
             return {
                 "online": False,
@@ -174,7 +174,7 @@ async def check_health() -> dict[str, Any]:
                 "base_url": _base_url(),
                 "status_code": response.status_code,
                 "duration_ms": duration_ms,
-                "detail": f"Worker health returned HTTP {response.status_code}",
+                "detail": f"台灣語音處理伺服器狀態檢查回傳 HTTP {response.status_code}",
             }
     except Exception as exc:
         return {
@@ -244,6 +244,23 @@ async def process_audio(
         logger.warning("CHT worker audio response has invalid mp3_base64: %s", exc)
         _mark_worker_failure()
         _record_event("fallback_error", detail=f"Invalid audio mp3_base64: {exc}")
+        return None
+    if len(transcript) > 12_000 or "\x00" in transcript:
+        logger.warning("CHT worker audio response has invalid transcript")
+        _mark_worker_failure()
+        _record_event("fallback_error", detail="Worker audio response has invalid transcript")
+        return None
+    try:
+        # Treat even an authenticated worker response as untrusted media.  It
+        # must match the canonical internal protocol exactly, but should not be
+        # subjected to another lossy encode pass.
+        from app.services.audio_processor import validate_canonical_mp3
+
+        await validate_canonical_mp3(mp3_bytes)
+    except Exception as exc:
+        logger.warning("CHT worker audio response is not valid canonical audio: %s", exc)
+        _mark_worker_failure()
+        _record_event("fallback_error", detail="Worker returned invalid MP3 audio")
         return None
     _record_event("worker_success", duration_ms=data.get("_worker_duration_ms"))
     return mp3_bytes, transcript, metrics

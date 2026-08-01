@@ -7,28 +7,29 @@ from difflib import SequenceMatcher
 from app.question_sets import CUSTOM_QUESTION_MAX_CHARS, contains_non_latin_script
 from app.services.workflow_policy import (
     CORE_QUESTION_COUNT,
-    MAX_ROLEPLAY_TURNS,
     SECRET_QUESTION_SOURCE_INDEX,
 )
 
 
 logger = logging.getLogger(__name__)
-_GUARDRAIL_REASK_MARKERS = (
-    "please answer in english",
-    "let's stay focused on the interview",
+_SURPRISE_QUESTION_FALLBACK = (
+    "Could you tell me about an experience that changed how you approach your work or studies?"
 )
-_SECRET_QUESTION_FALLBACK = (
-    "Please choose one situation you mentioned and explain the difficulty "
-    "you personally faced, what you did, and what result followed?"
+_UNSAFE_INTERVIEWER_OUTPUT_RE = re.compile(
+    r"\b(?:system|developer)\s+(?:prompt|message|instruction)|"
+    r"\b(?:ignore|override|disregard)\b.{0,50}\b(?:instruction|prompt|rule)|"
+    r"\b(?:you\s+are\s+now|i\s+am\s+no\s+longer|break\s+character|act\s+as)\b|"
+    r"```|<\s*script\b|\b(?:https?://|www\.)|"
+    r"\b(?:def|class|import|function)\s+[a-z_]|"
+    r"^\s*(?:interviewer|assistant|system)\s*:|"
+    r"\b(?:interview\s+turn|verification|anti-cheating|ai-generated)\b",
+    re.IGNORECASE | re.DOTALL,
 )
-_CONCRETE_WORD = re.compile(r"\bconcrete\b", re.IGNORECASE)
-
-
-def _uses_unrequested_concrete_word(text: str, canonical_question: str | None = None) -> bool:
-    return bool(
-        _CONCRETE_WORD.search(text)
-        and not _CONCRETE_WORD.search(canonical_question or "")
-    )
+_SURPRISE_META_OUTPUT_RE = re.compile(
+    r"\b(?:final\s+(?:draft|answer)|writing\s+(?:draft|answer)|"
+    r"turn\s+(?:number|\d+)|secret\s+question|artificial\s+intelligence|ai)\b",
+    re.IGNORECASE,
+)
 
 
 def _normalize_interviewer_question(text: str | None) -> str:
@@ -39,7 +40,7 @@ def _normalize_interviewer_question(text: str | None) -> str:
     return re.sub(r"\s+", " ", normalized).strip()
 
 
-_QUESTION_STOP_WORDS = {
+_MATCHING_STOP_WORDS = {
     "about", "after", "again", "also", "and", "are", "briefly", "can",
     "could", "for", "from", "have", "interview", "please", "question",
     "tell", "thank", "thanks", "that", "the", "this", "today", "you", "your",
@@ -50,7 +51,7 @@ def _question_terms(text: str | None) -> set[str]:
     return {
         token
         for token in _normalize_interviewer_question(text).split()
-        if len(token) > 2 and token not in _QUESTION_STOP_WORDS
+        if len(token) > 2 and token not in _MATCHING_STOP_WORDS
     }
 
 
@@ -83,7 +84,11 @@ def _best_interview_question_match(question: str | None, interview_questions) ->
 
 
 def match_interview_question_index(question: str | None, core_questions) -> int | None:
-    """Return the canonical index matching a natural interviewer paraphrase."""
+    """Heuristically map legacy interviewer wording to a canonical question.
+
+    This lexical matcher is not a semantic or security validator and must not
+    decide whether newly generated model prose can be persisted or played.
+    """
     return _best_interview_question_match(question, core_questions)
 
 
@@ -134,23 +139,18 @@ def all_required_questions_answered(turns: list[dict], core_questions: list[str]
     return all_core_questions_answered(turns, core_questions) and secret_question_answered(turns)
 
 
-def can_add_guardrail_reask(turns: list[dict], core_questions: list[str]) -> bool:
-    used = {turn.get("source_question_index") for turn in turns if turn.get("source_question_index") is not None}
-    missing_core_count = len(set(range(len(core_questions))) - used)
-    missing_secret_count = 0 if secret_question_exists(turns) else 1
-    return MAX_ROLEPLAY_TURNS - len(turns) > missing_core_count + missing_secret_count
+def _normalized_generated_question(generated: str | None) -> str:
+    return " ".join((generated or "").strip().split())
 
 
-def question_request(expected_index: int, core_question: str, context: str) -> str:
-    return (
-        f"Ask core question {expected_index + 1} now. Preserve this intent: {core_question}\n"
-        "Keep it as one natural question. Use the core question as written unless a small "
-        "spoken-English adjustment is needed. Do not automatically append an evidence probe. "
-        "Only when the core intent requires more detail, ask about one fitting element such as "
-        "a situation, the candidate's own action, reasoning, difficulty, or result. Vary the "
-        "wording across the interview and do not repeat a stock phrase. "
-        "Respond in English only; do not use Chinese or any other non-Latin script. "
-        "Do not ask any other question.\n" + context
+def _violates_interviewer_output_contract(text: str) -> bool:
+    return bool(
+        not text
+        or len(text) > CUSTOM_QUESTION_MAX_CHARS
+        or contains_non_latin_script(text)
+        or _UNSAFE_INTERVIEWER_OUTPUT_RE.search(text)
+        or text.count("?") != 1
+        or not text.endswith("?")
     )
 
 
@@ -159,56 +159,61 @@ def validated_question(
     core_questions: list[str],
     expected_index: int,
     *,
-    previous_index: int | None = None,
-    allow_reask: bool = True,
+    previous_questions: list[str] | None = None,
 ) -> tuple[str, int]:
-    text = (generated or "").strip()
-    if len(text) > CUSTOM_QUESTION_MAX_CHARS or contains_non_latin_script(text):
+    """Keep safe free-form interviewer prose while binding it to the expected source."""
+    text = _normalized_generated_question(generated)
+    if _violates_interviewer_output_contract(text):
         logger.warning("Roleplay question %s was invalid; using canonical fallback", expected_index)
         return core_questions[expected_index], expected_index
-    if _uses_unrequested_concrete_word(text, core_questions[expected_index]):
+    if any(_is_generated_duplicate(previous, text) for previous in previous_questions or []):
         logger.warning(
-            "Roleplay question %s used repetitive probe wording; using canonical fallback",
+            "Roleplay question %s repeated an earlier interviewer question; using canonical fallback",
             expected_index,
         )
         return core_questions[expected_index], expected_index
-    matched = match_interview_question_index(text, core_questions)
-    if matched == expected_index:
-        return text, matched
-    lowered = text.lower().replace("’", "'")
-    if allow_reask and previous_index is not None and matched == previous_index and any(
-        marker in lowered for marker in _GUARDRAIL_REASK_MARKERS
-    ):
-        return text, previous_index
-    logger.warning(
-        "Roleplay question did not match expected core question %s; using canonical fallback (matched=%s)",
-        expected_index,
-        matched,
-    )
-    return core_questions[expected_index], expected_index
+    return text, expected_index
 
 
-def validated_secret_question(generated: str | None, core_questions: list[str]) -> str:
-    text = " ".join((generated or "").strip().split())
-    if contains_non_latin_script(text) or _uses_unrequested_concrete_word(text):
-        logger.warning(
-            "Generated verification question violated language policy; using fallback"
-        )
-        return _SECRET_QUESTION_FALLBACK
+def validated_surprise_question(
+    generated: str | None,
+    core_questions: list[str],
+    turns: list[dict],
+) -> str:
+    """Accept one safe personalized follow-up or use the stable fallback."""
+    text = _normalized_generated_question(generated)
+    previous_questions = [
+        *core_questions,
+        *[
+            str(turn.get("interviewer_question") or "")
+            for turn in turns
+            if turn.get("interviewer_question")
+        ],
+    ]
     if (
-        not text
-        or len(text) > CUSTOM_QUESTION_MAX_CHARS
-        or match_interview_question_index(text, core_questions) is not None
+        _violates_interviewer_output_contract(text)
+        or _SURPRISE_META_OUTPUT_RE.search(text)
+        or any(_is_generated_duplicate(previous, text) for previous in previous_questions)
     ):
-        return _SECRET_QUESTION_FALLBACK
+        logger.warning("Personalized roleplay question was invalid or repetitive; using fallback")
+        return _SURPRISE_QUESTION_FALLBACK
     return text
 
 
-def _is_repeated_interviewer_question(
-    current_question: str | None,
-    next_question: str | None,
-    interview_questions=None,
-) -> bool:
+def _is_generated_duplicate(current_question: str | None, next_question: str | None) -> bool:
+    """Reject obvious repeats without using the legacy fuzzy matching heuristic."""
+    current = _normalize_interviewer_question(current_question)
+    next_ = _normalize_interviewer_question(next_question)
+    if not current or not next_:
+        return False
+    return current == next_ or (
+        min(len(current), len(next_)) >= 12
+        and (current in next_ or next_ in current)
+    )
+
+
+def _is_near_duplicate(current_question: str | None, next_question: str | None) -> bool:
+    """Heuristic used only for legacy matching and report re-ask detection."""
     current = _normalize_interviewer_question(current_question)
     next_ = _normalize_interviewer_question(next_question)
     if not current or not next_:
@@ -217,8 +222,18 @@ def _is_repeated_interviewer_question(
         return True
     if SequenceMatcher(None, current, next_).ratio() >= 0.9:
         return True
-    if _token_overlap_score(current, next_) >= 0.82:
+    return _token_overlap_score(current, next_) >= 0.82
+
+
+def _is_repeated_interviewer_question(
+    current_question: str | None,
+    next_question: str | None,
+    interview_questions=None,
+) -> bool:
+    if _is_near_duplicate(current_question, next_question):
         return True
+    current = _normalize_interviewer_question(current_question)
+    next_ = _normalize_interviewer_question(next_question)
     current_match = _best_interview_question_match(current, interview_questions)
     next_match = _best_interview_question_match(next_, interview_questions)
     return current_match is not None and current_match == next_match

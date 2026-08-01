@@ -58,7 +58,7 @@
             <div class="row g-3">
               <div class="col-md-7">
                 <label class="form-label">名稱</label>
-                <input id="rubricName" class="form-control">
+                <input id="rubricName" class="form-control" maxlength="200">
               </div>
               <div class="col-md-5">
                 <label class="form-label">狀態</label>
@@ -66,11 +66,11 @@
               </div>
               <div class="col-12">
                 <label class="form-label">說明</label>
-                <textarea id="rubricDescription" class="form-control" rows="2"></textarea>
+                <textarea id="rubricDescription" class="form-control" rows="2" maxlength="3000"></textarea>
               </div>
               <div class="col-12">
                 <label class="form-label">注意事項（每行一項）</label>
-                <textarea id="rubricNotes" class="form-control" rows="3" placeholder="例如：遲交扣 20 分"></textarea>
+                <textarea id="rubricNotes" class="form-control" rows="3" maxlength="10000" placeholder="例如：遲交扣 20 分"></textarea>
               </div>
             </div>
           </div>
@@ -180,11 +180,11 @@
           </div>
           <div class="col-md-4">
             <label class="form-label small">級距名稱</label>
-            <input class="form-control form-control-sm level-label" value="${escAttr(level.label || '')}">
+            <input class="form-control form-control-sm level-label" maxlength="120" value="${escAttr(level.label || '')}">
           </div>
           <div class="col-md-5">
             <label class="form-label small">評分描述</label>
-            <textarea class="form-control form-control-sm level-anchor" rows="2">${escHtml(level.anchor || '')}</textarea>
+            <textarea class="form-control form-control-sm level-anchor" rows="2" maxlength="1000">${escHtml(level.anchor || '')}</textarea>
           </div>
           <div class="col-md-1 d-flex align-items-end">
             <button type="button" class="btn btn-sm btn-outline-danger w-100 edit-only" title="刪除級距" data-action="removeLevel">
@@ -201,7 +201,7 @@
         <div class="row g-2">
           <div class="col-md-7">
             <label class="form-label small">評分項目名稱</label>
-            <input class="form-control criterion-name" value="${escAttr(criterion.name)}">
+            <input class="form-control criterion-name" maxlength="120" value="${escAttr(criterion.name)}">
             <input type="hidden" class="criterion-key" value="${escAttr(criterion.key)}">
           </div>
           <div class="col-md-3">
@@ -214,7 +214,7 @@
           </div>
           <div class="col-12">
             <label class="form-label small">評分說明</label>
-            <textarea class="form-control criterion-description" rows="2">${escHtml(criterion.description)}</textarea>
+            <textarea class="form-control criterion-description" rows="2" maxlength="1000">${escHtml(criterion.description)}</textarea>
           </div>
         </div>
         <div class="level-editor">
@@ -237,7 +237,7 @@
           <div class="row g-2 align-items-end">
             <div class="col-md-8">
               <label class="form-label">評分面向</label>
-              <input class="form-control dim-name fw-bold" value="${escAttr(dimension.name)}">
+              <input class="form-control dim-name fw-bold" maxlength="80" value="${escAttr(dimension.name)}">
               <input type="hidden" class="dim-key" value="${escAttr(dimension.key)}">
             </div>
             <div class="col-md-4">

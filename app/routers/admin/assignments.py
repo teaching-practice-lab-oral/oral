@@ -3,7 +3,7 @@ import logging
 from collections import defaultdict
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session, load_only
 
 from app.auth import get_current_admin, verify_admin_password_or_raise
@@ -40,11 +40,7 @@ from app.services.submission_data import (
     replace_question_snapshot,
 )
 from app.services.grading import default_published_rubric_version, latest_grades_by_submission, grade_student_payload
-from app.services.prompt_templates import (
-    PromptTemplateValidationError,
-    ensure_system_templates,
-    validate_global_template_selection,
-)
+from app.services.input_validator import normalize_http_text
 from app.services.assignment_questions import (
     AssignmentQuestionPolicyError,
     apply_selection,
@@ -88,13 +84,6 @@ def _get_visible_students_for_assignment(db: Session, admin: User, assignment: A
         admin,
     ).filter(User.is_active == True).all()
     return [student for student in students if student_matches_assignment(student, assignment)]
-
-
-def _validate_global_prompt_template(db: Session, template_id: int | None, stage: int) -> int | None:
-    try:
-        return validate_global_template_selection(db, template_id, stage)
-    except PromptTemplateValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _published_rubric_id(db: Session, version_id: int | None) -> int:
@@ -189,8 +178,6 @@ def seed_preset_assignments(
     db: Session = Depends(get_db),
 ):
     ensure_privileged_admin(admin, "只有指定管理員可同步預設作業")
-    # Ensure system default templates exist first
-    ensure_system_templates(db, admin.id)
     default_rubric_id = _published_rubric_id(db, None)
 
     created, updated, skipped = [], [], []
@@ -227,9 +214,6 @@ def seed_preset_assignments(
                 prompt_context=a_def["prompt_context"],
                 question_set_key=selection.question_set_key,
                 questions=selection.questions,
-                stage3_template_id=None,
-                stage6_template_id=None,
-                stage8_template_id=None,
                 rubric_version_id=default_rubric_id,
                 is_active=False,
             )
@@ -281,18 +265,12 @@ def create_assignment(
     db: Session = Depends(get_db),
 ):
     selection = _question_policy_or_400(selection_for_create, payload)
-    stage3_template_id = _validate_global_prompt_template(db, payload.stage3_template_id, 3)
-    stage6_template_id = _validate_global_prompt_template(db, payload.stage6_template_id, 6)
-    stage8_template_id = _validate_global_prompt_template(db, payload.stage8_template_id, 8)
     a = Assignment(
         title=payload.title,
         description=payload.description,
         prompt_context=payload.prompt_context,
         question_set_key=selection.question_set_key,
         questions=selection.questions,
-        stage3_template_id=stage3_template_id,
-        stage6_template_id=stage6_template_id,
-        stage8_template_id=stage8_template_id,
         course_nums=ensure_admin_can_assign_course_nums(admin, payload.course_nums),
         start_date=payload.start_date,
         due_date=payload.due_date,
@@ -346,18 +324,6 @@ def update_assignment(
     selection = _question_policy_or_400(selection_for_update, a, payload)
     if "course_nums" in update_data:
         update_data["course_nums"] = ensure_admin_can_assign_course_nums(admin, payload.course_nums)
-    if "stage3_template_id" in update_data:
-        update_data["stage3_template_id"] = _validate_global_prompt_template(
-            db, payload.stage3_template_id, 3
-        )
-    if "stage6_template_id" in update_data:
-        update_data["stage6_template_id"] = _validate_global_prompt_template(
-            db, payload.stage6_template_id, 6
-        )
-    if "stage8_template_id" in update_data:
-        update_data["stage8_template_id"] = _validate_global_prompt_template(
-            db, payload.stage8_template_id, 8
-        )
     if "rubric_version_id" in update_data:
         if payload.rubric_version_id == a.rubric_version_id:
             # Existing assignments may retain an archived rubric version. Only a
@@ -450,10 +416,11 @@ def toggle_assignment(
 @router.get("/assignments/{assignment_id}/results", response_model=List[StudentResultItem])
 def list_results(
     assignment_id: int,
-    course_num: Optional[str] = None,
+    course_num: Optional[str] = Query(None, max_length=64),
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    course_num = normalize_http_text(course_num, field_name="course_num")
     assignment = _get_accessible_assignment(db, admin, assignment_id)
     students = _get_visible_students_for_assignment(db, admin, assignment)
     if course_num:

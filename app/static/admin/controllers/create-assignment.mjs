@@ -24,10 +24,6 @@ function updateFlowPreview() {
   document.getElementById('flowPreview').innerHTML = html;
 }
 
-function updateStep3Visibility() {
-  document.getElementById('step3-s6-wrap').style.display = modules.roleplay ? '' : 'none';
-}
-
 function selectedQuestions() {
   const key = document.getElementById('s2QuestionSet').value;
   if (key === 'custom') return [0,1,2,3].map(i => document.getElementById(`s2Q${i}`).value.trim());
@@ -40,7 +36,7 @@ function updateQuestionSetUI() {
   document.getElementById('s2CustomQuestions').classList.toggle('d-none', !isCustom);
   const questions = selectedQuestions();
   document.getElementById('s2QuestionPreview').innerHTML = isCustom
-    ? '<span class="text-muted small"><i class="bi bi-pencil me-1"></i>請在下方填寫四題；同一組題目會用於寫作、跟讀與角色扮演。</span>'
+    ? '<span class="text-muted small"><i class="bi bi-pencil me-1"></i>請在下方填寫四題核心題意；角色扮演會保留題意自然改問。</span>'
     : `<ol class="mb-0 ps-3">${questions.map(q => `<li class="mb-1">${escHtml(q)}</li>`).join('')}</ol>`;
 }
 
@@ -59,23 +55,6 @@ async function loadQuestionSets() {
     select.innerHTML = '<option value="">無法載入公版題組</option>';
     document.getElementById('s2QuestionPreview').innerHTML = '<span class="text-danger small">公版題組載入失敗，請重新整理後再試。</span>';
   }
-}
-
-async function loadPromptTemplates() {
-  await window._adminReady;
-  try {
-    const res = await fetch('/api/admin/prompts');
-    if (!res.ok) throw new Error('prompt templates unavailable');
-    const templates = await res.json();
-    const custom3 = templates.filter(t => t.stage === 3 && !t.is_system);
-    const custom6 = templates.filter(t => t.stage === 6 && !t.is_system);
-    const sel3 = document.getElementById('s3TemplateSelect');
-    const sel6 = document.getElementById('s6TemplateSelect');
-    const sel8 = document.getElementById('s8TemplateSelect');
-    custom3.forEach(t => sel3.add(new Option(t.name, t.id)));
-    custom6.forEach(t => sel6.add(new Option(t.name, t.id)));
-    templates.filter(t => t.stage === 8 && !t.is_system).forEach(t => sel8.add(new Option(t.name, t.id)));
-  } catch(e) { showGlobalAlert('提示詞模板載入失敗，目前仍可使用系統預設。'); }
 }
 
 async function loadRubrics() {
@@ -155,18 +134,16 @@ function renderSummary() {
         <div class="summary-row"><span class="summary-label text-muted">啟用模組</span><span class="summary-value">${modBadges}</span></div>
         <div class="summary-row"><span class="summary-label text-muted">標題</span><span class="summary-value">${escHtml(title)}</span></div>
         ${desc ? `<div class="summary-row"><span class="summary-label text-muted">說明</span><span class="summary-value">${escHtml(desc)}</span></div>` : ''}
-        ${ctx ? `<div class="summary-row"><span class="summary-label text-muted">AI 情境說明</span><span class="summary-value text-info">${escHtml(ctx)}</span></div>` : ''}
+        ${ctx ? `<div class="summary-row"><span class="summary-label text-muted">AI 主題背景</span><span class="summary-value text-info">${escHtml(ctx)}</span></div>` : ''}
         <div class="summary-row"><span class="summary-label text-muted">題組來源</span><span class="summary-value">${escHtml(questionSetLabel)}</span></div>
-        <div class="summary-row"><span class="summary-label text-muted">三階段共用題目</span><span class="summary-value"><ol class="mb-0 ps-3 mt-0">${qs.map(q=>`<li>${escHtml(q)}</li>`).join('')}</ol></span></div>
+        <div class="summary-row"><span class="summary-label text-muted">四題核心題意</span><span class="summary-value"><ol class="mb-0 ps-3 mt-0">${qs.map(q=>`<li>${escHtml(q)}</li>`).join('')}</ol></span></div>
         ${classes.length ? `<div class="summary-row"><span class="summary-label text-muted">指定班級</span><span class="summary-value">${classes.map(c=>`<span class="badge bg-info">${escHtml(c)}</span>`).join(' ')}</span></div>` : ''}
         ${startDisplay ? `<div class="summary-row"><span class="summary-label text-muted">開放日期</span><span class="summary-value">${escHtml(startDisplay)}</span></div>` : ''}
         ${dueDisplay ? `<div class="summary-row"><span class="summary-label text-muted">截止日期</span><span class="summary-value">${escHtml(dueDisplay)}</span></div>` : ''}
         <div class="summary-row"><span class="summary-label text-muted">狀態</span><span class="summary-value"><span class="badge ${isActive?'bg-success':'bg-secondary'}">${isActive?'立即啟用':'草稿（停用）'}</span></span></div>
       </div>
       <div class="col-12 border-top pt-3 mt-1">
-        <div class="text-muted small fw-semibold mb-2">提示詞設定：</div>
-        <div class="summary-row"><span class="summary-label text-muted">草稿寫作（Stage 3）</span><span class="summary-value">${document.getElementById('s3TemplateSelect').value ? '<span class="badge bg-warning text-dark">自訂模板</span>' : '<span class="badge bg-secondary">系統預設</span>'}</span></div>
-        ${modules.roleplay ? `<div class="summary-row"><span class="summary-label text-muted">面試官（Stage 6）</span><span class="summary-value">${document.getElementById('s6TemplateSelect').value ? '<span class="badge bg-warning text-dark">自訂模板</span>' : '<span class="badge bg-secondary">系統預設</span>'}</span></div>` : ''}
+        <div class="text-muted small fw-semibold mb-2">評分設定：</div>
         <div class="summary-row"><span class="summary-label text-muted">評分規準</span><span class="summary-value">${escHtml(document.getElementById('rubricSelect').selectedOptions[0]?.textContent || '未選擇')}</span></div>
       </div>
     </div>`;
@@ -178,18 +155,12 @@ async function submitAssignment() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>建立中...';
 
-  const s3TemplateVal = document.getElementById('s3TemplateSelect').value;
-  const s6TemplateVal = document.getElementById('s6TemplateSelect').value;
-  const s8TemplateVal = document.getElementById('s8TemplateSelect').value;
   const questionSetKey = document.getElementById('s2QuestionSet').value;
 
   const payload = {
     title: document.getElementById('s2Title').value.trim(),
     description: document.getElementById('s2Desc').value.trim() || null,
     prompt_context: document.getElementById('s2Context').value.trim() || null,
-    stage3_template_id: s3TemplateVal ? parseInt(s3TemplateVal) : null,
-    stage6_template_id: s6TemplateVal ? parseInt(s6TemplateVal) : null,
-    stage8_template_id: s8TemplateVal ? parseInt(s8TemplateVal) : null,
     rubric_version_id: parseInt(document.getElementById('rubricSelect').value),
     course_nums: getTagsFromWrap('s2ClassWrap'),
     start_date: document.getElementById('s2StartDate').value || null,
@@ -269,9 +240,7 @@ async function loadClassHint() {
 // ── Init ──────────────────────────────────────────────────────────────────
 updateFlowPreview();
 AdminWorkflow.ready().then(updateFlowPreview);
-updateStep3Visibility();
 loadClassHint();
-loadPromptTemplates();
 loadRubrics();
 loadQuestionSets();
 dtpS2Start = new DateTimePicker('s2StartDate', { placeholder: '（不限）' });
@@ -281,11 +250,9 @@ document.addEventListener('click', () => { DateTimePicker.closeAll(); });
 Object.assign(window, {
   toggleModule,
   updateFlowPreview,
-  updateStep3Visibility,
   selectedQuestions,
   updateQuestionSetUI,
   loadQuestionSets,
-  loadPromptTemplates,
   loadRubrics,
   goStep,
   validateStep2,

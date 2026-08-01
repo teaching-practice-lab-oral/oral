@@ -86,16 +86,16 @@ export class AccountSetupController {
     const noteText = byId('changePwSetupText');
     const submit = byId('changePwSubmitBtn');
     if (this.mode === 'legal') {
-      title.textContent = '確認更新的法遵事項';
+      title.textContent = '確認更新內容';
       subtitle.textContent = '此確認不等同於同意參與研究，也不需要再次變更密碼。';
-      noteTitle.textContent = '法遵事項已更新';
-      noteText.textContent = '請閱讀更新後的個資告知事項與系統使用者條款，再分別完成確認。';
+      noteTitle.textContent = '條款與隱私權政策已更新';
+      noteText.textContent = '請閱讀更新後的隱私權政策與使用者條款，再分別完成確認。';
       submit.innerHTML = '<i class="bi bi-check2-circle me-1"></i>確認並繼續';
     } else if (this.mode === 'password-and-legal') {
       title.textContent = '完成帳戶設定';
-      subtitle.textContent = '完成法遵確認與密碼設定後，即可繼續使用系統。';
+      subtitle.textContent = '完成文件確認與密碼設定後，即可繼續使用系統。';
       noteTitle.textContent = '首次使用前請完成設定';
-      noteText.textContent = '請閱讀個資告知事項與系統使用者條款，並設定新的登入密碼。';
+      noteText.textContent = '請閱讀隱私權政策與使用者條款，並設定新的登入密碼。';
       submit.innerHTML = '<i class="bi bi-check2-circle me-1"></i>儲存設定';
     } else {
       title.textContent = '設定新的登入密碼';
@@ -117,7 +117,7 @@ export class AccountSetupController {
       try {
         await this.loadDocuments();
       } catch (error) {
-        this.showAlert(error?.detail || '目前無法載入法遵文件，請稍後重新整理。');
+        this.showAlert(error?.detail || '目前無法載入使用者條款與隱私權政策，請稍後重新整理。');
       } finally {
         submit.disabled = !this.documents;
       }
@@ -137,7 +137,7 @@ export class AccountSetupController {
   }
 
   acknowledgementPayload() {
-    if (!this.documents) throw new Error('法遵文件尚未載入完成');
+    if (!this.documents) throw new Error('使用者條款與隱私權政策尚未載入完成');
     return {
       privacy_notice_version: this.documents.privacy_notice.version,
       privacy_acknowledged: byId('privacyAcknowledged').checked,
@@ -156,8 +156,8 @@ export class AccountSetupController {
       if (newPassword.length < 8) throw new Error('新密碼至少需要 8 個字元');
     }
     if (this.mode !== 'password') {
-      if (!byId('privacyAcknowledged').checked) throw new Error('請先閱讀並勾選個人資料告知事項');
-      if (!byId('termsAccepted').checked) throw new Error('請先閱讀並同意系統使用者條款');
+      if (!byId('privacyAcknowledged').checked) throw new Error('請先閱讀並勾選隱私權政策');
+      if (!byId('termsAccepted').checked) throw new Error('請先閱讀並同意使用者條款');
     }
   }
 

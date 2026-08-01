@@ -69,7 +69,7 @@ def create_rubric(
     db: Session = Depends(get_db),
 ):
     ensure_privileged_admin(admin, "只有最高權限管理員可以建立評分規準")
-    definition = validate_rubric_definition(payload.definition)
+    definition = validate_rubric_definition(payload.definition.model_dump(exclude_none=True))
     rubric = Rubric(
         name=payload.name.strip(),
         description=(payload.description or "").strip() or None,
@@ -129,7 +129,7 @@ def update_rubric_version(
             status_code=409,
             detail="已有發布版本後，名稱與說明不可再修改；請只調整新版的評分內容",
         )
-    validated_definition = validate_rubric_definition(payload.definition)
+    validated_definition = validate_rubric_definition(payload.definition.model_dump(exclude_none=True))
     if not has_published_version:
         version.rubric.name = requested_name
         version.rubric.description = requested_description

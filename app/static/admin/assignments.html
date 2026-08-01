@@ -36,14 +36,6 @@
       gap: 0.75rem;
     }
     .assignment-card .card-body { padding: 1.25rem; }
-    .stage-prompt-label {
-      font-size: 0.78rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #6366f1;
-      margin-bottom: 0.4rem;
-    }
   </style>
 </head>
 <body>
@@ -56,9 +48,6 @@
       <div class="d-flex gap-2 flex-wrap">
         <a class="btn btn-outline-primary" href="/admin/rubrics" id="btnRubricManagement">
           <i class="bi bi-ui-checks-grid me-1"></i>評分規準管理
-        </a>
-        <a class="btn btn-outline-primary" href="/admin/prompts" id="btnPromptManagement">
-          <i class="bi bi-sliders me-1"></i>提示詞管理
         </a>
         <button class="btn btn-outline-secondary" id="btnSeedPresets" data-action="seedPresets">
           <i class="bi bi-stars me-1"></i>建立預設五套作業
@@ -92,7 +81,7 @@
             所有學生提交紀錄將被刪除，此操作<strong>無法復原</strong>。
           </div>
           <label class="form-label fw-semibold">請輸入您的管理員密碼以確認</label>
-          <input type="password" class="form-control" id="resetAssignmentPassword" placeholder="管理員密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+          <input type="password" class="form-control" id="resetAssignmentPassword" maxlength="256" placeholder="管理員密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
         </div>
         <div class="modal-footer border-0">
           <button class="btn btn-light" data-bs-dismiss="modal">取消</button>
@@ -120,7 +109,7 @@
             此操作<strong>無法復原</strong>，所有相關學生提交紀錄將一併刪除。
           </div>
           <label class="form-label fw-semibold">請輸入您的管理員密碼以確認</label>
-          <input type="password" class="form-control" id="deleteAssignmentPassword" placeholder="管理員密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
+          <input type="password" class="form-control" id="deleteAssignmentPassword" maxlength="256" placeholder="管理員密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" />
         </div>
         <div class="modal-footer border-0">
           <button class="btn btn-light" data-bs-dismiss="modal">取消</button>

@@ -92,7 +92,7 @@
 
     <!-- Filter/sort toolbar -->
     <div class="filter-toolbar">
-      <input type="text" id="searchInput" class="form-control form-control-sm"
+      <input type="text" id="searchInput" class="form-control form-control-sm" maxlength="256"
         style="max-width:200px" placeholder="搜尋姓名或學號…" aria-label="搜尋姓名或學號" data-action-input="applyFilterSort" autocomplete="off" readonly data-action-focus="clearReadonlyAttr">
 
       <select id="classFilter" class="form-select form-select-sm" style="max-width:160px" aria-label="依班級篩選" data-action-change="applyFilterSort">
@@ -279,7 +279,7 @@
           </div>
           <div class="mb-2">
             <label class="form-label fw-semibold small">管理員密碼</label>
-            <input type="password" class="form-control" id="lateDeadlinePassword" placeholder="輸入密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+            <input type="password" class="form-control" id="lateDeadlinePassword" maxlength="256" placeholder="輸入密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
           </div>
           <div id="lateDeadlineError" class="text-danger small d-none"></div>
         </div>
@@ -303,7 +303,7 @@
           <p class="text-muted small mb-3">請輸入管理員密碼以確認允許該學生重新作答。</p>
           <div class="mb-2">
             <label class="form-label fw-semibold small">管理員密碼</label>
-            <input type="password" class="form-control" id="retakePassword"
+            <input type="password" class="form-control" id="retakePassword" maxlength="256"
               placeholder="輸入密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-action-keydown="onEnterConfirmRetake">
           </div>
           <div id="retakeError" class="text-danger small d-none"></div>

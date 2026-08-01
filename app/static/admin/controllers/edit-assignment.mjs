@@ -24,10 +24,6 @@ function showError(msg) {
   document.getElementById('errorState').classList.remove('d-none');
 }
 
-function updateRoleplayVisibility() {
-  document.getElementById('s6TemplateWrap').style.display = '';
-}
-
 function selectedQuestions() {
   const key = document.getElementById('editQuestionSet').value;
   if (key === 'custom') return [0,1,2,3].map(i => document.getElementById(`editQ${i}`).value.trim());
@@ -40,7 +36,7 @@ function updateQuestionSetUI() {
   document.getElementById('editCustomQuestions').classList.toggle('d-none', !isCustom);
   const questions = selectedQuestions();
   document.getElementById('editQuestionPreview').innerHTML = isCustom
-    ? '<span class="text-muted small"><i class="bi bi-pencil me-1"></i>同一組自訂題目會用於寫作、跟讀與角色扮演。</span>'
+    ? '<span class="text-muted small"><i class="bi bi-pencil me-1"></i>請填寫四題核心題意；角色扮演會保留題意自然改問。</span>'
     : `<ol class="mb-0 ps-3">${questions.map(q => `<li class="mb-1">${escHtml(q)}</li>`).join('')}</ol>`;
 }
 
@@ -105,29 +101,6 @@ function addClassTag(val) {
   if (!existing.includes(val)) addTagBadge(wrap, input, val);
 }
 
-// ── Load prompt templates into selects ────────────────────────────────────
-async function loadPromptTemplates() {
-  try {
-    const res = await fetch('/api/admin/prompts');
-    if (!res.ok) return;
-    const templates = await res.json();
-    populateTemplateSelect('editS3Template', templates.filter(t => t.stage === 3), 'face-主題寫作回饋提示詞');
-    populateTemplateSelect('editS6Template', templates.filter(t => t.stage === 6), '面試官提示詞');
-  } catch(e) { /* ignore, will use system default */ }
-}
-
-function populateTemplateSelect(selectId, templates, defaultLabel) {
-  const sel = document.getElementById(selectId);
-  const currentVal = sel.value;
-  // Keep first default option, remove rest
-  while (sel.options.length > 1) sel.remove(1);
-  templates.filter(t => !t.is_system).forEach(t => {
-    const opt = new Option(`${t.name}`, t.id);
-    sel.add(opt);
-  });
-  if (currentVal) sel.value = currentVal;
-}
-
 // ── Init ─────────────────────────────────────────────────────────────────
 async function init() {
   await window._adminReady;
@@ -143,12 +116,10 @@ async function init() {
   if (!aRes.ok) { showError('找不到指定的作業'); return; }
   assignment = await aRes.json();
 
-  let tRes;
   let rRes;
   let qRes;
   try {
-    [tRes, rRes, qRes] = await Promise.all([
-      fetch('/api/admin/prompts'),
+    [rRes, qRes] = await Promise.all([
       fetch(`/api/admin/rubrics?include_version_id=${assignment.rubric_version_id}`),
       fetch('/api/admin/question-sets'),
     ]);
@@ -158,7 +129,6 @@ async function init() {
   }
 
   if (!rRes.ok) { showError('評分規準載入失敗，為避免變更原設定，目前無法儲存。'); return; }
-  const templates = tRes.ok ? await tRes.json() : [];
   const rubrics = await rRes.json();
   questionSets = qRes.ok ? await qRes.json() : [];
 
@@ -169,9 +139,6 @@ async function init() {
   }
 
   // Populate dropdowns
-  populateTemplateSelect('editS3Template', templates.filter(t => t.stage === 3));
-  populateTemplateSelect('editS6Template', templates.filter(t => t.stage === 6));
-  populateTemplateSelect('editS8Template', templates.filter(t => t.stage === 8));
   rubrics.forEach(row => {
     const archivedLabel = row.is_archived ? '（已封存，保留原設定）' : '';
     document.getElementById('editRubric').add(
@@ -201,13 +168,7 @@ async function init() {
   dtpStart.syncFromHidden();
   dtpDue.syncFromHidden();
 
-  // Set template selections
-  if (assignment.stage3_template_id) document.getElementById('editS3Template').value = assignment.stage3_template_id;
-  if (assignment.stage6_template_id) document.getElementById('editS6Template').value = assignment.stage6_template_id;
-  if (assignment.stage8_template_id) document.getElementById('editS8Template').value = assignment.stage8_template_id;
   document.getElementById('editRubric').value = assignment.rubric_version_id;
-
-  updateRoleplayVisibility();
 
   document.getElementById('pageTitle').innerHTML = `<i class="bi bi-pencil me-2 text-warning"></i>編輯作業：<span class="fw-normal text-secondary">${escHtml(assignment.title)}</span>`;
   document.title = `${assignment.title} - 編輯作業`;
@@ -233,9 +194,6 @@ async function saveAll() {
     return;
   }
 
-  const s3TemplateVal = document.getElementById('editS3Template').value;
-  const s6TemplateVal = document.getElementById('editS6Template').value;
-  const s8TemplateVal = document.getElementById('editS8Template').value;
   const selectedRubricId = Number(document.getElementById('editRubric').value);
   if (!Number.isInteger(selectedRubricId) || selectedRubricId <= 0) {
     showGlobalAlert('評分規準載入失敗，請重新整理後再試。');
@@ -247,9 +205,6 @@ async function saveAll() {
     title,
     description: document.getElementById('editDesc').value.trim() || null,
     prompt_context: document.getElementById('editPromptContext').value.trim() || null,
-    stage3_template_id: s3TemplateVal ? parseInt(s3TemplateVal) : null,
-    stage6_template_id: s6TemplateVal ? parseInt(s6TemplateVal) : null,
-    stage8_template_id: s8TemplateVal ? parseInt(s8TemplateVal) : null,
     course_nums: classNames,
     start_date: document.getElementById('editStartDate').value || null,
     due_date: document.getElementById('editDueDate').value || null,
@@ -272,7 +227,6 @@ async function saveAll() {
     updateQuestionSetUI();
     document.getElementById('pageTitle').innerHTML = `<i class="bi bi-pencil me-2 text-warning"></i>編輯作業：<span class="fw-normal text-secondary">${escHtml(assignment.title)}</span>`;
     document.title = `${assignment.title} - 編輯作業`;
-    updateRoleplayVisibility();
     showToast('已儲存', 'success');
     document.getElementById('globalAlert').className = 'alert d-none';
   } else {
@@ -294,7 +248,6 @@ Object.assign(window, {
   toLocalInput,
   showGlobalAlert,
   showError,
-  updateRoleplayVisibility,
   selectedQuestions,
   updateQuestionSetUI,
   focusTagInput,
@@ -304,8 +257,6 @@ Object.assign(window, {
   handleTagKey,
   loadAvailableClasses,
   addClassTag,
-  loadPromptTemplates,
-  populateTemplateSelect,
   init,
   saveAll,
 });

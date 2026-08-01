@@ -1,6 +1,6 @@
 from app.utils import taipei_now
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, Numeric,
+    Column, Integer, BigInteger, String, Boolean, DateTime, Text, Numeric,
     ForeignKey, UniqueConstraint, Index, CheckConstraint, func, text
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -34,6 +34,12 @@ class User(Base):
 
     submissions = relationship("Submission", back_populates="user", lazy="dynamic")
     api_logs = relationship("ApiUsageLog", back_populates="user", lazy="dynamic")
+    costly_action_logs = relationship(
+        "CostlyActionUsageLog",
+        back_populates="user",
+        lazy="dynamic",
+        passive_deletes=True,
+    )
     created_assignments = relationship("Assignment", back_populates="creator", lazy="dynamic")
     assignment_reminders = relationship(
         "AssignmentReminder",
@@ -87,6 +93,8 @@ class Assignment(Base):
     start_date = Column(DateTime, nullable=True)
     due_date = Column(DateTime, nullable=True)
     prompt_context = Column(Text, nullable=True)
+    # Retained for schema compatibility with existing Oral databases. The
+    # v2.0.3 API and admin UI no longer read or write prompt-template choices.
     stage3_template_id = Column(Integer, ForeignKey("prompt_templates.id", ondelete="SET NULL"), nullable=True)
     stage6_template_id = Column(Integer, ForeignKey("prompt_templates.id", ondelete="SET NULL"), nullable=True)
     stage8_template_id = Column(Integer, ForeignKey("prompt_templates.id", ondelete="SET NULL"), nullable=True)
@@ -147,12 +155,14 @@ class Assignment(Base):
 
 
 class PromptTemplate(Base):
+    """Deprecated storage retained so upgrades do not delete existing data."""
+
     __tablename__ = "prompt_templates"
 
     id = Column(Integer, primary_key=True)
-    stage = Column(Integer, nullable=False)  # 3=寫作回饋, 6=面試官, 8=口語回饋
-    name = Column(String(200), nullable=True)       # display name for global named templates
-    is_system = Column(Boolean, default=False, server_default="false", nullable=False)  # system default — UI read-only
+    stage = Column(Integer, nullable=False)
+    name = Column(String(200), nullable=True)
+    is_system = Column(Boolean, default=False, server_default="false", nullable=False)
     system_prompt = Column(Text, nullable=False)
     roleplay_policy = Column(Text, nullable=True)
     secret_question_policy = Column(Text, nullable=True)
@@ -442,6 +452,7 @@ class SubmissionReflection(Base):
     photo_content_type = Column(String(64), nullable=True)
     photo_original_name = Column(String(256), nullable=True)
     photo_size = Column(Integer, nullable=True)
+    photo_validation_version = Column(Integer, nullable=True)
     revision = Column(Integer, nullable=False, default=1, server_default="1")
     submitted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=taipei_now, nullable=False)
@@ -464,6 +475,10 @@ class SubmissionReflection(Base):
             name="ck_submission_reflections_issue_detail",
         ),
         CheckConstraint("photo_size IS NULL OR photo_size BETWEEN 1 AND 10485760", name="ck_submission_reflections_photo_size"),
+        CheckConstraint(
+            "photo_validation_version IS NULL OR photo_validation_version = 1",
+            name="ck_submission_reflections_photo_validation_version",
+        ),
         CheckConstraint("revision >= 1", name="ck_submission_reflections_revision_positive"),
         Index("ix_submission_reflections_submission_id", "submission_id"),
         Index(
@@ -595,6 +610,31 @@ class ApiUsageLog(Base):
         CheckConstraint("stage IN (1, 3, 5, 6, 7)", name="ck_api_usage_logs_stage"),
         Index("ix_api_usage_user_called", "user_id", "called_at"),
         Index("ix_api_usage_user_stage_called", "user_id", "stage", "called_at"),
+    )
+
+
+class CostlyActionUsageLog(Base):
+    """Short-lived, cluster-wide admission log for attacker-controlled costly work."""
+
+    __tablename__ = "costly_action_usage_logs"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    action = Column(String(32), nullable=False)
+    resource_id = Column(String(64), nullable=True)
+    units_bytes = Column(BigInteger, nullable=False, default=0, server_default="0")
+    called_at = Column(DateTime, default=taipei_now, server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="costly_action_logs")
+
+    __table_args__ = (
+        CheckConstraint(
+            "action IN ('audio_upload', 'photo_upload', 'student_result_export')",
+            name="ck_costly_action_usage_logs_action",
+        ),
+        CheckConstraint("units_bytes >= 0", name="ck_costly_action_usage_logs_units_nonnegative"),
+        Index("ix_costly_action_user_action_called", "user_id", "action", "called_at"),
+        Index("ix_costly_action_action_resource_called", "action", "resource_id", "called_at"),
     )
 
 

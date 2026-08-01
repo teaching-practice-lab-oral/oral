@@ -20,9 +20,8 @@
   <link rel="stylesheet" href="/static/admin/css/common.css?v=3" />
   <style>
     .panel-title { font-size: 1rem; font-weight: 700; color: #1e293b; }
-    .stage-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: #eef2ff; color: #4f46e5; border-radius: 8px; padding: 0.3rem 0.8rem; font-size: 0.82rem; font-weight: 700; margin-bottom: 0.4rem; }
     .iq-section { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-top: 1rem; }
-    .prompt-select-wrap { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
+    .config-select-wrap { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
   </style>
 </head>
 <body>
@@ -65,18 +64,18 @@
 
         <div class="mb-3">
           <label class="form-label fw-semibold">標題 <span class="text-danger">*</span></label>
-          <input class="form-control" id="editTitle" />
+          <input class="form-control" id="editTitle" maxlength="256" />
         </div>
         <div class="mb-3">
           <label class="form-label fw-semibold">說明</label>
-          <textarea class="form-control" id="editDesc" rows="2"></textarea>
+          <textarea class="form-control" id="editDesc" rows="2" maxlength="4000"></textarea>
         </div>
         <div class="mb-3">
           <label class="form-label fw-semibold">
             指定班級 <span class="text-muted small fw-normal">（留空則開放全部學生）</span>
           </label>
           <div id="editClassTagsWrap" class="tags-input-wrap border rounded p-2 d-flex flex-wrap gap-1 align-items-center" style="min-height:38px;cursor:text" data-action="focusTagInput" data-args='["editClassTagInput"]'>
-            <input id="editClassTagInput" class="border-0 flex-grow-1" style="min-width:80px;outline:none" placeholder="輸入課號後按 Enter 新增" data-action-keydown="handleTagKeyH" data-args='["editClassTagsWrap","editClassTagInput"]' autocomplete="off" readonly data-action-focus="clearReadonlyAttr" />
+            <input id="editClassTagInput" class="border-0 flex-grow-1" maxlength="64" style="min-width:80px;outline:none" placeholder="輸入課號後按 Enter 新增" data-action-keydown="handleTagKeyH" data-args='["editClassTagsWrap","editClassTagInput"]' autocomplete="off" readonly data-action-focus="clearReadonlyAttr" />
           </div>
           <div id="editClassHint" class="form-text text-muted mt-1"></div>
         </div>
@@ -93,14 +92,15 @@
         <div class="alert alert-light border mb-1"><i class="bi bi-diagram-3 me-1 text-primary"></i>固定流程：欲應徵的職位 → 寫作 → 跟讀 → 角色扮演 → AI 回饋 → 心得撰寫</div>
       </div>
 
-      <!-- Panel 2: 共用題組 -->
+      <!-- Panel 2: 核心題組 -->
       <div class="panel">
         <div class="panel-title mb-4"><i class="bi bi-list-ol me-2 text-primary"></i>題目設定</div>
         <div class="mb-1">
           <label class="form-label fw-semibold">
-            寫作、跟讀與角色扮演題組
-            <span class="badge bg-primary ms-1">共用 4 題</span>
+            寫作、跟讀與角色扮演核心題意
+            <span class="badge bg-primary ms-1">核心 4 題</span>
           </label>
+          <div class="form-text mb-3">寫作與跟讀使用原題；角色扮演第 1～4 題由 AI 保留題意自然改問，第 5 題則依學生內容個人化追問。</div>
           <select class="form-select" id="editQuestionSet" data-action-change="updateQuestionSetUI"></select>
           <div class="form-text text-muted">公版題組可直接使用；改成自訂時才需要填寫四題。</div>
           <div id="editQuestionPreview" class="bg-light border rounded p-3 mt-3"></div>
@@ -126,52 +126,20 @@
         </div>
       </div>
 
-      <!-- Panel 3: AI 提示詞設定 -->
+      <!-- Panel 3: AI 主題與評分設定 -->
       <div class="panel">
-        <div class="panel-title mb-4"><i class="bi bi-sliders2 me-2 text-primary"></i>AI 提示詞設定</div>
+        <div class="panel-title mb-4"><i class="bi bi-sliders2 me-2 text-primary"></i>AI 主題與評分設定</div>
 
         <div class="mb-3">
-          <label class="form-label fw-semibold">AI 情境主題說明 <span class="text-muted small fw-normal">（英文，供 Stage 3/6/8 AI 參考）</span></label>
-          <textarea class="form-control" id="editPromptContext" rows="2" placeholder="e.g. Personal background, self-introduction, motivation for applying, strengths and weaknesses"></textarea>
+          <label class="form-label fw-semibold">AI 情境主題說明 <span class="text-muted small fw-normal">（英文，僅作為內容背景）</span></label>
+          <textarea class="form-control" id="editPromptContext" rows="2" maxlength="3000" placeholder="e.g. Personal background, self-introduction, motivation for applying, strengths and weaknesses"></textarea>
+          <div class="form-text">Stage 3、6、8 使用系統統一規則，這段文字不會被當成 AI 指令。</div>
         </div>
 
-        <!-- 草稿寫作提示詞選擇 (Stage 3) -->
-        <div class="prompt-select-wrap">
-          <div class="stage-badge mb-2"><i class="bi bi-pencil-square"></i>草稿寫作提示詞（Stage 3）</div>
-          <div class="text-muted small mb-2">AI 對學生草稿提供英文文法與表達回饋</div>
-          <select class="form-select" id="editS3Template">
-            <option value="">使用系統預設 — 面試主題寫作回饋提示詞</option>
-          </select>
-          <div class="form-text text-muted mt-1">
-            如需新增自訂提示詞，請至 <a href="/admin/prompts" target="_blank">提示詞管理</a> 頁面建立。
-          </div>
-        </div>
-
-        <!-- 面試官提示詞選擇 (Stage 6，roleplay only) -->
-        <div class="prompt-select-wrap" id="s6TemplateWrap">
-          <div class="stage-badge mb-2"><i class="bi bi-person-badge"></i>面試官提示詞（Stage 6）</div>
-          <div class="text-muted small mb-2">AI 扮演英文面試官進行口試對話（含安全規則）</div>
-          <select class="form-select" id="editS6Template">
-            <option value="">使用系統預設 — 面試官提示詞</option>
-          </select>
-          <div class="form-text text-muted mt-1">
-            如需新增自訂提示詞，請至 <a href="/admin/prompts" target="_blank">提示詞管理</a> 頁面建立。
-          </div>
-        </div>
-
-        <div class="prompt-select-wrap">
-          <div class="stage-badge mb-2"><i class="bi bi-bar-chart-line"></i>口語回饋提示詞（Stage 8）</div>
-          <select class="form-select" id="editS8Template"><option value="">使用系統預設 — 英語面試學習回饋提示詞</option></select>
-        </div>
-
-        <div class="prompt-select-wrap">
-          <div class="stage-badge mb-2"><i class="bi bi-ui-checks-grid"></i>批改用評分規準</div>
+        <div class="config-select-wrap">
+          <label class="form-label fw-semibold"><i class="bi bi-ui-checks-grid me-1 text-primary"></i>批改用評分規準</label>
           <select class="form-select" id="editRubric"></select>
           <div class="form-text">已開始的提交保留原版本；變更只影響新的嘗試。</div>
-        </div>
-
-        <div class="text-muted small">
-          <i class="bi bi-info-circle me-1"></i>口語 AI 回饋（Stage 8）使用全系統共用的「英語面試學習回饋提示詞」，可於提示詞管理頁面查看。
         </div>
       </div>
 

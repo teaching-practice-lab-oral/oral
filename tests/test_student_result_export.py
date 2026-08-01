@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from types import SimpleNamespace
 
@@ -40,22 +41,32 @@ def test_student_result_export_is_owned_graded_and_uses_shared_builder(monkeypat
         calls["ownership"] = (submission_id, user_id)
         return submission
 
-    def build_package(db, received_student, received_assignment, received_submission, received_grade):
+    def build_package(output, db, received_student, received_assignment, received_submission, received_grade):
+        calls["output"] = output
         calls["builder"] = (
             received_student,
             received_assignment,
             received_submission,
             received_grade,
         )
-        return b"complete-result-package"
+        payload = b"x" * (128 * 1024)
+        output.write(payload)
+        output.seek(0)
+        return len(payload)
+
+    class Lease:
+        def release(self):
+            calls["lease_released"] = True
 
     monkeypatch.setattr(student_exports, "get_own_submission", owned_submission)
     monkeypatch.setattr(student_exports, "latest_grade", lambda _db, _id: grade)
     monkeypatch.setattr(
         student_exports,
-        "build_graded_submission_result_package",
+        "write_graded_submission_result_package",
         build_package,
     )
+    monkeypatch.setattr(student_exports.rate_limiter, "reserve_costly_action", lambda *args, **kwargs: calls.setdefault("rate", (args, kwargs)))
+    monkeypatch.setattr(student_exports, "acquire_student_export_lease", lambda _id: Lease())
 
     response = student_exports.export_result_package(
         submission.id,
@@ -65,12 +76,41 @@ def test_student_result_export_is_owned_graded_and_uses_shared_builder(monkeypat
 
     assert calls["ownership"] == (submission.id, student.id)
     assert calls["builder"] == (student, assignment, submission, grade)
+    assert calls["lease_released"] is True
     assert response.media_type == "application/zip"
     assert response.headers["cache-control"] == "no-store"
     assert "filename*=UTF-8''" in response.headers["content-disposition"]
     assert "%E5%AD%B8%E7%BF%92%E6%88%90%E6%9E%9C.zip" in response.headers[
         "content-disposition"
     ]
+
+    async def disconnect_immediately():
+        body_send_started = asyncio.Event()
+
+        async def receive():
+            await body_send_started.wait()
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            if message["type"] == "http.response.body" and message.get("more_body"):
+                body_send_started.set()
+                await asyncio.sleep(1)
+
+        await response(
+            {
+                "type": "http",
+                "asgi": {"version": "3.0"},
+                "method": "GET",
+                "path": "/download",
+                "headers": [],
+            },
+            receive,
+            send,
+        )
+
+    assert calls["output"].closed is False
+    asyncio.run(disconnect_immediately())
+    assert calls["output"].closed is True
 
 
 def test_student_result_export_rejects_ungraded_submission(monkeypatch):

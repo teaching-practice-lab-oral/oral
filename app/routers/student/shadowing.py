@@ -68,6 +68,11 @@ async def speaking1_shadowing_question(
         student_id = current_user.student_id
         key_stem = f"shadowing_recording_q{question_index}_{uuid4().hex}"
         db.rollback()
+        rate_limiter.reserve_costly_action(
+            current_user.id,
+            rate_limiter.CostlyAction.AUDIO_UPLOAD,
+            resource_id=submission_id,
+        )
         prepared_audio = await audio_processor.prepare_audio_upload(audio, key_stem)
         rate_limiter.reserve_api_call(current_user.id, rate_limiter.ExternalApiStage.SHADOWING)
 

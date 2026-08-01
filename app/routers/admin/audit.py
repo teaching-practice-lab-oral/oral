@@ -2,7 +2,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,7 @@ from app.utils import taipei_now
 from app.config import settings
 from app.services import worker_client
 from app.services.workflow_policy import workflow_stage_label
+from app.services.input_validator import normalize_http_text
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +36,10 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
 ROUTE_STATUS_LABELS = {
-    "worker_success": "台灣 worker",
-    "fallback_error": "worker 失敗，已回主站",
+    "worker_success": "由台灣語音處理伺服器完成",
+    "fallback_error": "語音處理伺服器失敗，已由主系統接手",
     "local_weight": "本次留在主站",
-    "local_cooldown": "worker 冷卻中",
+    "local_cooldown": "語音處理伺服器暫停分流",
     "local_disabled": "分流未啟用",
 }
 
@@ -47,7 +48,7 @@ ROUTE_STATUS_LABELS = {
 
 @router.get("/usage-logs", response_model=ApiUsageLogListResponse)
 def get_usage_logs(
-    student_id: Optional[str] = None,
+    student_id: Optional[str] = Query(None, max_length=64),
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     skip: int = Query(0, ge=0),
@@ -55,6 +56,7 @@ def get_usage_logs(
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    student_id = normalize_http_text(student_id, field_name="student_id")
     visible_user_ids = [
         user_id for user_id, in apply_user_visibility_filter(db.query(User.id), admin).all()
     ]
@@ -101,13 +103,14 @@ def get_usage_logs(
 def list_login_events(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200),
-    student_id: Optional[str] = Query(None),
+    student_id: Optional[str] = Query(None, max_length=64),
     success: Optional[bool] = Query(None),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    student_id = normalize_http_text(student_id, field_name="student_id")
     visible_users = apply_user_visibility_filter(db.query(User), admin).all()
     visible_user_ids = [user.id for user in visible_users]
     if not visible_user_ids:
@@ -191,8 +194,8 @@ def list_active_sessions(
 
 @router.get("/worker-routing-status", response_model=WorkerRoutingStatusResponse)
 def list_worker_routing_status(
-    student_id: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
+    student_id: Optional[str] = Query(None, max_length=64),
+    status: Optional[str] = Query(None, max_length=32),
     stage: Optional[int] = Query(None, ge=1, le=9),
     active_only: bool = Query(False),
     recent_minutes: int = Query(120, ge=5, le=1440),
@@ -200,6 +203,10 @@ def list_worker_routing_status(
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    student_id = normalize_http_text(student_id, field_name="student_id")
+    status = normalize_http_text(status, field_name="status")
+    if status and status not in ROUTE_STATUS_LABELS:
+        raise HTTPException(status_code=422, detail="status 無效")
     now = taipei_now()
     visible_users = (
         apply_user_visibility_filter(db.query(User), admin)
@@ -341,14 +348,17 @@ async def get_worker_health(
 def list_admin_audit_logs(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200),
-    admin_student_id: Optional[str] = Query(None),
-    action: Optional[str] = Query(None),
-    target_type: Optional[str] = Query(None),
+    admin_student_id: Optional[str] = Query(None, max_length=64),
+    action: Optional[str] = Query(None, max_length=64),
+    target_type: Optional[str] = Query(None, max_length=32),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    admin_student_id = normalize_http_text(admin_student_id, field_name="admin_student_id")
+    action = normalize_http_text(action, field_name="action")
+    target_type = normalize_http_text(target_type, field_name="target_type")
     query = db.query(AdminAuditLog)
 
     if not is_privileged_admin(admin):
