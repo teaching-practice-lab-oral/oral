@@ -1,4 +1,5 @@
 import { AccountSetupController } from '/static/student/account-setup.mjs?v=1';
+import { apiErrorMessage } from '/static/student/api-error.mjs?v=1';
 
 function clearStudentAuthState() {
   ['role', 'name', 'user_id', 'userId', 'studentId', 'must_change_password', 'requires_legal_acknowledgement', 'isPrivilegedAdmin']
@@ -165,7 +166,7 @@ async function exportResultPackage(assignmentId, submissionId) {
     );
     if (!response.ok) {
       const error = await response.json().catch(() => null);
-      throw new Error(error?.detail || '成果包匯出失敗，請稍後再試。');
+      throw new Error(apiErrorMessage(error, '成果包匯出失敗，請稍後再試。'));
     }
     const blob = await response.blob();
     const filename = resultPackageFilename(response, `學習成果_${normalizedSubmissionId}.zip`);
@@ -501,6 +502,7 @@ Object.assign(window, {
   renderCompletedActions,
   setResultExportFeedback,
   resultPackageFilename,
+  apiErrorMessage,
   exportResultPackage,
   setRetryFeedback,
   retryAssignment,

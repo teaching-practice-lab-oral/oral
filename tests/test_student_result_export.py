@@ -1,5 +1,8 @@
 import asyncio
+import json
+import subprocess
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -8,6 +11,9 @@ from fastapi import HTTPException
 from app.models import Assignment, User
 from app.routers.student import exports as student_exports
 from app.services import result_delivery
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class _ExportDb:
@@ -182,3 +188,30 @@ def test_shared_result_package_builder_binds_requested_grade(monkeypatch):
         ("hydrate", "db", submission),
         ("build", student, assignment, submission),
     ]
+
+
+def test_api_error_message_handles_structured_fastapi_detail():
+    module_uri = (ROOT / "app/static/student/api-error.mjs").as_uri()
+    script = f"""
+      import {{ apiErrorMessage }} from {json.dumps(module_uri)};
+      const values = [
+        apiErrorMessage({{detail: {{code: 'limited', message: '請稍後再試。'}}}}, 'fallback'),
+        apiErrorMessage({{detail: '一般錯誤'}}, 'fallback'),
+        apiErrorMessage(null, 'fallback'),
+      ];
+      process.stdout.write(JSON.stringify(values));
+    """
+    completed = subprocess.run(
+        ["node", "--input-type=module", "--eval", script],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert json.loads(completed.stdout) == ["請稍後再試。", "一般錯誤", "fallback"]
+
+
+def test_student_index_busts_export_controller_cache():
+    html = (ROOT / "app/static/student/index.html").read_text(encoding="utf-8")
+    assert "/static/student/controllers/index-page.mjs?v=11" in html
