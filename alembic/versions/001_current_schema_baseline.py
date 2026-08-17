@@ -2,7 +2,7 @@
 
 Revision ID: 001
 Revises: None
-Create Date: 2026-07-18
+Create Date: 2026-08-01
 """
 
 from alembic import op
@@ -133,6 +133,19 @@ SCHEMA_STATEMENTS = ['CREATE TABLE object_deletion_tasks (\n'
  '\tCONSTRAINT ck_api_usage_logs_stage CHECK (stage IN (1, 3, 5, 6, 7)), \n'
  '\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE\n'
  ')',
+ 'CREATE TABLE costly_action_usage_logs (\n'
+ '\tid SERIAL NOT NULL, \n'
+ '\tuser_id INTEGER NOT NULL, \n'
+ '\taction VARCHAR(32) NOT NULL, \n'
+ '\tresource_id VARCHAR(64), \n'
+ "\tunits_bytes BIGINT DEFAULT '0' NOT NULL, \n"
+ '\tcalled_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL, \n'
+ '\tPRIMARY KEY (id), \n'
+ "\tCONSTRAINT ck_costly_action_usage_logs_action CHECK (action IN ('audio_upload', 'photo_upload', "
+ "'student_result_export')), \n"
+ '\tCONSTRAINT ck_costly_action_usage_logs_units_nonnegative CHECK (units_bytes >= 0), \n'
+ '\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE\n'
+ ')',
  'CREATE TABLE login_events (\n'
  '\tid SERIAL NOT NULL, \n'
  '\tuser_id INTEGER, \n'
@@ -159,23 +172,6 @@ SCHEMA_STATEMENTS = ['CREATE TABLE object_deletion_tasks (\n'
  '\tCONSTRAINT ck_password_reset_tokens_expires_after_created CHECK (expires_at >= created_at), \n'
  '\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE, \n'
  '\tUNIQUE (token_hash)\n'
- ')',
- 'CREATE TABLE prompt_templates (\n'
- '\tid SERIAL NOT NULL, \n'
- '\tstage INTEGER NOT NULL, \n'
- '\tname VARCHAR(200), \n'
- "\tis_system BOOLEAN DEFAULT 'false' NOT NULL, \n"
- '\tsystem_prompt TEXT NOT NULL, \n'
- '\troleplay_policy TEXT, \n'
- '\tsecret_question_policy TEXT, \n'
- '\tupdated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, \n'
- '\tupdated_by INTEGER, \n'
- '\tPRIMARY KEY (id), \n'
- '\tCONSTRAINT ck_prompt_templates_stage CHECK (stage IN (3, 6, 8)), \n'
- "\tCONSTRAINT ck_prompt_templates_stage_policies CHECK ((stage = 6 AND NULLIF(BTRIM(roleplay_policy), '') IS NOT "
- "NULL AND NULLIF(BTRIM(secret_question_policy), '') IS NOT NULL) OR (stage <> 6 AND roleplay_policy IS NULL AND "
- 'secret_question_policy IS NULL)), \n'
- '\tFOREIGN KEY(updated_by) REFERENCES users (id) ON DELETE SET NULL\n'
  ')',
  'CREATE TABLE rubrics (\n'
  '\tid SERIAL NOT NULL, \n'
@@ -231,9 +227,6 @@ SCHEMA_STATEMENTS = ['CREATE TABLE object_deletion_tasks (\n'
  '\tstart_date TIMESTAMP WITHOUT TIME ZONE, \n'
  '\tdue_date TIMESTAMP WITHOUT TIME ZONE, \n'
  '\tprompt_context TEXT, \n'
- '\tstage3_template_id INTEGER, \n'
- '\tstage6_template_id INTEGER, \n'
- '\tstage8_template_id INTEGER, \n'
  '\trubric_version_id INTEGER NOT NULL, \n'
  '\tis_active BOOLEAN NOT NULL, \n'
  '\tcreated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, \n'
@@ -254,9 +247,6 @@ SCHEMA_STATEMENTS = ['CREATE TABLE object_deletion_tasks (\n'
  '\tCONSTRAINT ck_assignments_question_set_key CHECK (question_set_key IS NULL OR question_set_key IN '
  "('background_motivation', 'skills_achievements', 'situational_problem_solving', 'work_attitude_soft_skills', "
  "'company_future')), \n"
- '\tFOREIGN KEY(stage3_template_id) REFERENCES prompt_templates (id) ON DELETE SET NULL, \n'
- '\tFOREIGN KEY(stage6_template_id) REFERENCES prompt_templates (id) ON DELETE SET NULL, \n'
- '\tFOREIGN KEY(stage8_template_id) REFERENCES prompt_templates (id) ON DELETE SET NULL, \n'
  '\tFOREIGN KEY(rubric_version_id) REFERENCES rubric_versions (id) ON DELETE RESTRICT, \n'
  '\tFOREIGN KEY(created_by) REFERENCES users (id) ON DELETE SET NULL\n'
  ')',
@@ -463,6 +453,7 @@ SCHEMA_STATEMENTS = ['CREATE TABLE object_deletion_tasks (\n'
  '\tphoto_content_type VARCHAR(64), \n'
  '\tphoto_original_name VARCHAR(256), \n'
  '\tphoto_size INTEGER, \n'
+ '\tphoto_validation_version INTEGER, \n'
  "\trevision INTEGER DEFAULT '1' NOT NULL, \n"
  '\tsubmitted_at TIMESTAMP WITHOUT TIME ZONE, \n'
  '\tcreated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, \n'
@@ -474,6 +465,8 @@ SCHEMA_STATEMENTS = ['CREATE TABLE object_deletion_tasks (\n'
  "btrim(issue_description) <> '')), \n"
  '\tCONSTRAINT ck_submission_reflections_photo_size CHECK (photo_size IS NULL OR photo_size BETWEEN 1 AND '
  '10485760), \n'
+ '\tCONSTRAINT ck_submission_reflections_photo_validation_version CHECK (photo_validation_version IS NULL OR '
+ 'photo_validation_version = 1), \n'
  '\tCONSTRAINT ck_submission_reflections_revision_positive CHECK (revision >= 1), \n'
  '\tFOREIGN KEY(submission_id) REFERENCES submissions (id) ON DELETE CASCADE\n'
  ')',
@@ -559,6 +552,8 @@ SCHEMA_STATEMENTS = ['CREATE TABLE object_deletion_tasks (\n'
  'CREATE INDEX ix_admin_audit_logs_target_type_created ON admin_audit_logs (target_type, created_at DESC)',
  'CREATE INDEX ix_api_usage_user_called ON api_usage_logs (user_id, called_at)',
  'CREATE INDEX ix_api_usage_user_stage_called ON api_usage_logs (user_id, stage, called_at)',
+ 'CREATE INDEX ix_costly_action_user_action_called ON costly_action_usage_logs (user_id, action, called_at)',
+ 'CREATE INDEX ix_costly_action_action_resource_called ON costly_action_usage_logs (action, resource_id, called_at)',
  'CREATE INDEX ix_login_events_ip_login_at ON login_events (ip_address, login_at)',
  'CREATE INDEX ix_login_events_login_at ON login_events (login_at)',
  'CREATE INDEX ix_login_events_student_id ON login_events (student_id)',
@@ -570,9 +565,6 @@ SCHEMA_STATEMENTS = ['CREATE TABLE object_deletion_tasks (\n'
  'CREATE INDEX ix_password_reset_tokens_request_ip ON password_reset_tokens (request_ip)',
  'CREATE INDEX ix_password_reset_tokens_user_created ON password_reset_tokens (user_id, created_at DESC)',
  'CREATE INDEX ix_password_reset_tokens_user_id ON password_reset_tokens (user_id)',
- 'CREATE INDEX ix_prompt_templates_global_stage_system_updated ON prompt_templates (stage, is_system, updated_at)',
- 'CREATE INDEX ix_prompt_templates_updated_by ON prompt_templates (updated_by)',
- 'CREATE UNIQUE INDEX uq_prompt_templates_system_stage ON prompt_templates (stage) WHERE is_system IS true',
  'CREATE INDEX ix_rubrics_archived_name ON rubrics (is_archived, name)',
  'CREATE UNIQUE INDEX uq_rubrics_single_system ON rubrics (is_system) WHERE is_system IS true',
  'CREATE INDEX ix_rubric_versions_status_created ON rubric_versions (status, created_at)',
@@ -609,9 +601,9 @@ TABLE_NAMES = ['object_deletion_tasks',
  'active_sessions',
  'admin_audit_logs',
  'api_usage_logs',
+ 'costly_action_usage_logs',
  'login_events',
  'password_reset_tokens',
- 'prompt_templates',
  'rubrics',
  'rubric_versions',
  'student_presence',

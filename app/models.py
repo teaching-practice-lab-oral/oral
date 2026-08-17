@@ -93,11 +93,6 @@ class Assignment(Base):
     start_date = Column(DateTime, nullable=True)
     due_date = Column(DateTime, nullable=True)
     prompt_context = Column(Text, nullable=True)
-    # Retained for schema compatibility with existing Oral databases. The
-    # v2.0.3 API and admin UI no longer read or write prompt-template choices.
-    stage3_template_id = Column(Integer, ForeignKey("prompt_templates.id", ondelete="SET NULL"), nullable=True)
-    stage6_template_id = Column(Integer, ForeignKey("prompt_templates.id", ondelete="SET NULL"), nullable=True)
-    stage8_template_id = Column(Integer, ForeignKey("prompt_templates.id", ondelete="SET NULL"), nullable=True)
     rubric_version_id = Column(Integer, ForeignKey("rubric_versions.id", ondelete="RESTRICT"), nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=taipei_now, nullable=False)
@@ -151,46 +146,6 @@ class Assignment(Base):
         Index("ix_assignments_created_by", "created_by"),
         Index("ix_assignments_active_due_date", is_active, due_date),
         Index("ix_assignments_created_at_desc", created_at.desc()),
-    )
-
-
-class PromptTemplate(Base):
-    """Deprecated storage retained so upgrades do not delete existing data."""
-
-    __tablename__ = "prompt_templates"
-
-    id = Column(Integer, primary_key=True)
-    stage = Column(Integer, nullable=False)
-    name = Column(String(200), nullable=True)
-    is_system = Column(Boolean, default=False, server_default="false", nullable=False)
-    system_prompt = Column(Text, nullable=False)
-    roleplay_policy = Column(Text, nullable=True)
-    secret_question_policy = Column(Text, nullable=True)
-    updated_at = Column(DateTime, default=taipei_now, onupdate=taipei_now, nullable=False)
-    updated_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-
-    updater = relationship("User", foreign_keys=[updated_by])
-
-    __table_args__ = (
-        CheckConstraint("stage IN (3, 6, 8)", name="ck_prompt_templates_stage"),
-        CheckConstraint(
-            "(stage = 6 AND NULLIF(BTRIM(roleplay_policy), '') IS NOT NULL "
-            "AND NULLIF(BTRIM(secret_question_policy), '') IS NOT NULL) OR "
-            "(stage <> 6 AND roleplay_policy IS NULL AND secret_question_policy IS NULL)",
-            name="ck_prompt_templates_stage_policies",
-        ),
-        Index(
-            "uq_prompt_templates_system_stage",
-            stage,
-            unique=True,
-            postgresql_where=is_system.is_(True),
-        ),
-        Index(
-            "ix_prompt_templates_global_stage_system_updated",
-            stage,
-            is_system,
-            updated_at,
-        ),
     )
 
 

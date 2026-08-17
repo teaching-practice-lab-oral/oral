@@ -40,3 +40,5 @@ oral.code-workspace
 !/tests/
 !/tests/**
 tests/**
+alembic/versions/.gitkeep
+.gitignore
