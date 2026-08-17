@@ -92,7 +92,7 @@ class Settings(BaseSettings):
 
     # Rate limiting
     STAGE_HOURLY_LIMIT: int = 20
-    DAILY_API_LIMIT: int = 40
+    DAILY_API_LIMIT: int = 50
     MAX_AUDIO_SECONDS: int = 300
     STAGE3_MAX_RESPONSE_CHARS: int = 15000
     AUDIO_UPLOAD_WINDOW_MINUTES: int = 15
