@@ -21,12 +21,12 @@ class LegalDocument:
 PRIVACY_NOTICE = LegalDocument(
     title="隱私權政策",
     version="2026-08-01.1",
-    url="https://docs.oral.brid.pw/legal/privacy-notice/",
+    url="https://stu.oral.brid.pw/legal/privacy-notice/",
 )
 SYSTEM_TERMS = LegalDocument(
     title="使用者條款",
     version="2026-08-01.1",
-    url="https://docs.oral.brid.pw/legal/system-terms/",
+    url="https://stu.oral.brid.pw/legal/system-terms/",
 )
 
 
