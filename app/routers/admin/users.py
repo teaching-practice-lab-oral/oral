@@ -201,6 +201,28 @@ def _validate_imported_user_batch(
     return validated
 
 
+def _get_account_email_job_for_admin(
+    db: Session,
+    admin: User,
+    job_id: str,
+) -> EmailJob:
+    """Return an account-delivery job only to its creator or protected admin."""
+    job = (
+        db.query(EmailJob)
+        .filter(
+            EmailJob.id == job_id,
+            EmailJob.kind == "account",
+        )
+        .first()
+    )
+    if job is None:
+        raise HTTPException(status_code=404, detail="Email job not found")
+    if job.created_by_id != admin.id and not is_privileged_admin(admin):
+        # Do not reveal whether another administrator's unguessable job ID is valid.
+        raise HTTPException(status_code=404, detail="Email job not found")
+    return job
+
+
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @router.get("/dashboard", response_model=AdminDashboardStats)
@@ -640,11 +662,7 @@ def get_email_job_status(
     db: Session = Depends(get_db),
 ):
     job_id = normalize_http_text(job_id, field_name="job_id") or ""
-    job = db.get(EmailJob, job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Email job not found")
-    if job.kind != "account":
-        raise HTTPException(status_code=404, detail="Email job not found")
+    job = _get_account_email_job_for_admin(db, admin, job_id)
     return DeliveryJobStatusResponse(
         job_id=job.id,
         kind=job.kind,

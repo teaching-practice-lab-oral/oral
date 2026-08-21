@@ -42,24 +42,38 @@ def ensure_not_submitted(sub: Submission) -> None:
         raise HTTPException(status_code=400, detail="Submission already completed")
 
 
-def get_submission_or_403(db: Session, submission_id: int, user_id: int) -> "Submission":
+def get_owned_submission_or_404(db: Session, submission_id: int, user_id: int) -> "Submission":
+    """Load one student-owned submission without disclosing foreign IDs."""
     from app.models import Submission as _Sub
-    sub = db.query(_Sub).filter(_Sub.id == submission_id).first()
+    sub = db.query(_Sub).filter(
+        _Sub.id == submission_id,
+        _Sub.user_id == user_id,
+    ).first()
     if not sub:
         raise HTTPException(status_code=404, detail="Submission not found")
-    if sub.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
     return sub
 
 
-def get_submission_locked_or_403(db: Session, submission_id: int, user_id: int) -> "Submission":
+def get_owned_submission_locked_or_404(
+    db: Session,
+    submission_id: int,
+    user_id: int,
+) -> "Submission":
+    """Row-lock one student-owned submission without disclosing foreign IDs."""
     from app.models import Submission as _Sub
-    sub = db.query(_Sub).filter(_Sub.id == submission_id).with_for_update().first()
+    sub = db.query(_Sub).filter(
+        _Sub.id == submission_id,
+        _Sub.user_id == user_id,
+    ).with_for_update().first()
     if not sub:
         raise HTTPException(status_code=404, detail="Submission not found")
-    if sub.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
     return sub
+
+
+# Compatibility aliases for older internal imports. Both now enforce the
+# non-enumerating 404 contract above.
+get_submission_or_403 = get_owned_submission_or_404
+get_submission_locked_or_403 = get_owned_submission_locked_or_404
 
 
 def load_users_by_ids(db: Session, ids) -> dict[int, User]:

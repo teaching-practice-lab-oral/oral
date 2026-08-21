@@ -1,7 +1,11 @@
 """Shared constants and helpers for the student router sub-package."""
 from fastapi import HTTPException
 
-from app.db_helpers import get_submission_or_403, get_submission_locked_or_403, ensure_not_submitted
+from app.db_helpers import (
+    ensure_not_submitted,
+    get_owned_submission_locked_or_404,
+    get_owned_submission_or_404,
+)
 from app.models import Submission, User
 from app.services import storage
 from app.services.student_assignment_access import ensure_student_can_mutate_submission_assignment
@@ -16,8 +20,8 @@ MAX_ATTEMPTS = WORKFLOW_LIMITS.max_attempts
 MAX_FEEDBACK_COUNT = WORKFLOW_LIMITS.max_feedback_count
 MAX_SHADOWING_ATTEMPTS = WORKFLOW_LIMITS.max_shadowing_attempts
 
-get_own_submission = get_submission_or_403
-get_own_submission_locked = get_submission_locked_or_403
+get_own_submission = get_owned_submission_or_404
+get_own_submission_locked = get_owned_submission_locked_or_404
 
 
 def bind_answers_to_snapshot(db, submission: Submission, items, *, require_all: bool) -> list[dict]:
@@ -86,7 +90,7 @@ def get_editable_submission_locked(db, submission_id: int, user_id: int) -> Subm
     `sub = get_own_submission_locked(...); ensure_not_submitted(sub)` pair, and additionally
     enforces the assignment deadline so finalized *or* past-due submissions are read-only.
     """
-    sub = get_submission_locked_or_403(db, submission_id, user_id)
+    sub = get_owned_submission_locked_or_404(db, submission_id, user_id)
     ensure_not_submitted(sub)
     assignment = sub.assignment
     student = db.query(User).filter(User.id == user_id).first()
