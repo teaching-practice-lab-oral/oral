@@ -1,10 +1,39 @@
+from pathlib import Path
+
+import pytest
+from fastapi import HTTPException
+
 from app.config import settings
 from app.models import Assignment, User
+from app.routers.admin.assignments import seed_preset_assignments
 from app.services.admin_scope import (
     assignment_visible_to_admin,
     student_matches_assignment,
     student_visible_to_admin,
 )
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_non_protected_assignment_page_hides_privileged_controls_safely():
+    controller = (ROOT / "app/static/admin/controllers/assignments.mjs").read_text()
+    page = (ROOT / "app/static/admin/assignments.html").read_text()
+
+    assert "btnPromptManagement" not in controller
+    assert "['btnSeedPresets', 'btnSendReminders']" in controller
+    assert 'class="btn btn-outline-secondary d-none" id="btnSeedPresets"' in page
+
+
+def test_non_protected_admin_cannot_seed_preset_assignments(monkeypatch):
+    monkeypatch.setattr(settings, "PROTECTED_ADMIN_STUDENT_ID", "MASTER")
+    admin = User(id=1, student_id="COURSE-ADMIN", role="admin", course_num="A")
+
+    with pytest.raises(HTTPException) as exc_info:
+        seed_preset_assignments(request=None, admin=admin, db=None)
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "只有指定管理員可同步預設作業"
 
 
 def test_course_admin_cannot_deliver_outside_visible_scope(monkeypatch):

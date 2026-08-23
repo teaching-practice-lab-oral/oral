@@ -13,13 +13,16 @@ function isPrivilegedAdmin() {
   return sessionStorage.getItem('isPrivilegedAdmin') === '1';
 }
 
+function syncPrivilegedControls() {
+  const privileged = isPrivilegedAdmin();
+  ['btnSeedPresets', 'btnSendReminders'].forEach((id) => {
+    document.getElementById(id)?.classList.toggle('d-none', !privileged);
+  });
+}
+
 async function loadAssignments() {
   await window._adminReady;
-  if (!isPrivilegedAdmin()) {
-    document.getElementById('btnPromptManagement').classList.add('d-none');
-    document.getElementById('btnSeedPresets').classList.add('d-none');
-    document.getElementById('btnSendReminders').classList.add('d-none');
-  }
+  syncPrivilegedControls();
   const res = await fetch('/api/admin/assignments', { headers: authHeaders() });
   if (res.status === 401) { redirectAdminToLogin(); return; }
   if (!res.ok) {
@@ -225,6 +228,7 @@ if (pageParams.get('created')) {
 Object.assign(window, {
   showAlert,
   isPrivilegedAdmin,
+  syncPrivilegedControls,
   loadAssignments,
   renderAssignments,
   toggleActive,
