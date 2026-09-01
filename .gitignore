@@ -42,3 +42,4 @@ security-audit/**
 tests/**
 alembic/versions/.gitkeep
 .gitignore
+scripts/**
