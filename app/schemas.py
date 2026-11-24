@@ -483,7 +483,7 @@ class LearningScaffoldQuestion(BaseModel):
     experience_prompts: List[str] = Field(min_length=2, max_length=2)
     keywords: List[str] = Field(min_length=3, max_length=5)
     sentence_starters: List[str] = Field(min_length=1, max_length=3)
-    shadowing_focus: str
+    shadowing_focus: Optional[str] = None  # legacy; no longer generated
     roleplay_focus: str
 
 
@@ -492,9 +492,10 @@ class LearningScaffoldData(BaseModel):
     question_set_key: str
     position_focus: str
     competency_priorities: List[str] = Field(min_length=2, max_length=3)
-    job_profile_focus: str
-    report_focus: str
-    reflection_focus: str
+    # Legacy fields, no longer generated.
+    job_profile_focus: Optional[str] = None
+    report_focus: Optional[str] = None
+    reflection_focus: Optional[str] = None
     questions: List[LearningScaffoldQuestion] = Field(min_length=4, max_length=4)
     generated_at: datetime
 
@@ -656,45 +657,6 @@ class ApiUsageLogListResponse(BaseModel):
     logs: List[ApiUsageLogResponse]
 
 
-class WorkerRoutingStatusItem(BaseModel):
-    user_id: int
-    student_id: str
-    name: Optional[str] = None
-    role: str
-    online: bool
-    last_seen_at: Optional[datetime] = None
-    submission_id: Optional[int] = None
-    assignment_id: Optional[int] = None
-    assignment_title: Optional[str] = None
-    stage: Optional[int] = None
-    stage_label: Optional[str] = None
-    operation: Optional[str] = None
-    route_status: Optional[str] = None
-    route_status_label: Optional[str] = None
-    worker_url: Optional[str] = None
-    detail: Optional[str] = None
-    duration_ms: Optional[int] = None
-    routed_at: Optional[datetime] = None
-
-
-class WorkerRoutingStatusResponse(BaseModel):
-    enabled: bool
-    base_url: str
-    weight: float
-    cooldown_seconds: int
-    items: List[WorkerRoutingStatusItem]
-
-
-class WorkerHealthResponse(BaseModel):
-    online: bool
-    configured: bool
-    base_url: str
-    status_code: Optional[int] = None
-    duration_ms: Optional[int] = None
-    detail: Optional[str] = None
-    checked_at: datetime
-
-
 class ShadowingQuestionRecordingResponse(BaseModel):
     index: int
     transcript: str
@@ -739,6 +701,7 @@ class RoleplayTurnResponse(BaseModel):
     is_complete: bool
     report: Optional[Any] = None
     pronunciation: Optional[Dict] = None
+    submission: SubmissionResponse
 
 
 class ProctorEventDetails(StrictRequestModel):
@@ -990,6 +953,11 @@ class DeleteConfirmRequest(StrictRequestModel):
     admin_password: str = Field(min_length=1, max_length=256)
 
 
+class SubmissionRewindRequest(StrictRequestModel):
+    admin_password: str = Field(min_length=1, max_length=256)
+    target_stage: int = Field(ge=1, le=8)
+
+
 class LateDeadlineRequest(StrictRequestModel):
     admin_password: str = Field(min_length=1, max_length=256)
     late_deadline: Optional[datetime] = None
@@ -1016,6 +984,14 @@ class BatchLateDeadlineRequest(StrictRequestModel):
         if not deduped:
             raise ValueError("至少要選擇一位學生")
         return deduped
+
+
+# ── Login unfreeze ───────────────────────────────────────────────────────────
+
+class LoginUnfreezeResponse(BaseModel):
+    unlocked_accounts: int
+    reset_failure_counts: int
+    message: str
 
 
 # ── Active Sessions ──────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 import logging
 from uuid import uuid4
 
-from app.services import storage, tts, tts_alignment, worker_client
+from app.services import storage, tts, tts_alignment
 from app.services.submission_assets import delete_uncommitted_object
 
 
@@ -30,14 +30,7 @@ async def generate_asset(
     )
     upload_started = False
     try:
-        with worker_client.routing_context(
-            user_id=user_id,
-            student_id=student_id,
-            submission_id=submission_id,
-            stage=5,
-            operation="shadowing_tts",
-        ):
-            audio_bytes = await tts.generate_speech(spoken_text, tts.SpeechProfile.SHADOWING)
+        audio_bytes = await tts.generate_speech(spoken_text, tts.SpeechProfile.SHADOWING)
         timing = await tts_alignment.create_tts_timing(
             audio_bytes,
             spoken_text,

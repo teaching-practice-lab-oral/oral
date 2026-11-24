@@ -17,12 +17,14 @@ const AA_ACTION_LABELS = {
   'admin.user.delete': '刪除使用者',
   'admin.assignment.send_due_reminders': '手動寄送提醒',
   'admin.assignment.seed_presets': '同步預設作業',
+  'admin.login.unfreeze_all': '解除全站登入限制',
   'admin.assignment.create': '建立作業',
   'admin.assignment.update': '更新作業',
   'admin.assignment.delete': '刪除作業',
   'admin.assignment.toggle': '切換作業啟用',
   'admin.assignment.reset_submissions': '清空提交紀錄',
   'admin.assignment.allow_retake': '允許重作',
+  'admin.assignment.rewind_submission': '退回作答階段',
   'admin.assignment.set_late_deadline': '設定補繳期限',
   'admin.rubric.create': '建立評分規準',
   'admin.rubric.update': '更新評分規準草稿',
@@ -369,161 +371,6 @@ function ulResetFilters() {
 }
 
 // ──────────────────────────────────────────
-// 分流狀態
-// ──────────────────────────────────────────
-const WR_STATUS_LABELS = {
-  worker_success: '由台灣語音處理伺服器完成',
-  fallback_error: '語音處理伺服器失敗，已由主系統接手',
-  local_weight: '本次留在主站',
-  local_cooldown: '語音處理伺服器暫停分流',
-  local_disabled: '分流未啟用',
-};
-const WR_STATUS_CLASSES = {
-  worker_success: 'route-worker-success',
-  fallback_error: 'route-fallback-error',
-  local_weight: 'route-local-weight',
-  local_cooldown: 'route-local-cooldown',
-  local_disabled: 'route-local-disabled',
-};
-const WR_STATUS_ICONS = {
-  worker_success: 'bi-check-circle-fill',
-  fallback_error: 'bi-exclamation-triangle-fill',
-  local_weight: 'bi-hdd-network',
-  local_cooldown: 'bi-hourglass-split',
-  local_disabled: 'bi-slash-circle',
-};
-const WR_OPERATION_LABELS = {
-  shadowing_tts: '產生跟讀示範語音',
-  shadowing_audio: '跟讀錄音處理',
-  roleplay_tts: '產生角色扮演語音',
-  roleplay_audio: '角色扮演錄音處理',
-};
-let wrInitialized = false;
-
-function wrStatusBadge(status, label) {
-  if (!status) return '<span class="text-muted">尚無分流記錄</span>';
-  const cls = WR_STATUS_CLASSES[status] || 'route-local-disabled';
-  const icon = WR_STATUS_ICONS[status] || 'bi-question-circle';
-  return `<span class="route-status ${cls}"><i class="bi ${icon}"></i>${escHtml(label || WR_STATUS_LABELS[status] || status)}</span>`;
-}
-
-function wrBuildParams() {
-  const params = new URLSearchParams();
-  const studentId = document.getElementById('wr-filterStudentId').value.trim();
-  const status = document.getElementById('wr-filterStatus').value;
-  const stage = document.getElementById('wr-filterStage').value;
-  const recent = document.getElementById('wr-filterRecentMinutes').value;
-  const activeOnly = document.getElementById('wr-filterActiveOnly').checked;
-  if (studentId) params.set('student_id', studentId);
-  if (status) params.set('status', status);
-  if (stage) params.set('stage', stage);
-  if (recent) params.set('recent_minutes', recent);
-  if (activeOnly) params.set('active_only', 'true');
-  params.set('limit', '200');
-  return params.toString();
-}
-
-async function wrLoadHealth() {
-  const badge = document.getElementById('wr-healthBadge');
-  const detail = document.getElementById('wr-healthDetail');
-  badge.className = 'badge bg-light text-secondary border';
-  badge.textContent = '台灣語音處理伺服器：檢查中…';
-  detail.textContent = '';
-
-  try {
-    const res = await apiCall('/api/admin/worker-health');
-    if (!res.ok) {
-      badge.className = 'badge bg-danger bg-opacity-75';
-      badge.textContent = '台灣語音處理伺服器離線';
-      detail.textContent = '無法取得伺服器狀態';
-      return;
-    }
-    const health = await res.json();
-    if (!health.configured) {
-      badge.className = 'badge bg-secondary bg-opacity-75';
-      badge.textContent = '台灣語音處理伺服器未啟用';
-    } else if (health.online) {
-      badge.className = 'badge bg-success bg-opacity-75';
-      badge.textContent = `台灣語音處理伺服器在線${health.duration_ms != null ? ` · ${health.duration_ms} ms` : ''}`;
-    } else {
-      badge.className = 'badge bg-danger bg-opacity-75';
-      badge.textContent = `台灣語音處理伺服器離線${health.status_code ? ` · HTTP ${health.status_code}` : ''}`;
-    }
-    const checkedAt = health.checked_at
-      ? new Date(health.checked_at).toLocaleTimeString('zh-TW', { hour12: false })
-      : '';
-    detail.textContent = `${health.base_url || ''}${health.detail ? ` · ${health.detail}` : ''}${checkedAt ? ` · ${checkedAt}` : ''}`;
-  } catch (e) {
-    badge.className = 'badge bg-danger bg-opacity-75';
-    badge.textContent = '台灣語音處理伺服器離線';
-    detail.textContent = e.message || '狀態檢查失敗';
-  }
-}
-
-async function wrLoad() {
-  const btn = document.getElementById('wr-refreshBtn');
-  const icon = btn.querySelector('i');
-  icon.classList.add('spinning');
-  wrLoadHealth();
-  const tbody = document.getElementById('wr-tableBody');
-  tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">載入中…</td></tr>';
-
-  const res = await apiCall(`/api/admin/worker-routing-status?${wrBuildParams()}`);
-  icon.classList.remove('spinning');
-  if (!res.ok) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-5">載入失敗</td></tr>';
-    return;
-  }
-
-  const data = await res.json();
-  document.getElementById('wr-enabledBadge').className = data.enabled
-    ? 'badge bg-success bg-opacity-75'
-    : 'badge bg-secondary bg-opacity-75';
-  document.getElementById('wr-enabledBadge').textContent = data.enabled ? '分流已啟用' : '分流未啟用';
-  document.getElementById('wr-weightBadge').textContent = `權重 ${Math.round((data.weight || 0) * 100)}%`;
-  document.getElementById('wr-workerUrl').textContent = data.base_url ? `語音處理伺服器：${data.base_url}` : '';
-  document.getElementById('wr-lastRefresh').textContent = `更新於 ${new Date().toLocaleTimeString('zh-TW', { hour12: false })}`;
-
-  const items = data.items || [];
-  if (!items.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">目前沒有符合條件的學生或分流記錄</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = items.map(item => {
-    const onlineHtml = item.online
-      ? `<span class="last-seen-fresh"><span class="online-dot"></span>${item.last_seen_at ? escHtml(asRelativeTime(item.last_seen_at)) : '在線'}</span>`
-      : '<span class="text-muted">離線</span>';
-    const stageHtml = item.stage
-      ? `<span class="badge bg-light text-dark border">第 ${item.stage} 階段</span><div class="small text-muted mt-1">${escHtml(item.stage_label || '')}</div>`
-      : '<span class="text-muted">尚無提交</span>';
-    const assignmentHtml = item.assignment_title
-      ? `<div class="small text-muted audit-text-wrap">${escHtml(item.assignment_title)}</div>`
-      : '';
-    const operation = item.operation ? (WR_OPERATION_LABELS[item.operation] || item.operation) : '—';
-    const worker = item.worker_url
-      ? `<div class="audit-text-wrap">${escHtml(item.worker_url)}</div>${item.duration_ms != null ? `<div class="small text-muted">${item.duration_ms} ms</div>` : ''}`
-      : '<span class="text-muted">—</span>';
-    const routedAt = item.routed_at
-      ? `<div>${new Date(item.routed_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false })}</div>${item.detail ? `<div class="small text-danger audit-text-wrap">${escHtml(item.detail)}</div>` : ''}`
-      : '<span class="text-muted">—</span>';
-    return `
-      <tr>
-        <td>
-          <div class="fw-semibold">${escHtml(item.name || '—')}</div>
-          <div class="text-muted small">${escHtml(item.student_id)}</div>
-        </td>
-        <td>${onlineHtml}</td>
-        <td>${stageHtml}${assignmentHtml}</td>
-        <td>${wrStatusBadge(item.route_status, item.route_status_label)}</td>
-        <td>${escHtml(operation)}</td>
-        <td class="small">${worker}</td>
-        <td class="small">${routedAt}</td>
-      </tr>`;
-  }).join('');
-}
-
-// ──────────────────────────────────────────
 // 已登入裝置
 // ──────────────────────────────────────────
 let asInitialized = false;
@@ -565,7 +412,7 @@ async function asLoad() {
 
   const badge = document.getElementById('as-sessionBadge');
   badge.textContent = count;
-  badge.style.display = count > 0 ? '' : 'none';
+  badge.classList.toggle('d-none', !(count > 0));
 
   if (!sessions.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">目前無已登入裝置</td></tr>';
@@ -598,4 +445,31 @@ async function asLoad() {
         <td class="small">${expiresHtml}</td>
       </tr>`;
   }).join('');
+}
+
+// ──────────────────────────────────────────
+// 一鍵解除登入限制
+// ──────────────────────────────────────────
+async function laUnfreezeAll() {
+  const ok = await confirmAdminAction(
+    '所有因為密碼輸錯而被暫停的帳號會馬上可以登入，同一個 IP 的失敗次數也會歸零。要繼續嗎？',
+    { title: '解除登入限制', confirmText: '解除' },
+  );
+  if (!ok) return;
+  const btn = document.getElementById('la-unfreezeBtn');
+  btn.disabled = true;
+  try {
+    const res = await apiCall('/api/admin/login-unfreeze', { method: 'POST' });
+    let data = {};
+    try { data = await res.json(); } catch (_) {}
+    if (!res.ok) {
+      showToast(data.detail || '解除失敗，請稍後再試。');
+      return;
+    }
+    showToast(data.message || '已解除登入限制。', 'success');
+  } catch (e) {
+    showToast('解除失敗，請稍後再試。');
+  } finally {
+    btn.disabled = false;
+  }
 }

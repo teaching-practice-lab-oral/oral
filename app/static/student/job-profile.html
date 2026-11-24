@@ -3,41 +3,42 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="AI 英語面試"><meta name="application-name" content="AI 英語面試"><meta name="theme-color" content="#4f46e5">
+  <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="AI 英語面試"><meta name="application-name" content="AI 英語面試"><meta name="theme-color" content="#1F3A5F">
   <title>欲應徵的職位 - AI 英語面試練習系統</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" crossorigin="anonymous">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" crossorigin="anonymous">
-  <link rel="stylesheet" href="/static/student/common.css?v=2">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+" crossorigin="anonymous">
+  <link rel="stylesheet" href="/static/student/common.css">
   <style>
-    .guide { background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:1rem;color:#3730a3; }
-    .field-help { color:#64748b;font-size:.84rem;margin-top:.35rem; }
-    textarea.form-control { min-height:110px; }
-    .rubric-dimension { border-left:4px solid #4f46e5;background:#f8fafc;border-radius:8px;padding:.85rem 1rem;margin:.65rem 0; }
-    .carryover-card { background:linear-gradient(135deg,#f0fdf4,#f8fafc);border:1px solid #bbf7d0;border-radius:14px;padding:1rem 1.1rem;margin-bottom:1.25rem; }
-    .carryover-grid { display:grid;grid-template-columns:1fr 1fr;gap:.75rem; }
-    .carryover-item { background:rgba(255,255,255,.82);border:1px solid #dbe7df;border-radius:10px;padding:.75rem .85rem; }
-    .carryover-item h6 { color:#166534;font-size:.85rem;font-weight:800;margin-bottom:.45rem; }
-    .carryover-item ul { margin:0;padding-left:1.1rem;font-size:.86rem; }
-    .carryover-action { border-left:3px solid #16a34a;background:#fff;border-radius:0 8px 8px 0;padding:.65rem .75rem;margin-top:.75rem;font-size:.87rem; }
+    .guide { background: var(--primary-soft); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; color: var(--ink); }
+    .field-help { color: var(--muted); font-size: .84rem; margin-top: .35rem; }
+    textarea.form-control { min-height: 110px; }
+    .rubric-dimension { border-left: 3px solid var(--primary); background: var(--surface-soft); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: .85rem 1rem; margin: .65rem 0; }
+    .carryover-card { background: var(--surface-soft); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; margin-bottom: 1.25rem; }
+    .carryover-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    .carryover-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .75rem .85rem; }
+    .carryover-item h6 { color: var(--success); font-size: .85rem; font-weight: 700; margin-bottom: .45rem; }
+    .carryover-item ul { margin: 0; padding-left: 1.1rem; font-size: .86rem; }
+    .carryover-action { border-left: 3px solid var(--success); background: var(--surface); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: .65rem .75rem; margin-top: .75rem; font-size: .87rem; }
     @media(max-width:767.98px){.carryover-grid{grid-template-columns:1fr}}
   </style>
+  <link rel="stylesheet" href="/static/css/ui.css">
 </head>
 <body>
   <nav class="navbar navbar-custom"><div class="container">
     <a class="navbar-brand text-white fw-bold" href="/student"><i class="bi bi-arrow-left me-2"></i>返回作業列表</a>
-    <button class="btn btn-outline-light btn-sm" data-action="logout"><i class="bi bi-box-arrow-right me-1"></i>登出</button>
+    <button class="btn btn-outline-light btn-sm" data-action="logout">登出</button>
   </div></nav>
   <div id="toastContainer"></div>
-  <main class="container my-4 mb-5" style="max-width:900px">
+  <main class="container my-4 mb-5 maxw-900">
     <div id="loadingMsg" class="text-center py-5"><div class="spinner-border text-primary"></div><p class="text-muted mt-3">載入中...</p></div>
     <div id="content" class="d-none">
-      <h3 id="assignmentTitle" class="fw-bold"></h3><p id="assignmentDesc" class="text-muted"></p>
+      <h3 id="assignmentTitle" class="fw-bold"></h3>
       <div class="progress-steps" id="progressSteps"></div><div id="viewModeBanner" class="d-none mb-3"></div>
       <section class="section-card active">
-        <div class="section-header"><div class="section-icon"><i class="bi bi-briefcase-fill"></i></div><div><div class="section-title">欲應徵的職位</div><div class="section-subtitle">步驟 1／6 · 可使用中文填寫</div></div></div>
-        <div class="section-body"><div id="profileLearningGuide"></div><div id="priorLearning" class="d-none"></div>
-          <div class="guide mb-4"><i class="bi bi-info-circle-fill me-1"></i>請使用中文描述你想應徵的工作。這些資料會協助 AI 讓寫作回饋、角色扮演與 AI 回饋更貼近你的目標；第一次 AI 寫作回饋後即鎖定。</div>
+        <div class="section-header"><div><div class="section-title">欲應徵的職位</div><div class="section-subtitle">步驟 1／6 · 可使用中文填寫</div></div></div>
+        <div class="section-body"><div id="priorLearning" class="d-none"></div>
+          <div class="guide mb-4">請使用中文描述你想應徵的工作。這些資料會協助 AI 讓寫作回饋、角色扮演與 AI 回饋更貼近你的目標；第一次 AI 寫作回饋後即鎖定。</div>
           <div id="prefillNotice" class="alert alert-info d-none" role="status"><i class="bi bi-arrow-repeat me-1"></i>已自動帶入你最近一次儲存的職位資料，請確認或修改後，再按「儲存並前往寫作練習」。</div>
           <form id="profileForm">
             <div class="mb-4"><label class="form-label fw-bold" for="desiredPosition">你想要應徵什麼職位？ <span class="text-danger">*</span></label><input id="desiredPosition" class="form-control" maxlength="200" required placeholder="例如：國際業務專員、軟體工程師、飯店櫃檯人員"><div class="field-help">請寫出明確的職位名稱。</div></div>
@@ -49,13 +50,13 @@
           </form>
         </div>
       </section>
-      <details class="section-card mt-4"><summary class="section-body fw-bold" style="cursor:pointer"><i class="bi bi-ui-checks-grid me-2 text-primary"></i>查看本次作業的評分規準</summary><div class="section-body pt-0" id="rubricBox"></div></details>
+      <details class="section-card mt-4"><summary class="section-body fw-bold cursor-pointer">查看本次作業的評分規準</summary><div class="section-body pt-0" id="rubricBox"></div></details>
     </div>
   </main>
   <script>window.CURRENT_SECTION=1;window.PAGE_PATH='job-profile';</script>
-  <script src="/static/student/workflow.js?v=4"></script>
-  <script src="/static/student/common.js?v=23"></script>
-  <script src="/static/pwa.js?v=7"></script>
-  <script src="/static/student/practice-runtime.js?v=5"></script>
-  <script type="module" src="/static/student/controllers/job-profile.mjs?v=4"></script>
+  <script src="/static/student/workflow.js"></script>
+  <script src="/static/student/common.js"></script>
+  <script src="/static/pwa.js"></script>
+  <script src="/static/student/practice-runtime.js"></script>
+  <script type="module" src="/static/student/controllers/job-profile.mjs"></script>
 </body></html>

@@ -59,7 +59,7 @@ window.ApiUnauthorizedHandler = async response => {
   redirectToStudentLogin(message);
 };
 
-const StudentApiClientReady = import('/static/js/api-client.mjs?v=2');
+const StudentApiClientReady = import('/static/js/api-client.mjs');
 const studentNativeFetch = window.fetch.bind(window);
 window.StudentApiClientReady = StudentApiClientReady;
 window.StudentApiNativeFetch = studentNativeFetch;
@@ -208,16 +208,6 @@ function escAttr(s) {
 
 function tryParseJson(str) { try { return typeof str === 'object' ? str : JSON.parse(str); } catch { return null; } }
 
-function getLearningSupport(view = getView()) {
-  const attemptNumber = Math.min(
-    workflowLimit('max_attempts'),
-    Math.max(1, Number(view && view.attempt_number) || 1),
-  );
-  if (attemptNumber === 1) return { attemptNumber, mode: 'guided', badge: '第 1 次｜跟著提示做' };
-  if (attemptNumber === 2) return { attemptNumber, mode: 'supported', badge: '第 2 次｜先自己做' };
-  return { attemptNumber, mode: 'independent', badge: `第 ${attemptNumber} 次｜獨立完成` };
-}
-
 function getLearningScaffold(view = getView()) {
   return view && view.learning_scaffold_status === 'ready' && view.learning_scaffold
     ? view.learning_scaffold
@@ -226,111 +216,67 @@ function getLearningScaffold(view = getView()) {
 
 function learningScaffoldQuestion(view, index) {
   const scaffold = getLearningScaffold(view);
-  if (scaffold && Array.isArray(scaffold.questions)) {
-    return scaffold.questions.find(item => Number(item.index) === Number(index)) || null;
-  }
-  const fallback = window.assignment && Array.isArray(window.assignment.question_scaffolds)
-    ? window.assignment.question_scaffolds
-    : [];
-  return fallback.find(item => Number(item.index) === Number(index)) || null;
-}
-
-function learningScaffoldStarters(view, index, fallback = []) {
-  const item = learningScaffoldQuestion(view, index);
-  if (item && Array.isArray(item.sentence_starters) && item.sentence_starters.length) {
-    return item.sentence_starters;
-  }
-  if (item && Array.isArray(item.starters) && item.starters.length) return item.starters;
-  return fallback;
+  if (!scaffold || !Array.isArray(scaffold.questions)) return null;
+  return scaffold.questions.find(item => Number(item.index) === Number(index)) || null;
 }
 
 function _scaffoldList(items) {
   return `<ul class="personalized-scaffold-list">${(items || []).map(item => `<li>${escHtml(item)}</li>`).join('')}</ul>`;
 }
 
-function learningScaffoldQuestionHtml(view, index, stage, answerText = '') {
-  const item = learningScaffoldQuestion(view, index);
-  if (!item) return '';
-  const keywordSource = Array.isArray(item.keywords) ? item.keywords : [];
-  const answer = String(answerText || '').toLocaleLowerCase();
-  const keywords = stage === 'shadowing'
-    ? keywordSource.filter(keyword => answer.includes(String(keyword).toLocaleLowerCase()))
-    : keywordSource;
-  const keywordHtml = keywords.length
-    ? `<div class="personalized-scaffold-keywords" aria-label="職位關鍵字">${keywords.map(keyword => `<span>${escHtml(keyword)}</span>`).join('')}</div>`
+function _scaffoldChips(items, className, label, itemClass = '') {
+  const cls = itemClass ? ` class="${itemClass}"` : '';
+  return items.length
+    ? `<div class="${className}" aria-label="${escAttr(label)}">${items.map(item => `<span${cls}>${escHtml(item)}</span>`).join('')}</div>`
     : '';
-  const stageFocus = stage === 'shadowing'
-    ? item.shadowing_focus
-    : stage === 'roleplay' ? item.roleplay_focus : '';
-  return `<aside class="personalized-scaffold" aria-label="Q${Number(index) + 1} 個人化鷹架">
-    <div class="personalized-scaffold-title"><i class="bi bi-person-check-fill" aria-hidden="true"></i>Q${Number(index) + 1}｜依你的職位調整</div>
-    <p><strong>這題要證明：</strong>${escHtml(item.goal)}</p>
-    ${stage === 'writing' ? `<div><strong>回答順序：</strong>${_scaffoldList(item.steps)}</div><p><strong>找證據：</strong>${escHtml(item.evidence)}</p>` : ''}
-    ${item.role_connection ? `<p><strong>職位連結：</strong>${escHtml(item.role_connection)}</p>` : ''}
-    ${stageFocus ? `<p><strong>本階段焦點：</strong>${escHtml(stageFocus)}</p>` : ''}
-    ${stage !== 'shadowing' && Array.isArray(item.experience_prompts) ? `<div><strong>想一想：</strong>${_scaffoldList(item.experience_prompts)}</div>` : ''}
-    ${keywordHtml}
-  </aside>`;
 }
 
-function learningScaffoldInlineHtml(view, index, stage, answerText = '') {
-  const support = getLearningSupport(view);
-  if (support.mode === 'independent') return '';
-  const content = learningScaffoldQuestionHtml(view, index, stage, answerText);
+// Only AI-generated, job-specific guidance is shown. Nothing renders until
+// the scaffold for this attempt is ready.
+function learningScaffoldQuestionHtml(view, index, stage) {
+  const item = learningScaffoldQuestion(view, index);
+  if (!item) return '';
+  const keywords = Array.isArray(item.keywords) ? item.keywords : [];
+  const starters = Array.isArray(item.sentence_starters) ? item.sentence_starters : [];
+  const parts = [];
+  if (stage === 'writing') {
+    if (item.role_connection) parts.push(`<p>${escHtml(item.role_connection)}</p>`);
+    if (Array.isArray(item.experience_prompts)) parts.push(_scaffoldList(item.experience_prompts));
+  } else if (stage === 'roleplay') {
+    if (item.roleplay_focus) parts.push(`<p>${escHtml(item.roleplay_focus)}</p>`);
+  }
+  parts.push(_scaffoldChips(keywords, 'personalized-scaffold-keywords', '關鍵字'));
+  parts.push(_scaffoldChips(starters, 'sentence-starters mt-2', '句子開頭', 'sentence-starter'));
+  const body = parts.join('');
+  if (!body) return '';
+  return `<aside class="personalized-scaffold" aria-label="Q${Number(index) + 1} 提示">${body}</aside>`;
+}
+
+function learningScaffoldInlineHtml(view, index, stage) {
+  const content = learningScaffoldQuestionHtml(view, index, stage);
   if (!content) return '';
-  return `<details class="question-scaffold-details" ${support.mode === 'guided' ? 'open' : ''}>
-    <summary>Q${Number(index)+1} 的${getLearningScaffold(view)?'職位化':'專屬'}作答鷹架</summary>
+  return `<details class="question-scaffold-details" open>
+    <summary>Q${Number(index)+1} 提示</summary>
     ${content}
   </details>`;
 }
 
-function learningScaffoldStageHtml(view, stage) {
-  const scaffold = getLearningScaffold(view);
-  if (!scaffold) return '';
-  const field = {
-    job_profile: 'job_profile_focus',
-    report: 'report_focus',
-    reflection: 'reflection_focus',
-  }[stage];
-  if (!field || !scaffold[field]) return '';
-  return `<aside class="personalized-scaffold" aria-label="個人化階段焦點">
-    <div class="personalized-scaffold-title"><i class="bi bi-person-check-fill" aria-hidden="true"></i>依你的職位調整</div>
-    <p><strong>本次面試重點：</strong>${escHtml(scaffold.position_focus)}</p>
-    <p><strong>這一階段：</strong>${escHtml(scaffold[field])}</p>
-    ${_scaffoldList(scaffold.competency_priorities || [])}
-  </aside>`;
-}
-
-function learningScaffoldModuleHtml() {
-  const items = window.assignment && Array.isArray(window.assignment.question_scaffolds)
-    ? window.assignment.question_scaffolds
-    : [];
-  if (!items.length) return '';
-  return `<aside class="personalized-scaffold" aria-label="四題不同的準備重點">
-    <div class="personalized-scaffold-title"><i class="bi bi-list-check" aria-hidden="true"></i>這四題要準備不同證據</div>
-    <ol class="personalized-scaffold-list">${items.map(item => `<li><strong>Q${Number(item.index) + 1}：</strong>${escHtml(item.goal)}</li>`).join('')}</ol>
-  </aside>`;
-}
-
-function learningScaffoldPositionHtml(view) {
-  const scaffold = getLearningScaffold(view);
-  if (!scaffold || !scaffold.position_focus) return '';
-  return `<aside class="personalized-scaffold" aria-label="本次職位面試重點">
-    <div class="personalized-scaffold-title"><i class="bi bi-briefcase-fill" aria-hidden="true"></i>本次職位面試重點</div>
-    <p>${escHtml(scaffold.position_focus)}</p>
-    ${_scaffoldList(scaffold.competency_priorities || [])}
-  </aside>`;
+// Wraps AI guidance for a page. Returns '' when there is nothing to show.
+function renderAiGuide(view, html = '') {
+  const status = renderLearningScaffoldStatus(view);
+  if (!status && !html) return '';
+  return `<section class="ai-guide">${status}${html}</section>`;
 }
 
 function renderLearningScaffoldStatus(view) {
   if (!view || !view.job_profile_data || !view.question_set_key) return '';
   if (!['missing', 'stale'].includes(view.learning_scaffold_status)) return '';
   const label = view.learning_scaffold_status === 'stale'
-    ? '職位資料或題目已更新，先前的個人化提示不再使用。'
-    : '個人化提示尚未建立，目前仍可使用每題不同的公版鷹架。';
+    ? '職位資料改過了，提示要重新產生。'
+    : '提示還沒產生。';
   return `<div class="learning-scaffold-status" role="status">
     <span><i class="bi bi-info-circle-fill" aria-hidden="true"></i>${escHtml(label)}</span>
-    <button type="button" class="btn btn-sm btn-outline-primary" data-action="retryLearningScaffold">重新產生個人化提示</button>
+    <button type="button" class="btn btn-sm btn-outline-primary" data-action="retryLearningScaffold">產生提示</button>
   </div>`;
 }
 
@@ -343,132 +289,21 @@ async function retryLearningScaffold() {
     const response = await apiCall(`/api/student/submissions/${active.id}/learning-scaffold`, { method: 'POST' });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      showAlert(data.detail || '個人化提示暫時無法產生；可使用公版提示繼續。');
+      showAlert(data.detail || '提示暫時產生不出來，請稍後再試。');
       return false;
     }
     active.learning_scaffold_status = 'ready';
     active.learning_scaffold = data.scaffold;
     if (typeof renderAll === 'function') renderAll();
-    showAlert('已依你的職位建立四題不同的個人化提示。', 'success');
+    showAlert('提示已產生。', 'success');
     return true;
   } catch (_) {
-    showAlert('個人化提示暫時無法產生；可使用公版提示繼續。');
+    showAlert('提示暫時產生不出來，請稍後再試。');
     return false;
   } finally {
-    buttons.forEach(button => { button.disabled = false; button.textContent = '重新產生個人化提示'; });
+    buttons.forEach(button => { button.disabled = false; button.textContent = '產生提示'; });
   }
 }
-
-function _taskGuideList(items, icon) {
-  return (items || []).map(item => `<li><i class="bi ${icon}" aria-hidden="true"></i><span>${escHtml(item)}</span></li>`).join('');
-}
-
-function _taskGuideSupport({ support, starters, persistentHtml }, learningSupport) {
-  // support.html and persistentHtml are caller-owned markup. Callers must
-  // escape every dynamic value before passing either trusted HTML slot.
-  const alwaysHtml = persistentHtml || (support && support.persistentHtml) || '';
-  if (learningSupport.mode === 'independent') return alwaysHtml;
-
-  const help = support || {};
-  const helpItems = _taskGuideList(help.items || [], 'bi-lightbulb');
-  const helpHtml = help.html || '';
-  const starterHtml = (starters || []).length
-    ? `<div class="sentence-starters" aria-label="作答句架">${starters.map(item => `<span class="sentence-starter">${escHtml(item)}</span>`).join('')}</div>`
-    : '';
-  if (!helpItems && !helpHtml && !starterHtml) return alwaysHtml;
-
-  const content = `${helpItems ? `<ul class="task-guide-help-list">${helpItems}</ul>` : ''}${helpHtml}${starterHtml}`;
-  if (learningSupport.mode === 'guided') {
-    return `<section class="task-guide-support task-guide-support-open" aria-label="卡住時">
-      <h6><i class="bi bi-life-preserver" aria-hidden="true"></i>${escHtml(help.title || '卡住時')}</h6>
-      ${content}
-    </section>${alwaysHtml}`;
-  }
-  return `<details class="task-guide-support task-guide-support-collapsed">
-    <summary><i class="bi bi-lightbulb" aria-hidden="true"></i>${escHtml(help.title || '卡住時')}（需要時再展開）</summary>
-    <div class="task-guide-support-body">${content}</div>
-  </details>${alwaysHtml}`;
-}
-
-function renderTaskGuide({
-  title,
-  progress = '',
-  actions = [],
-  support = null,
-  starters = [],
-  persistentHtml = '',
-  checks = [],
-  next = '',
-  view = getView(),
-  state = 'active',
-}) {
-  const learningSupport = getLearningSupport(view);
-  const isReview = state === 'completed' || state === 'read-only';
-  const stateLabel = state === 'completed' ? '這個階段已完成' : '唯讀回顧';
-  if (isReview) {
-    return `<section class="task-guide task-guide-review" aria-label="${escAttr(title)}任務回顧">
-      <div class="task-guide-heading">
-        <div>
-          <div class="task-guide-kicker">${stateLabel}</div>
-          <h5>${escHtml(title)}</h5>
-        </div>
-        <span class="learning-mode learning-mode-${learningSupport.mode}">${escHtml(learningSupport.badge)}</span>
-      </div>
-      ${progress ? `<div class="task-guide-progress">${escHtml(progress)}</div>` : ''}
-      ${next ? `<div class="task-guide-next"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span><strong>回看重點：</strong>${escHtml(next)}</span></div>` : ''}
-    </section>`;
-  }
-
-  return `<section class="task-guide" aria-label="${escAttr(title)}任務導航">
-    <div class="task-guide-heading">
-      <div>
-        <div class="task-guide-kicker">現在的任務</div>
-        <h5>${escHtml(title)}</h5>
-      </div>
-      <span class="learning-mode learning-mode-${learningSupport.mode}">${escHtml(learningSupport.badge)}</span>
-    </div>
-    ${progress ? `<div class="task-guide-progress">${escHtml(progress)}</div>` : ''}
-    ${renderLearningScaffoldStatus(view)}
-    <div class="task-guide-grid">
-      <div>
-        <h6><i class="bi bi-cursor-fill" aria-hidden="true"></i>現在做</h6>
-        <ol class="task-guide-actions">${actions.map(item => `<li>${escHtml(item)}</li>`).join('')}</ol>
-      </div>
-      <div>
-        <h6><i class="bi bi-ui-checks" aria-hidden="true"></i>完成條件</h6>
-        <ul class="task-guide-checks">${_taskGuideList(checks, 'bi-check2-circle')}</ul>
-      </div>
-    </div>
-    ${_taskGuideSupport({ support, starters, persistentHtml }, learningSupport)}
-    ${next ? `<div class="task-guide-next"><i class="bi bi-arrow-right-circle-fill" aria-hidden="true"></i><span><strong>完成後：</strong>${escHtml(next)}</span></div>` : ''}
-  </section>`;
-}
-
-(function injectLearningGuideStyles() {
-  if (document.getElementById('studentLearningGuideStyles')) return;
-  const style = document.createElement('style');
-  style.id = 'studentLearningGuideStyles';
-  style.textContent = `
-    .task-guide{background:linear-gradient(135deg,#eef2ff 0%,#f8fafc 100%);border:1px solid #c7d2fe;border-radius:16px;padding:1rem 1.1rem;margin-bottom:1.25rem;color:#1e293b}
-    .task-guide-review{background:linear-gradient(135deg,#f0fdf4 0%,#f8fafc 100%);border-color:#bbf7d0}
-    .task-guide-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-bottom:.7rem}
-    .task-guide-heading h5{font-size:1.05rem;font-weight:800;margin:0}.task-guide-kicker{color:#6366f1;font-size:.73rem;font-weight:800;letter-spacing:.08em;margin-bottom:.15rem}.task-guide-review .task-guide-kicker{color:#15803d}
-    .learning-mode{border-radius:999px;padding:.3rem .7rem;font-size:.76rem;font-weight:800;white-space:nowrap}.learning-mode-guided{background:#fef3c7;color:#92400e}.learning-mode-supported{background:#e0f2fe;color:#075985}.learning-mode-independent{background:#dcfce7;color:#166534}
-    .task-guide-progress{display:inline-flex;align-items:center;background:#fff;border:1px solid #cbd5e1;border-radius:999px;color:#475569;font-size:.78rem;font-weight:700;padding:.23rem .62rem;margin:0 0 .75rem}
-    .task-guide-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.task-guide-grid>div{background:rgba(255,255,255,.82);border:1px solid #e2e8f0;border-radius:12px;padding:.75rem .85rem}
-    .task-guide-grid h6,.task-guide-support h6{font-size:.86rem;font-weight:800;margin:0 0 .5rem}.task-guide-grid h6 i,.task-guide-support h6 i{color:#4f46e5;margin-right:.4rem}
-    .task-guide-actions{margin:0;padding-left:1.2rem;font-size:.87rem}.task-guide-actions li+li{margin-top:.32rem}.task-guide-checks,.task-guide-help-list{list-style:none;margin:0;padding:0;font-size:.87rem}.task-guide-checks li,.task-guide-help-list li{display:flex;gap:.4rem;align-items:flex-start}.task-guide-checks li+li,.task-guide-help-list li+li{margin-top:.32rem}.task-guide-checks i{color:#059669;margin-top:.08rem}.task-guide-help-list i{color:#d97706;margin-top:.08rem}
-    .task-guide-support{border-radius:12px;margin-top:.75rem;padding:.75rem .85rem}.task-guide-support-open{background:#fffbeb;border:1px solid #fde68a}.task-guide-support-collapsed{background:#fff;border:1px solid #cbd5e1}.task-guide-support summary{cursor:pointer;font-size:.88rem;font-weight:800;color:#334155}.task-guide-support summary i{color:#d97706;margin-right:.4rem}.task-guide-support-body{padding-top:.75rem}.task-guide-support .sentence-starters{margin-top:.6rem}
-    .task-guide-next{display:flex;align-items:flex-start;gap:.45rem;background:#fff;border-left:3px solid #4f46e5;border-radius:0 8px 8px 0;padding:.55rem .7rem;margin-top:.8rem;font-size:.87rem}.task-guide-next i{color:#4f46e5}
-    .planning-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:.7rem}.planning-step{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:.65rem .7rem}.planning-step strong{display:block;font-size:.86rem;margin-bottom:.2rem}.planning-step span{color:#64748b;font-size:.8rem}
-    .sentence-starters{display:flex;gap:.35rem;flex-wrap:wrap}.sentence-starter{display:inline-block;background:#fff;border:1px solid #f59e0b;color:#92400e;border-radius:999px;padding:.2rem .58rem;font-size:.77rem}
-    .learning-scaffold-status{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:12px;padding:.7rem .8rem;margin-top:.75rem;font-size:.86rem}.learning-scaffold-status i{margin-right:.4rem}.personalized-scaffold{background:#eefbf5;border:1px solid #a7f3d0;border-radius:12px;padding:.75rem .85rem;margin-top:.7rem;color:#164e3f}.personalized-scaffold-title{font-weight:800;margin-bottom:.45rem}.personalized-scaffold-title i{margin-right:.4rem;color:#059669}.personalized-scaffold p{font-size:.84rem;margin:0 0 .45rem}.personalized-scaffold-list{font-size:.84rem;margin:.25rem 0 .5rem;padding-left:1.15rem}.personalized-scaffold-keywords{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.45rem}.personalized-scaffold-keywords span{background:#fff;border:1px solid #6ee7b7;border-radius:999px;padding:.18rem .55rem;font-size:.76rem;color:#065f46}
-    .question-scaffold-details{margin:.65rem 0;background:#fff;border:1px solid #a7f3d0;border-radius:10px;padding:.55rem .7rem}.question-scaffold-details>summary{cursor:pointer;color:#047857;font-size:.82rem;font-weight:800}.question-scaffold-details .personalized-scaffold{border:0;background:transparent;padding:.55rem 0 0;margin:0}
-    .task-guide-persistent{background:#fff;border:1px solid #dbeafe;border-radius:12px;padding:.75rem .85rem;margin-top:.75rem}
-    @media(max-width:767.98px){.task-guide-grid,.planning-grid{grid-template-columns:1fr}.task-guide{padding:.9rem}.learning-mode{white-space:normal}}
-  `;
-  document.head.appendChild(style);
-})();
 
 function showAlert(msg, type = 'danger') {
   const container = document.getElementById('toastContainer');
@@ -571,20 +406,20 @@ function renderViewBanner() {
   if (isViewingPast) {
     viewBanner.classList.remove('d-none');
     viewBanner.innerHTML = `
-      <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:0.9rem 1.25rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-        <div><i class="bi bi-eye me-1" style="color:#4f46e5;"></i>
+      <div class="notice-banner notice-banner-view">
+        <div><i class="bi bi-eye me-1 text-brand"></i>
           <strong>正在查看：第 ${viewedSubmission.attempt_number} 次練習結果</strong>
           <span class="text-muted ms-2 small">（唯讀模式）</span>
         </div>
-        <button class="btn btn-sm ms-auto" style="border:1.5px solid #4f46e5;color:#4f46e5;background:white;border-radius:8px;font-weight:600;" data-action="exitViewMode">
+        <button class="btn btn-sm ms-auto btn-outline-brand" data-action="exitViewMode">
           <i class="bi bi-arrow-left me-1"></i>返回當前練習
         </button>
       </div>`;
   } else if (isPastDue()) {
     viewBanner.classList.remove('d-none');
     viewBanner.innerHTML = `
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:0.9rem 1.25rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-        <div><i class="bi bi-calendar-x me-1" style="color:#dc2626;"></i>
+      <div class="notice-banner notice-banner-closed">
+        <div><i class="bi bi-calendar-x me-1 text-danger-strong"></i>
           <strong>作業已截止</strong>
           <span class="text-muted ms-2 small">（唯讀模式，可檢視先前作答，但無法繼續或修改）</span>
         </div>
@@ -599,9 +434,9 @@ function renderViewBanner() {
     const sub = typeof submission !== 'undefined' ? submission : null;
     const lateStr = sub && sub.late_deadline ? new Date(sub.late_deadline).toLocaleString('zh-TW') : '';
     viewBanner.innerHTML = `
-      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:0.9rem 1.25rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-        <div><i class="bi bi-calendar-plus me-1" style="color:#d97706;"></i>
-          <strong style="color:#b45309;">補繳期間</strong>
+      <div class="notice-banner notice-banner-late">
+        <div><i class="bi bi-calendar-plus me-1 text-amber"></i>
+          <strong class="text-amber-dark">補繳期間</strong>
           <span class="text-muted ms-2 small">（補繳截止：${lateStr}，請在期限前完成並提交）</span>
         </div>
       </div>`;

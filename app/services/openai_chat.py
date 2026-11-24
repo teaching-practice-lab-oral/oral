@@ -7,6 +7,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from openai import AsyncOpenAI, APIError
 
 from app.config import settings
+from app.services.workflow_policy import MAX_GRAMMAR_CORRECTIONS
 
 _openai_semaphore = asyncio.Semaphore(settings.OPENAI_MAX_CONCURRENCY)
 
@@ -151,7 +152,7 @@ def draft_feedback_response_format(question_count: int) -> dict[str, Any]:
             "grammar_corrections": {
                 "type": "array",
                 "items": correction,
-                "maxItems": 3,
+                "maxItems": MAX_GRAMMAR_CORRECTIONS,
             },
             "polished_sample": {"type": "string", "minLength": 1, "maxLength": 4000},
         },
@@ -207,7 +208,7 @@ def is_complete_draft_feedback(data: Any, question_count: int) -> bool:
             return False
         seen_indices.add(index)
         corrections = item.get("grammar_corrections")
-        if not isinstance(corrections, list) or len(corrections) > 3:
+        if not isinstance(corrections, list) or len(corrections) > MAX_GRAMMAR_CORRECTIONS:
             return False
         if (
             not isinstance(item.get("polished_sample"), str)

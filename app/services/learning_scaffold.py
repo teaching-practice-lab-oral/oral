@@ -23,8 +23,9 @@ _SYSTEM_PROMPT = """你是台灣大學生英語面試的學習鷹架設計師。
 3. 不得宣稱學生做過未提供的經歷。experience_prompts 必須是協助學生回想真實經驗的問句。
 4. 不得產生完整示範答案。英文只能是 3-5 個關鍵字／短語，以及 1-2 個以 … 結尾的不完整句首。
 5. 中文使用台灣繁體中文，適合 TOEIC 300-450 程度學生；具體、簡短、可立即行動。
-6. role_connection、experience_prompts、shadowing_focus、roleplay_focus 必須逐題不同並緊扣該題目的。
-7. 嚴格依指定 JSON schema 輸出。"""
+6. role_connection、experience_prompts、roleplay_focus 必須逐題不同並緊扣該題目的。
+7. 盡量帶到學生的職位或具體情境；不要用「A；B」「X、Y、Z」這種壓縮口令，也不要寫成長段落。
+8. 嚴格依指定 JSON schema 輸出。"""
 
 
 def scaffold_response_format() -> dict[str, Any]:
@@ -52,7 +53,6 @@ def scaffold_response_format() -> dict[str, Any]:
                 "minItems": 1,
                 "maxItems": 2,
             },
-            "shadowing_focus": short_text,
             "roleplay_focus": short_text,
         },
         "required": [
@@ -61,7 +61,6 @@ def scaffold_response_format() -> dict[str, Any]:
             "experience_prompts",
             "keywords",
             "sentence_starters",
-            "shadowing_focus",
             "roleplay_focus",
         ],
         "additionalProperties": False,
@@ -81,9 +80,6 @@ def scaffold_response_format() -> dict[str, Any]:
                         "minItems": 2,
                         "maxItems": 3,
                     },
-                    "job_profile_focus": short_text,
-                    "report_focus": short_text,
-                    "reflection_focus": short_text,
                     "questions": {
                         "type": "array",
                         "items": question,
@@ -94,9 +90,6 @@ def scaffold_response_format() -> dict[str, Any]:
                 "required": [
                     "position_focus",
                     "competency_priorities",
-                    "job_profile_focus",
-                    "report_focus",
-                    "reflection_focus",
                     "questions",
                 ],
                 "additionalProperties": False,
@@ -297,7 +290,7 @@ def normalize_scaffold_output(
             for starter in ai_starters
         ):
             raise ValueError("英文句架必須是短句首，不可成為完整答案")
-        starters = list(dict.fromkeys(ai_starters + blueprint["starters"][:1]))[:3]
+        starters = list(dict.fromkeys(ai_starters))
         questions.append(
             {
                 "index": index,
@@ -311,7 +304,6 @@ def normalize_scaffold_output(
                     raw.get("keywords"), minimum=3, maximum=5, max_chars=60
                 ),
                 "sentence_starters": starters,
-                "shadowing_focus": _clean_text(raw.get("shadowing_focus"), max_chars=260),
                 "roleplay_focus": _clean_text(raw.get("roleplay_focus"), max_chars=260),
             }
         )
@@ -323,9 +315,6 @@ def normalize_scaffold_output(
         "competency_priorities": _clean_list(
             data.get("competency_priorities"), minimum=2, maximum=3, max_chars=100
         ),
-        "job_profile_focus": _clean_text(data.get("job_profile_focus"), max_chars=260),
-        "report_focus": _clean_text(data.get("report_focus"), max_chars=260),
-        "reflection_focus": _clean_text(data.get("reflection_focus"), max_chars=260),
         "questions": questions,
     }
 

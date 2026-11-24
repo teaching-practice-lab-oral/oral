@@ -55,25 +55,25 @@ if ('serviceWorker' in navigator) {
   overlay.setAttribute('aria-labelledby', 'mobilePwaPromptTitle');
   overlay.style.cssText = 'position:fixed;inset:0;z-index:25000;background:rgba(15,23,42,.78);display:flex;align-items:center;justify-content:center;padding:max(1rem,env(safe-area-inset-top)) max(1rem,env(safe-area-inset-right)) max(1rem,env(safe-area-inset-bottom)) max(1rem,env(safe-area-inset-left));overflow:auto';
   overlay.innerHTML = `
-    <div style="position:relative;width:min(100%,520px);background:#fff;color:#0f172a;border-radius:20px;padding:1.35rem;box-shadow:0 24px 60px rgba(0,0,0,.28)">
-      <button id="mobilePwaPromptClose" type="button" aria-label="稍後再安裝" style="position:absolute;right:.8rem;top:.8rem;border:0;background:#e2e8f0;color:#334155;width:2.25rem;height:2.25rem;border-radius:999px;font-size:1.25rem;line-height:1">&times;</button>
-      <div style="display:flex;align-items:center;gap:.8rem;padding-right:2.5rem">
-        <img src="/apple-touch-icon.png" width="58" height="58" alt="AI 英語面試圖示" style="border-radius:13px;box-shadow:0 2px 8px rgba(15,23,42,.2)">
+    <div class="pwa-card">
+      <button class="pwa-close" id="mobilePwaPromptClose" type="button" aria-label="稍後再安裝">&times;</button>
+      <div class="pwa-head">
+        <img class="pwa-icon" src="/apple-touch-icon.png" width="58" height="58" alt="AI 英語面試圖示">
         <div>
-          <h2 id="mobilePwaPromptTitle" style="font-size:1.2rem;font-weight:800;margin:0 0 .25rem">安裝 AI 英語面試</h2>
-          <div id="mobilePwaPromptHint" style="font-size:.86rem;color:#64748b">安裝後才能進入正式練習</div>
+          <h2 class="pwa-title" id="mobilePwaPromptTitle">安裝 AI 英語面試</h2>
+          <div class="pwa-hint" id="mobilePwaPromptHint">安裝後才能進入正式練習</div>
         </div>
       </div>
-      <p id="mobilePwaInstallStatus" role="status" aria-live="polite" hidden style="color:#475569;margin:1rem 0 0"></p>
+      <p class="pwa-status" id="mobilePwaInstallStatus" role="status" aria-live="polite" hidden></p>
       <div id="mobilePwaManualInstallInstructions" hidden>
-        <p style="color:#475569;margin:1rem 0 .8rem">請依照下列步驟安裝，之後從主畫面圖示開啟。</p>
-        ${isEmbeddedBrowser ? '<div style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:.7rem;margin-bottom:.8rem"><strong>請改用 Safari 或 Chrome：</strong>目前是 App 內建瀏覽器，通常不提供安裝功能。</div>' : ''}
-        <ol style="padding-left:1.25rem;line-height:1.65;color:#334155;margin:0">${steps}</ol>
+        <p class="pwa-lead">請依照下列步驟安裝，之後從主畫面圖示開啟。</p>
+        ${isEmbeddedBrowser ? '<div class="pwa-warning"><strong>請改用 Safari 或 Chrome：</strong>目前是 App 內建瀏覽器，通常不提供安裝功能。</div>' : ''}
+        <ol class="pwa-steps">${steps}</ol>
       </div>
-      <div style="margin-top:1rem">
-        <button id="mobilePwaNativeInstall" type="button" hidden style="width:100%;border:0;background:#4f46e5;color:#fff;border-radius:10px;padding:.72rem;font-weight:800;margin-bottom:.65rem">立即安裝</button>
-        <a id="mobilePwaOpenInstalled" hidden role="button" style="display:block;width:100%;border:0;background:#4f46e5;color:#fff;border-radius:10px;padding:.72rem;font-weight:800;margin-bottom:.65rem;text-align:center;text-decoration:none">立即開啟 Web App</a>
-        <button id="mobilePwaPromptLater" type="button" style="width:100%;border:1px solid #cbd5e1;background:#f8fafc;color:#334155;border-radius:10px;padding:.65rem;font-weight:700">稍後再安裝</button>
+      <div class="mt-3">
+        <button class="pwa-btn-primary" id="mobilePwaNativeInstall" type="button" hidden>立即安裝</button>
+        <a class="pwa-btn-primary pwa-btn-link" id="mobilePwaOpenInstalled" hidden role="button">立即開啟 Web App</a>
+        <button class="pwa-btn-secondary" id="mobilePwaPromptLater" type="button">稍後再安裝</button>
       </div>
     </div>`;
 

@@ -13,6 +13,9 @@ SECRET_QUESTION_COUNT = 1
 SECRET_QUESTION_SOURCE_INDEX = CORE_QUESTION_COUNT
 MAX_ROLEPLAY_TURNS = CORE_QUESTION_COUNT * 2 + SECRET_QUESTION_COUNT
 WORKFLOW_VERSION = 2
+# Per-question cap keeps a full four-question response inside
+# STAGE3_MAX_RESPONSE_CHARS; the prompt asks for the most important first.
+MAX_GRAMMAR_CORRECTIONS = 8
 REFLECTION_QUESTIONS = (
     "這次練習中，你最滿意或最有進步的地方是什麼？請舉一個具體例子。",
     "寫作、跟讀、角色扮演中，哪一部分最有挑戰？你遇到什麼困難，又如何處理？",

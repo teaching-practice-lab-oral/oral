@@ -1,7 +1,7 @@
 async function loadLoginAuditTabs() {
   const host = document.getElementById('loginAuditTabsHost');
   try {
-    const res = await fetch('/static/admin/partials/login-audit-tabs.html?v=20260714-password-reset-audit');
+    const res = await fetch('/static/admin/partials/login-audit-tabs.html');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     host.innerHTML = await res.text();
     initLoginAuditPage();
@@ -12,16 +12,14 @@ async function loadLoginAuditTabs() {
 }
 
 function initLoginAuditPage() {
+  document.getElementById('la-unfreezeBar').hidden = sessionStorage.getItem('isPrivilegedAdmin') !== '1';
+
   document.getElementById('tab-admin-audit-btn').addEventListener('show.bs.tab', function () {
     if (!aaInitialized) { aaInitialized = true; aaLoadLogs(1); }
   });
 
   document.getElementById('tab-api-logs-btn').addEventListener('show.bs.tab', function () {
     if (!ulInitialized) { ulInitialized = true; ulLoadLogs(true); }
-  });
-
-  document.getElementById('tab-worker-routing-btn').addEventListener('show.bs.tab', function () {
-    if (!wrInitialized) { wrInitialized = true; wrLoad(); }
   });
 
   document.getElementById('tab-active-sessions-btn').addEventListener('show.bs.tab', function () {
@@ -32,18 +30,9 @@ function initLoginAuditPage() {
     if (e.key === 'Enter') ulLoadLogs(true);
   });
 
-  document.getElementById('wr-filterStudentId').addEventListener('keydown', e => {
-    if (e.key === 'Enter') wrLoad();
-  });
-
-  ['wr-filterStatus', 'wr-filterStage', 'wr-filterRecentMinutes', 'wr-filterActiveOnly'].forEach(id => {
-    document.getElementById(id).addEventListener('change', () => wrLoad());
-  });
-
   setInterval(() => {
     const activeBtn = document.querySelector('#auditTabs .nav-link.active');
     if (activeBtn && activeBtn.id === 'tab-active-sessions-btn') asLoad();
-    if (activeBtn && activeBtn.id === 'tab-worker-routing-btn') wrLoad();
   }, 30000);
 
   initAuditDatePicker('la-filterDateFrom', '開始日期', () => laLoadEvents(1));

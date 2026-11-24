@@ -7,9 +7,12 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import ApiUsageLog, CostlyActionUsageLog, LoginEvent, User
+from app.models import AdminAuditLog, ApiUsageLog, CostlyActionUsageLog, LoginEvent, User
 from app.config import settings
 from app.utils import taipei_now
+
+
+LOGIN_UNFREEZE_ACTION = "admin.login.unfreeze_all"
 
 
 class ExternalApiStage(IntEnum):
@@ -128,6 +131,20 @@ def check_login_ip_rate_limit(db: Session, ip_address: str | None) -> None:
     if not ip_address:
         return
     window_start = taipei_now() - timedelta(minutes=settings.LOGIN_IP_WINDOW_MINUTES)
+    # A global unfreeze by an administrator resets the IP window: failures
+    # recorded before it no longer count, without deleting login history.
+    last_unfreeze = (
+        db.query(AdminAuditLog.created_at)
+        .filter(
+            AdminAuditLog.action == LOGIN_UNFREEZE_ACTION,
+            AdminAuditLog.result == "success",
+        )
+        .order_by(AdminAuditLog.created_at.desc())
+        .limit(1)
+        .scalar()
+    )
+    if last_unfreeze and last_unfreeze > window_start:
+        window_start = last_unfreeze
     failures = (
         db.query(LoginEvent)
         .filter(

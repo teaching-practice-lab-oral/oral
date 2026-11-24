@@ -91,7 +91,7 @@ async function loadAvailableClasses() {
   if (!res.ok) return;
   const classes = await res.json();
   const hint = document.getElementById('editClassHint');
-  if (classes.length) hint.innerHTML = `現有課號：${classes.map(c => `<span class="badge bg-light text-dark border me-1" style="cursor:pointer" data-action="addClassTag" data-args='["${escAttr(c)}"]'>${escHtml(c)}</span>`).join('')}`;
+  if (classes.length) hint.innerHTML = `現有課號：${classes.map(c => `<span class="badge bg-light text-dark border me-1 cursor-pointer" data-action="addClassTag" data-args='["${escAttr(c)}"]'>${escHtml(c)}</span>`).join('')}`;
 }
 
 function addClassTag(val) {

@@ -6,7 +6,6 @@ import httpx
 from openai import AsyncOpenAI
 
 from app.config import settings
-from app.services import worker_client
 
 _client: AsyncOpenAI | None = None
 _tts_semaphore = asyncio.Semaphore(settings.TTS_MAX_CONCURRENCY)
@@ -69,8 +68,8 @@ def _get_client() -> AsyncOpenAI:
     return _client
 
 
-async def generate_speech_local(text: str, profile: SpeechProfile) -> bytes:
-    """Generate speech audio locally through OpenAI TTS. Returns MP3 bytes."""
+async def generate_speech(text: str, profile: SpeechProfile) -> bytes:
+    """Generate speech audio through OpenAI TTS. Returns MP3 bytes."""
     text = validate_speech_text(text)
     profile_config = SPEECH_PROFILES[profile]
     async with _tts_semaphore:
@@ -84,12 +83,3 @@ async def generate_speech_local(text: str, profile: SpeechProfile) -> bytes:
             instructions=profile_config.instructions,
         )
     return response.content
-
-
-async def generate_speech(text: str, profile: SpeechProfile) -> bytes:
-    """Generate speech audio, optionally delegating stateless work to the CHT worker."""
-    text = validate_speech_text(text)
-    worker_audio = await worker_client.generate_speech(text, profile=profile.value)
-    if worker_audio is not None:
-        return worker_audio
-    return await generate_speech_local(text, profile)

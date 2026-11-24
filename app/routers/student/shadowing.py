@@ -2,7 +2,7 @@
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_student
@@ -16,7 +16,7 @@ from app.services.submission_data import (
 )
 from app.services.operation_lock import SHADOWING_OPERATION, acquire_operation_lock
 from app.schemas import ShadowingQuestionRecordingResponse
-from app.services import audio_processor, rate_limiter, worker_client
+from app.services import audio_processor, rate_limiter
 from app.services.submission_assets import (
     delete_uncommitted_object,
     enqueue_object_cleanup,
@@ -33,6 +33,7 @@ async def speaking1_shadowing_question(
     submission_id: int,
     question_index: int,
     audio: UploadFile = File(...),
+    client_duration_ms: int | None = Form(default=None),
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db),
 ):
@@ -73,21 +74,19 @@ async def speaking1_shadowing_question(
             rate_limiter.CostlyAction.AUDIO_UPLOAD,
             resource_id=submission_id,
         )
-        prepared_audio = await audio_processor.prepare_audio_upload(audio, key_stem)
+        prepared_audio = await audio_processor.prepare_audio_upload(
+            audio,
+            key_stem,
+            workflow="shadowing",
+            client_duration_ms=client_duration_ms,
+        )
         rate_limiter.reserve_api_call(current_user.id, rate_limiter.ExternalApiStage.SHADOWING)
 
-        with worker_client.routing_context(
-            user_id=current_user.id,
-            student_id=student_id,
-            submission_id=submission_id,
-            stage=5,
-            operation="shadowing_audio",
-        ):
-            audio_key, transcript, metrics = await audio_processor.process_prepared_audio(
-                prepared_audio,
-                student_id,
-                submission_id,
-            )
+        audio_key, transcript, metrics = await audio_processor.process_prepared_audio(
+            prepared_audio,
+            student_id,
+            submission_id,
+        )
 
         # Re-check mutable preconditions under a fresh row lock before accepting
         # the unique temporary object.

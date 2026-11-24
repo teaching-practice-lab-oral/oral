@@ -54,10 +54,10 @@ function renderAssignments() {
   const now = new Date();
   container.innerHTML = assignments.map(a => {
     const modBadges = [
-      `<span class="badge bg-success" style="font-size:0.7rem">📝 寫作</span>`,
-      `<span class="badge bg-primary" style="font-size:0.7rem">🎤 跟讀</span>`,
-      `<span class="badge" style="background:#7c3aed;font-size:0.7rem">🎭 角色扮演</span>`,
-      `<span class="badge bg-info" style="font-size:0.7rem">📓 心得</span>`,
+      `<span class="badge bg-success fs-xs"><i class="bi bi-pencil-square me-1"></i>寫作</span>`,
+      `<span class="badge bg-primary fs-xs"><i class="bi bi-mic me-1"></i>跟讀</span>`,
+      `<span class="badge bg-purple fs-xs"><i class="bi bi-people me-1"></i>角色扮演</span>`,
+      `<span class="badge bg-info fs-xs"><i class="bi bi-journal-text me-1"></i>心得</span>`,
     ].filter(Boolean).join(' ');
     const overdue = a.is_active && a.due_date && now > new Date(a.due_date);
     const stCls = !a.is_active ? 'bg-secondary' : overdue ? 'bg-danger' : 'bg-success';
@@ -66,7 +66,7 @@ function renderAssignments() {
     <div class="assignment-card">
       <div class="card-header flex-wrap">
         <span class="badge ${stCls} me-1">
-          <i class="bi bi-circle-fill me-1" style="font-size:0.5rem"></i>${stTxt}
+          <i class="bi bi-circle-fill me-1 fs-xxs"></i>${stTxt}
         </span>
         <strong class="flex-grow-1">${escHtml(a.title)}</strong>
         <div class="d-flex align-items-center gap-1 me-2">${modBadges}</div>
@@ -80,9 +80,6 @@ function renderAssignments() {
           </a>
           <button class="btn btn-sm ${a.is_active ? 'btn-outline-warning' : 'btn-success'}" data-action="toggleActive" data-args='[${a.id}]'>
             <i class="bi bi-${a.is_active ? 'pause' : 'play'}-fill me-1"></i>${a.is_active ? '停用' : '啟用'}
-          </button>
-          <button class="btn btn-sm btn-outline-secondary" data-action="openResetAssignmentH" data-id="${a.id}" data-title="${escAttr(a.title)}" title="清除所有學生提交紀錄（測試用）">
-            <i class="bi bi-arrow-counterclockwise me-1"></i>初始化
           </button>
           <button class="btn btn-sm btn-outline-danger" data-action="openDeleteAssignmentH" data-id="${a.id}" data-title="${escAttr(a.title)}">
             <i class="bi bi-trash me-1"></i>刪除
@@ -122,32 +119,6 @@ async function toggleActive(id) {
   } else {
     const data = await res.json().catch(() => ({}));
     showAlert('alertBox', data.detail || '操作失敗，請稍後再試。');
-  }
-}
-
-let resetAssignmentId = null;
-
-function openResetAssignment(id, title) {
-  resetAssignmentId = id;
-  document.getElementById('resetAssignmentTitle').textContent = title;
-  document.getElementById('resetAssignmentPassword').value = '';
-  document.getElementById('resetAssignmentAlert').className = 'alert d-none';
-  new bootstrap.Modal(document.getElementById('resetAssignmentModal')).show();
-}
-
-async function confirmResetAssignment() {
-  const pw = document.getElementById('resetAssignmentPassword').value;
-  if (!pw) { showAlert('resetAssignmentAlert', '請輸入密碼'); return; }
-  const res = await fetch(`/api/admin/assignments/${resetAssignmentId}/submissions`, {
-    method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ admin_password: pw })
-  });
-  if (res.ok || res.status === 204) {
-    bootstrap.Modal.getInstance(document.getElementById('resetAssignmentModal')).hide();
-    showAlert('alertBox', '作業已初始化，所有提交紀錄已清除。', 'success');
-    loadAssignments();
-  } else {
-    const data = await res.json().catch(() => ({}));
-    showAlert('resetAssignmentAlert', data.detail || '初始化失敗，請稍後再試。');
   }
 }
 
@@ -221,7 +192,7 @@ async function confirmDeleteAssignment() {
 loadAssignments();
 const pageParams = new URLSearchParams(location.search);
 if (pageParams.get('created')) {
-  showAlert('alertBox', '作業建立成功！', 'success');
+  showAlert('alertBox', '作業已建立。', 'success');
   history.replaceState(null, '', location.pathname);
 }
 
@@ -232,8 +203,6 @@ Object.assign(window, {
   loadAssignments,
   renderAssignments,
   toggleActive,
-  openResetAssignment,
-  confirmResetAssignment,
   seedPresets,
   sendDueReminders,
   openDeleteAssignment,

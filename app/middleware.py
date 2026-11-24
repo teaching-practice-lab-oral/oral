@@ -1,6 +1,5 @@
 """Small ASGI security middleware that must run before request parsing."""
 
-import secrets
 import re
 
 from starlette.responses import JSONResponse
@@ -109,36 +108,3 @@ class RequestBodyLimitMiddleware:
             status_code=413,
         )
         await response(scope, receive, send)
-
-
-class BearerPathAuthMiddleware:
-    """Reject protected paths from headers before the application reads a body."""
-
-    def __init__(self, app, *, path_prefix: str, secret):
-        self.app = app
-        self.path_prefix = path_prefix
-        self.secret = secret
-
-    async def __call__(self, scope, receive, send):
-        if scope.get("type") != "http" or not scope.get("path", "").startswith(self.path_prefix):
-            await self.app(scope, receive, send)
-            return
-
-        headers = dict(scope.get("headers") or [])
-        authorization = headers.get(b"authorization", b"").decode("latin-1")
-        supplied = authorization.removeprefix("Bearer ").strip() if authorization.startswith("Bearer ") else ""
-        if not supplied:
-            response = JSONResponse({"detail": "Worker token required or invalid"}, status_code=401)
-            await response(scope, receive, send)
-            return
-        configured_secret = self.secret() if callable(self.secret) else self.secret
-        if not configured_secret:
-            response = JSONResponse({"detail": "Worker secret is not configured"}, status_code=503)
-            await response(scope, receive, send)
-            return
-        if not secrets.compare_digest(supplied, configured_secret):
-            response = JSONResponse({"detail": "Worker token required or invalid"}, status_code=401)
-            await response(scope, receive, send)
-            return
-
-        await self.app(scope, receive, send)

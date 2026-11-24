@@ -3,6 +3,7 @@ import unicodedata
 from fastapi import HTTPException, status
 
 _CJK_RE = re.compile(r'[一-鿿㐀-䶿豈-﫿]')
+_ENGLISH_WORD_RE = re.compile(r"[A-Za-z]+(?:['’-][A-Za-z]+)*")
 
 _CODE_PATTERNS = re.compile(
     r'```|'
@@ -20,6 +21,7 @@ _CODE_PATTERNS = re.compile(
 _MIN_LENGTH = 30
 _MAX_LENGTH = 2000
 _CHINESE_THRESHOLD = 0.3
+_DRAFT1_MIN_ENGLISH_WORDS = 3
 
 _DISALLOWED_CONTROL_RE = re.compile(
     r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]"
@@ -154,8 +156,7 @@ def validate_roleplay_transcript(transcript: str | None) -> str:
     return normalize_user_text(transcript or "", field_name="語音逐字稿")
 
 
-def validate_draft_text(text: str) -> None:
-    """Reject drafts that are too short/long, mostly Chinese, or contain code."""
+def _validate_draft_length(text: str) -> str:
     text = text.strip()
 
     if len(text) < _MIN_LENGTH:
@@ -168,6 +169,33 @@ def validate_draft_text(text: str) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"草稿內容過長（上限 {_MAX_LENGTH} 字元）。",
         )
+    return text
+
+
+def _validate_draft_has_no_code(text: str) -> None:
+    if _CODE_PATTERNS.search(text):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="草稿不應包含程式碼，請提交英文面試答案。",
+        )
+
+
+def validate_draft1_text(text: str) -> None:
+    """Allow mixed Chinese/English Draft 1 text with a small English foothold."""
+    text = _validate_draft_length(text)
+
+    if len(_ENGLISH_WORD_RE.findall(text)) < _DRAFT1_MIN_ENGLISH_WORDS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="第一版草稿可以中英夾雜，但請至少輸入 3 個英文單字。",
+        )
+
+    _validate_draft_has_no_code(text)
+
+
+def validate_final_draft_text(text: str) -> None:
+    """Require final drafts to remain primarily English for TTS/shadowing."""
+    text = _validate_draft_length(text)
 
     non_space = re.sub(r'\s', '', text)
     if non_space:
@@ -178,8 +206,4 @@ def validate_draft_text(text: str) -> None:
                 detail="草稿請以英文撰寫，偵測到大量中文內容。",
             )
 
-    if _CODE_PATTERNS.search(text):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="草稿不應包含程式碼，請提交英文面試答案。",
-        )
+    _validate_draft_has_no_code(text)

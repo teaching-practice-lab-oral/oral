@@ -2,7 +2,7 @@
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_student
@@ -15,6 +15,7 @@ from app.models import User, Assignment
 from app.services.submission_data import (
     build_roleplay_conversation,
     get_job_profile_data,
+    get_report_data,
     hydrate_submission_from_normalized,
     list_answers,
     list_question_snapshot,
@@ -36,7 +37,7 @@ from app.services.report_generation import (
 from app.question_sets import default_questions, normalize_custom_questions
 from app.utils import taipei_now
 from app.schemas import RoleplayStartResponse, RoleplayTurnResponse, SubmissionResponse
-from app.services import rate_limiter, openai_chat, storage, tts, audio_processor, worker_client
+from app.services import rate_limiter, openai_chat, storage, tts, audio_processor
 from app.config import settings
 from ._common import ensure_submission_stage, get_editable_submission_locked
 from app.services.workflow_policy import (
@@ -236,17 +237,10 @@ async def _append_next_roleplay_question(
     next_turn_number = current_turn + 1
     next_tts_key = None
     try:
-        with worker_client.routing_context(
-            user_id=user_id,
-            student_id=student_id,
-            submission_id=submission_id,
-            stage=6,
-            operation="roleplay_tts",
-        ):
-            tts_audio = await tts.generate_speech(
-                next_question,
-                tts.SpeechProfile.ROLEPLAY,
-            )
+        tts_audio = await tts.generate_speech(
+            next_question,
+            tts.SpeechProfile.ROLEPLAY,
+        )
         next_tts_key = storage.object_key(
             "audio",
             student_id,
@@ -423,17 +417,10 @@ async def roleplay_start(
         first_question, first_source_index = _validated_question(generated, core_questions, 0)
 
         try:
-            with worker_client.routing_context(
-                user_id=user_id,
-                student_id=student_id,
-                submission_id=submission_id,
-                stage=6,
-                operation="roleplay_tts",
-            ):
-                tts_audio = await tts.generate_speech(
-                    first_question,
-                    tts.SpeechProfile.ROLEPLAY,
-                )
+            tts_audio = await tts.generate_speech(
+                first_question,
+                tts.SpeechProfile.ROLEPLAY,
+            )
             interviewer_tts_key = storage.object_key(
                 "audio",
                 student_id,
@@ -495,12 +482,17 @@ async def roleplay_start(
 async def roleplay_turn(
     submission_id: int,
     audio: UploadFile = File(...),
+    client_duration_ms: int | None = Form(default=None),
+    expected_turn_number: int | None = Form(default=None, ge=1, le=MAX_ROLEPLAY_TURNS),
     current_user: User = Depends(get_current_student),
     db: Session = Depends(get_db),
 ):
     user_id = current_user.id
     sub = get_editable_submission_locked(db, submission_id, user_id)
-    ensure_submission_stage(sub, {7}, "目前階段無法提交角色扮演錄音。")
+    # Older cached clients must refresh rather than submit an unbound recording.
+    if expected_turn_number is None:
+        raise HTTPException(status_code=409, detail="角色扮演頁面已更新，請重新整理後再提交錄音。")
+    ensure_submission_stage(sub, {7, 8}, "目前階段無法提交角色扮演錄音。")
 
     conversation = build_roleplay_conversation(db, sub)
     current_turn = conversation.get("current_turn", 1)
@@ -515,38 +507,32 @@ async def roleplay_turn(
     student_id = current_user.student_id
     lease = await acquire_operation_lock(submission_id, ROLEPLAY_TURN_OPERATION)
     try:
-        # Recover a committed answer whose next question was never appended.
-        # The uploaded body is deliberately not sent to transcription again.
-        if turns and all(turn.get("student_transcript") for turn in turns):
-            if _all_required_questions_answered(turns, core_questions):
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"{CORE_QUESTION_COUNT + 1} 個面試題目已完成，請改用重新產生 AI 回饋。",
-                )
-            last_turn = turns[-1]
-            db.rollback()
-            next_question, next_source_index, next_tts_key, _, _ = (
-                await _append_next_roleplay_question(
-                    db,
-                    submission_id,
-                    user_id,
-                    student_id,
-                    count_api_call=True,
-                )
+        requested_turn = next(
+            (turn for turn in turns if turn.get("turn_number") == expected_turn_number),
+            None,
+        )
+        if requested_turn and requested_turn.get("student_transcript"):
+            # A committed answer may have lost its HTTP response. Return the
+            # saved state; never transcribe its retry as the following question.
+            following = next(
+                (turn for turn in turns if turn.get("turn_number") == expected_turn_number + 1),
+                {},
             )
+            hydrate_submission_from_normalized(db, sub)
             return RoleplayTurnResponse(
-                turn_number=int(last_turn.get("turn_number", current_turn)),
-                source_question_index=int(last_turn.get("source_question_index") or 0),
-                student_transcript=last_turn.get("student_transcript") or "",
-                student_audio_key=last_turn.get("student_audio_key"),
-                next_question=next_question,
-                next_question_source_index=next_source_index,
-                next_question_tts_key=next_tts_key,
-                is_complete=False,
-                report=None,
-                pronunciation=None,
+                turn_number=expected_turn_number,
+                source_question_index=int(requested_turn.get("source_question_index") or 0),
+                student_transcript=requested_turn["student_transcript"],
+                student_audio_key=requested_turn.get("student_audio_key"),
+                next_question=following.get("interviewer_question"),
+                next_question_source_index=following.get("source_question_index"),
+                next_question_tts_key=following.get("interviewer_tts_key"),
+                is_complete=sub.stage >= 8,
+                report=get_report_data(db, sub),
+                submission=SubmissionResponse.model_validate(sub),
             )
-
+        if expected_turn_number != current_turn or requested_turn is None or sub.stage != 7:
+            raise HTTPException(status_code=409, detail="錄音所屬題目與目前進度不同，請重新整理後再試。")
         key_stem = f"roleplay_turn{current_turn}_{uuid4().hex}"
         db.rollback()
         rate_limiter.reserve_costly_action(
@@ -554,19 +540,17 @@ async def roleplay_turn(
             rate_limiter.CostlyAction.AUDIO_UPLOAD,
             resource_id=submission_id,
         )
-        prepared_audio = await audio_processor.prepare_audio_upload(audio, key_stem)
+        prepared_audio = await audio_processor.prepare_audio_upload(
+            audio,
+            key_stem,
+            workflow="roleplay",
+            client_duration_ms=client_duration_ms,
+        )
         rate_limiter.reserve_api_call(user_id, rate_limiter.ExternalApiStage.ROLEPLAY)
 
-        with worker_client.routing_context(
-            user_id=user_id,
-            student_id=student_id,
-            submission_id=submission_id,
-            stage=6,
-            operation="roleplay_audio",
-        ):
-            mp3_bytes, transcript, metrics = await audio_processor.transcribe_prepared_audio(
-                prepared_audio,
-            )
+        mp3_bytes, transcript, metrics = await audio_processor.transcribe_prepared_audio(
+            prepared_audio,
+        )
 
         # Candidate speech is a trust boundary.  Rejected prompt manipulation
         # must never create an object-storage side effect.
@@ -630,14 +614,14 @@ async def roleplay_turn(
                 core_questions,
                 user_id,
             )
-            _save_completed_report(db, submission_id, user_id, report, expected_hash)
+            sub = _save_completed_report(db, submission_id, user_id, report, expected_hash)
         else:
             (
                 next_question,
                 next_question_source_index,
                 next_question_tts_key,
                 _,
-                _,
+                sub,
             ) = await _append_next_roleplay_question(
                 db,
                 submission_id,
@@ -646,6 +630,7 @@ async def roleplay_turn(
                 count_api_call=False,
             )
 
+        hydrate_submission_from_normalized(db, sub)
         return RoleplayTurnResponse(
             turn_number=current_turn,
             source_question_index=current_source_index,
@@ -657,6 +642,7 @@ async def roleplay_turn(
             is_complete=is_complete,
             report=report,
             pronunciation=None,
+            submission=SubmissionResponse.model_validate(sub),
         )
     finally:
         await lease.release()

@@ -16,7 +16,6 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
 from app.models import Assignment, User
-from app.config import settings
 from app.services import storage
 from app.services.workflow_policy import CORE_QUESTION_COUNT
 
@@ -480,7 +479,7 @@ def build_submission_docx(student: User, assignment: Assignment, sub) -> bytes:
                 _add_corrections_table(doc, corrections)
             else:
                 paragraph = doc.add_paragraph()
-                _set_run_font(paragraph.add_run("本題沒有需要優先修正的文法或用字。"), color=_MUTED)
+                _set_run_font(paragraph.add_run("未發現英文文法或用字錯誤。"), color=_MUTED)
             _add_answer_card(doc, "建議範文", item["polished_sample"])
         _add_subheading(doc, "組織架構建議")
         _add_bullets(doc, feedback["organization_suggestions"], color=_BRAND_DARK)
@@ -830,52 +829,3 @@ def build_submission_result_package(student: User, assignment: Assignment, sub) 
             archive.writestr(asset.archive_path, asset.payload)
         archive.writestr("_檔案清單.txt", audio_manifest(downloaded).encode("utf-8"))
     return buffer.getvalue()
-
-
-def write_submission_result_package(output, student: User, assignment: Assignment, sub) -> int:
-    """Write a bounded package to a seekable file without retaining audio in RAM."""
-    document = build_submission_docx(student, assignment, sub)
-    assets = submission_audio_assets(sub)
-    _validate_complete_audio_assets(assets)
-    sizes: list[int] = []
-    total_source_bytes = len(document)
-    for asset in assets:
-        try:
-            size = storage.object_size(asset.key)
-        except Exception as exc:
-            raise RuntimeError(f"音檔資訊讀取失敗：{asset.archive_path}") from exc
-        if size < 1:
-            raise RuntimeError(f"音檔內容為空：{asset.archive_path}")
-        if size > settings.STUDENT_EXPORT_MAX_ASSET_BYTES:
-            raise ValueError(f"音檔超過成果包單檔限制：{asset.archive_path}")
-        total_source_bytes += size
-        if total_source_bytes > settings.STUDENT_EXPORT_MAX_TOTAL_SOURCE_BYTES:
-            raise ValueError("成果包來源檔案總量超過限制")
-        sizes.append(size)
-
-    output.seek(0)
-    output.truncate(0)
-    with zipfile.ZipFile(
-        output,
-        mode="w",
-        compression=zipfile.ZIP_DEFLATED,
-        allowZip64=True,
-    ) as archive:
-        archive.writestr("學習成果報告.docx", document)
-        for asset, expected_size in zip(assets, sizes, strict=True):
-            try:
-                with archive.open(asset.archive_path, mode="w", force_zip64=True) as destination:
-                    written = storage.download_file_to(
-                        asset.key,
-                        destination,
-                        max_bytes=settings.STUDENT_EXPORT_MAX_ASSET_BYTES,
-                    )
-            except Exception as exc:
-                raise RuntimeError(f"音檔下載失敗：{asset.archive_path}") from exc
-            if written != expected_size:
-                raise RuntimeError(f"音檔在匯出期間發生變更：{asset.archive_path}")
-        archive.writestr("_檔案清單.txt", audio_manifest(assets).encode("utf-8"))
-    output.flush()
-    size = output.tell()
-    output.seek(0)
-    return size

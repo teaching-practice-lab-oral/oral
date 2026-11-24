@@ -11,26 +11,20 @@
   <meta property="og:image" content="/static/favicon.svg" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-  integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
-  crossorigin="anonymous" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
-  integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD"
-  crossorigin="anonymous" />
-  <link rel="stylesheet" href="/static/admin/css/common.css?v=3" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD" crossorigin="anonymous"/>
+  <link rel="stylesheet" href="/static/admin/css/common.css" />
   <style>
     .info-card {
       background: white;
-      border-radius: 16px;
+      border-radius: var(--admin-radius);
       border: 1px solid #e2e8f0;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       padding: 1.25rem 1.5rem;
     }
     .stage-card {
       background: white;
-      border-radius: 16px;
+      border-radius: var(--admin-radius);
       border: 1px solid #e2e8f0;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       overflow: hidden;
       margin-bottom: 1rem;
     }
@@ -52,7 +46,7 @@
     .stage-num {
       width: 32px; height: 32px;
       border-radius: 50%;
-      background: #4f46e5;
+      background: #1F3A5F;
       color: white;
       font-size: 0.85rem;
       font-weight: 700;
@@ -65,7 +59,7 @@
 
     /* Grammar correction card */
     .correction-card {
-      border-radius: 10px;
+      border-radius: var(--admin-radius-sm);
       border: 1px solid #fecaca;
       background: #fff5f5;
       padding: 0.85rem 1rem;
@@ -78,10 +72,10 @@
     .feedback-box {
       background: #f8fafc;
       border: 1px solid #e2e8f0;
-      border-radius: 12px;
+      border-radius: var(--admin-radius);
       padding: 1rem 1.25rem;
     }
-    .polished-box { border-left: 3px solid #4f46e5; padding: 0.8rem 1rem; background: #eef2ff; border-radius: 0 12px 12px 0; }
+    .polished-box { border-left: 3px solid #1F3A5F; padding: 0.8rem 1rem; background: #E8EDF4; border-radius: 0 12px 12px 0; }
     pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-size: 0.88rem; }
 
     .analysis-item { padding: 0.6rem 0; border-bottom: 1px solid #f1f5f9; font-size: 0.88rem; }
@@ -92,34 +86,34 @@
     .nav-bar {
       background: white;
       border: 1px solid #e2e8f0;
-      border-radius: 12px;
+      border-radius: var(--admin-radius);
       padding: 0.55rem 1rem;
       margin-bottom: 1rem;
       display: flex;
       align-items: center;
       gap: 0.5rem;
       flex-wrap: wrap;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
     }
-    .breadcrumb-link { font-size: 0.82rem; color: #4f46e5; text-decoration: none; }
+    .breadcrumb-link { font-size: 0.82rem; color: #1F3A5F; text-decoration: none; }
     .breadcrumb-link:hover { text-decoration: underline; }
     .breadcrumb-sep { color: #cbd5e1; font-size: 0.75rem; }
     .breadcrumb-current { font-size: 0.82rem; color: #1e293b; font-weight: 600; }
     .nav-counter { font-size: 0.8rem; color: #64748b; background: #f1f5f9;
-      padding: 0.18rem 0.6rem; border-radius: 20px; flex-shrink: 0; }
+      padding: 0.18rem 0.6rem; border-radius: var(--admin-radius); flex-shrink: 0; }
     .btn-nav { font-size: 0.82rem; padding: 0.28rem 0.7rem; border-radius: 8px;
       white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
     .keyboard-hint { font-size: 0.72rem; color: #94a3b8; flex-shrink: 0; }
     .grading-panel { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow:auto; }
     .criterion-grade { border-bottom:1px solid #e2e8f0; padding:.7rem 0; }
     .criterion-grade:last-child { border-bottom:0; }
-    .score-display { font-size:2rem; font-weight:800; color:#4f46e5; }
+    .score-display { font-size:2rem; font-weight:800; color:#1F3A5F; }
     .proctor-timeline { border-left:2px solid #cbd5e1; margin-left:.45rem; padding-left:1rem; }
     .proctor-event { position:relative; padding:.15rem 0 .9rem; }
     .proctor-event::before { content:''; position:absolute; width:.62rem; height:.62rem; border-radius:50%; background:#f59e0b; left:-1.37rem; top:.42rem; }
     .proctor-event.proctor-ok::before { background:#10b981; }
     @media (max-width:1199px) { .grading-panel { position:static; max-height:none; } }
   </style>
+  <link rel="stylesheet" href="/static/css/ui.css">
 </head>
 <body>
   <nav class="navbar navbar-admin navbar-expand-lg"></nav>
@@ -204,7 +198,7 @@
         <label class="fw-semibold small text-muted mb-0">嘗試次數：</label>
         <select class="form-select w-auto" id="attemptSelector" data-action-change="renderAttempt"></select>
         <span class="text-muted small" id="attemptStatus"></span>
-        <div class="ms-auto d-flex gap-2" id="exportButtons" style="display:none!important;"></div>
+        <div class="ms-auto d-flex gap-2 d-none" id="exportButtons"></div>
       </div>
 
       <div class="grading-workflow-hint mb-3" role="note">
@@ -219,16 +213,14 @@
     </div>
   </div>
 
-  <script src="/static/admin/js/common.js?v=8"></script>
+  <script src="/static/admin/js/common.js"></script>
   <script src="/static/admin/js/date-time-picker.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-  integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
-  crossorigin="anonymous"></script>
-  <script type="module" src="/static/admin/controllers/student-detail.mjs?v=6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+  <script type="module" src="/static/admin/controllers/student-detail.mjs"></script>
 
   <!-- 補繳設定 Modal -->
   <div class="modal fade" id="lateDeadlineModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+    <div class="modal-dialog modal-dialog-centered maxw-420">
       <div class="modal-content">
         <div class="modal-header">
           <h6 class="modal-title fw-bold"><i class="bi bi-calendar-plus me-2 text-info"></i>補繳設定</h6>
@@ -254,9 +246,36 @@
     </div>
   </div>
 
+  <!-- 退回階段 Modal -->
+  <div class="modal fade" id="rewindModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered maxw-400">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title fw-bold"><i class="bi bi-skip-backward me-2 text-danger"></i>從「<span id="rewindStageLabel"></span>」重做</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small mb-2">學生會回到這一步重新開始，前面做好的部分不受影響。下面這些內容會被刪掉，刪了就找不回來：</p>
+          <ul class="small mb-3" id="rewindClearList"></ul>
+          <div id="rewindNotes" class="alert alert-warning small py-2 d-none"></div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold small">管理員密碼</label>
+            <input type="password" class="form-control" id="rewindPassword" maxlength="256"
+              placeholder="輸入密碼" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+          </div>
+          <div id="rewindError" class="text-danger small d-none"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-light" data-bs-dismiss="modal">取消</button>
+          <button class="btn btn-danger" id="btnConfirmRewind" data-action="confirmRewind">確認退回</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 允許重作密碼確認 Modal -->
   <div class="modal fade" id="retakeModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered" style="max-width:400px">
+    <div class="modal-dialog modal-dialog-centered maxw-400">
       <div class="modal-content">
         <div class="modal-header">
           <h6 class="modal-title fw-bold"><i class="bi bi-arrow-repeat me-2 text-warning"></i>允許重作</h6>

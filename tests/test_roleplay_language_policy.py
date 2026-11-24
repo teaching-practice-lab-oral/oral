@@ -1,14 +1,17 @@
 import json
 
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.models import Assignment
 from app.prompts import (
+    STAGE3_DRAFT_FEEDBACK,
     STAGE6_INTERVIEW_TURN_TASK,
     STAGE6_INTERVIEWER,
 )
 from app.services.prompt_composition import compose_roleplay_request
+from app.services.input_validator import validate_draft1_text, validate_final_draft_text
 from app.services.roleplay_policy import validated_question, validated_surprise_question
 from app.schemas import AssignmentCreate, AssignmentUpdate
 
@@ -22,6 +25,70 @@ CORE_QUESTIONS = [
 SURPRISE_FALLBACK = (
     "Could you tell me about an experience that changed how you approach your work or studies?"
 )
+
+
+@pytest.mark.parametrize(
+    "draft",
+    [
+        (
+            "I'm currently a senior major in IEM. I studied Java, OOP (物件導向), "
+            "OR (作業研究) and project 管理。我同時擁有 IT and Management background."
+        ),
+        "I think problem-solving 是我的優點，我會找各種方法並在團隊裡找到最適合的解決方案。",
+        "I don't problem-solving 這是一段中文比例很高但剛好有三個英文單字的第一版草稿。",
+        "IT OOP OR 這是技術名詞與縮寫可以計入三個英文單字的測試草稿。",
+    ],
+)
+def test_draft1_accepts_mixed_language_with_three_english_words(draft):
+    validate_draft1_text(draft)
+
+
+@pytest.mark.parametrize(
+    "draft",
+    [
+        "這是完全使用中文寫成的第一版草稿，目前還沒有加入任何英文單字。",
+        "I think 這是只有兩個英文單字的第一版草稿，所以仍然應該被系統拒絕。",
+    ],
+)
+def test_draft1_rejects_fewer_than_three_english_words(draft):
+    with pytest.raises(HTTPException) as caught:
+        validate_draft1_text(draft)
+
+    assert caught.value.status_code == 422
+    assert caught.value.detail == "第一版草稿可以中英夾雜，但請至少輸入 3 個英文單字。"
+
+
+@pytest.mark.parametrize(
+    ("draft", "message"),
+    [
+        ("I can help.", "草稿內容太短"),
+        ("word " * 401, "草稿內容過長"),
+        ("I can explain this answer with code: ```python\nprint('x')\n```", "草稿不應包含程式碼"),
+    ],
+)
+def test_draft1_keeps_length_and_code_rejections(draft, message):
+    with pytest.raises(HTTPException) as caught:
+        validate_draft1_text(draft)
+
+    assert caught.value.status_code == 422
+    assert message in caught.value.detail
+
+
+def test_final_draft_keeps_existing_chinese_ratio_limit():
+    with pytest.raises(HTTPException) as caught:
+        validate_final_draft_text("I can help " + "這是中文內容" * 12)
+    assert caught.value.status_code == 422
+    assert caught.value.detail == "草稿請以英文撰寫，偵測到大量中文內容。"
+
+    validate_final_draft_text(
+        "I have strong project management experience and work well with teams. 中文"
+    )
+
+
+def test_stage3_prompt_handles_mixed_language_without_inventing_details():
+    assert "第一版草稿可能中英夾雜" in STAGE3_DRAFT_FEEDBACK
+    assert "只修正草稿中已有的英文" in STAGE3_DRAFT_FEEDBACK
+    assert "不得虛構經歷" in STAGE3_DRAFT_FEEDBACK
 
 
 class _AssignmentQuery:
@@ -213,7 +280,10 @@ def test_prompt_customization_routes_and_assignment_response_fields_are_absent()
     from app.main import app
     from app.schemas import AssignmentResponse
 
-    paths = {route.path for route in app.routes}
+    from route_helpers import all_route_paths
+
+    paths = all_route_paths(app)
+    assert any(path.startswith("/api/admin/") for path in paths), "route enumeration is empty"
     assert not any(path == "/admin/prompts" for path in paths)
     assert not any(path.startswith("/api/admin/prompts") for path in paths)
     for field in ("stage3_template_id", "stage6_template_id", "stage8_template_id"):

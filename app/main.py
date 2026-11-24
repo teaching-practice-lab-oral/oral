@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import secrets
 from contextlib import asynccontextmanager
 from html import escape
@@ -11,15 +12,13 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 import os
 
+from app.asset_version import stamp_asset_urls
 from app.auth import decode_token
 from app.config import settings
 from app.routers import auth, student, admin, workflow, result_downloads
 from app.services.maintenance import maintenance_scheduler_loop
 from app.services.reminders import reminder_scheduler_loop
 from app.middleware import RequestBodyLimitMiddleware
-
-if settings.WORKER_ONLY:
-    raise RuntimeError("WORKER_ONLY=true must run app.worker_main:app, not app.main:app")
 
 _CSRF_EXEMPT = {"/api/auth/login", "/api/auth/refresh", "/api/auth/logout"}
 _CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
@@ -80,7 +79,7 @@ async def csrf_protection(request: Request, call_next):
     return await call_next(request)
 
 
-_ACTION_DELEGATOR_TAG = b'<script type="module" src="/static/js/action-delegator.mjs?v=1"></script>'
+_ACTION_DELEGATOR_TAG = b'<script type="module" src="/static/js/action-delegator.mjs"></script>'
 
 
 @app.middleware("http")
@@ -101,6 +100,8 @@ async def add_security_headers(request: Request, call_next):
         else:
             body = _ACTION_DELEGATOR_TAG + body
         body = body.replace(b"<script", b'<script nonce="' + nonce.encode() + b'" data-cfasync="false"')
+        body = body.replace(b"<style", b'<style nonce="' + nonce.encode() + b'"')
+        body = stamp_asset_urls(body)
         response = Response(
             content=body,
             status_code=response.status_code,
@@ -127,11 +128,12 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=(self)"
     # Strict script CSP: no 'unsafe-inline'. Inline scripts are allowed via the per-request
     # nonce injected above; inline event handlers were removed in favour of the delegation
-    # action delegator. style-src keeps 'unsafe-inline' (inline styles remain).
+    # action delegator. Styles follow the same rule: <style> blocks carry the
+    # nonce and style="" attributes were replaced by classes in /static/css/ui.css.
     response.headers["Content-Security-Policy"] = (
         f"default-src 'self'; "
         f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net https://challenges.cloudflare.com; "
-        f"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        f"style-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
         f"font-src 'self' https://cdn.jsdelivr.net; "
         f"img-src 'self' data: https://*.oraclecloud.com; "
         f"media-src 'self' blob: https://*.oraclecloud.com; "
@@ -160,14 +162,28 @@ app.include_router(result_downloads.router)
 
 class CachedStaticFiles(StaticFiles):
     """StaticFiles that lets browsers cache assets for an hour instead of
-    re-validating (304 round-trip) on every page navigation. Asset URLs are not
-    yet content-hashed, so max-age is kept modest; after a deploy a stale asset
-    is served for at most an hour. ETag/Last-Modified revalidation still applies."""
+    re-validating (304 round-trip) on every page navigation.
+
+    HTML and JavaScript reference assets as ``?v=<static tree hash>`` (see
+    app.asset_version), so a deploy changes every asset URL. JavaScript bodies
+    are stamped too, so a module's own imports never pin a stale dependency."""
 
     async def get_response(self, path: str, scope):
         response = await super().get_response(path, scope)
-        if response.status_code == 200:
-            response.headers["Cache-Control"] = "public, max-age=3600"
+        if response.status_code != 200:
+            return response
+        if path.endswith((".js", ".mjs")) and isinstance(response, FileResponse):
+            with open(response.path, "rb") as handle:
+                body = stamp_asset_urls(handle.read())
+            return Response(
+                content=body,
+                media_type="text/javascript",
+                headers={
+                    "Cache-Control": "public, max-age=3600",
+                    "ETag": '"' + hashlib.sha256(body).hexdigest()[:32] + '"',
+                },
+            )
+        response.headers["Cache-Control"] = "public, max-age=3600"
         return response
 
 

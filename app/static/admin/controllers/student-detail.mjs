@@ -179,6 +179,8 @@ const pathParts = window.location.pathname.split('/');
       const attempt = parseInt(document.getElementById('attemptSelector').value);
       const sub = submissions.find(s => s.attempt_number === attempt);
       if (!sub) return;
+      const latestAttempt = Math.max(...submissions.map(s => s.attempt_number));
+      rewindSub = sub.attempt_number === latestAttempt ? sub : null;
 
       document.getElementById('attemptStatus').textContent = sub.submitted_at
         ? `完成於 ${new Date(sub.submitted_at).toLocaleString('zh-TW')}`
@@ -186,7 +188,7 @@ const pathParts = window.location.pathname.split('/');
 
       // Export buttons
       const exportDiv = document.getElementById('exportButtons');
-      exportDiv.style.display = '';
+      exportDiv.classList.remove('d-none');
       exportDiv.innerHTML = `
 <button class="btn btn-outline-primary" id="btnExportAll" data-action="exportStudentAll">
           <i class="bi bi-file-earmark-zip me-1"></i>匯出全部
@@ -210,37 +212,37 @@ const pathParts = window.location.pathname.split('/');
         <p><strong>職位工作內容：</strong>${escHtml(profile.role_description)}</p>
         <p><strong>所需職能：</strong>${escHtml(profile.required_competencies)}</p>
         <p class="mb-0"><strong>其他補充：</strong>${escHtml(profile.additional_notes || '無')}</p>` : pendingHtml('尚未填寫欲應徵的職位');
-      html.push(stageSection(1, AdminWorkflow.sectionLabel(1), profileHtml, !!profile.desired_position));
+      html.push(stageSection(1, AdminWorkflow.sectionLabel(1), profileHtml, !!profile.desired_position, 1));
       html.push(collapsibleStageSection('個人化學習鷹架（唯讀）', renderLearningScaffold(sub.learning_scaffold)));
 
       // Section 2: Draft 1
       let draft1Html = '';
       if (sub.draft1_answers && Array.isArray(sub.draft1_answers) && sub.draft1_answers.length > 0) {
         draft1Html = sub.draft1_answers.map(item => `
-          <div class="mb-3 p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0;">
-            <p class="fw-semibold mb-2 small" style="color:#4f46e5;">Q${item.index+1}：${escHtml(item.question || '')}</p>
+          <div class="mb-3 p-3 rounded panel-muted">
+            <p class="fw-semibold mb-2 small text-brand">Q${item.index+1}：${escHtml(item.question || '')}</p>
             <div class="feedback-box"><pre>${escHtml(item.text || '')}</pre></div>
           </div>`).join('');
       }
       html.push(stageSection(2, AdminWorkflow.stageLabel(2), draft1Html || pendingHtml('尚未提交草稿'),
-        !!(sub.draft1_answers && sub.draft1_answers.length > 0)));
+        !!(sub.draft1_answers && sub.draft1_answers.length > 0), 2));
 
       // Section 3: AI Feedback
       html.push(stageSection(3, AdminWorkflow.stageLabel(3), sub.draft2_ai_feedback
         ? renderFeedback(sub.draft2_ai_feedback, sub.draft1_answers || [])
-        : pendingHtml('尚未請求 AI 練習回饋'), !!sub.draft2_ai_feedback));
+        : pendingHtml('尚未請求 AI 練習回饋'), !!sub.draft2_ai_feedback, 3));
 
       // Section 4: Final Draft
       let finalDraftHtml = '';
       if (sub.final_draft_answers && Array.isArray(sub.final_draft_answers) && sub.final_draft_answers.length > 0) {
         finalDraftHtml = sub.final_draft_answers.map(item => `
-          <div class="mb-3 p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0;">
-            <p class="fw-semibold mb-2 small" style="color:#10b981;">Q${item.index+1}：${escHtml(item.question || '')}</p>
+          <div class="mb-3 p-3 rounded panel-muted">
+            <p class="fw-semibold mb-2 small text-emerald">Q${item.index+1}：${escHtml(item.question || '')}</p>
             <div class="feedback-box"><pre>${escHtml(item.text || '')}</pre></div>
           </div>`).join('');
       }
       html.push(stageSection(4, AdminWorkflow.stageLabel(4), finalDraftHtml || pendingHtml('尚未提交最終草稿'),
-        !!(sub.final_draft_answers && sub.final_draft_answers.length > 0)));
+        !!(sub.final_draft_answers && sub.final_draft_answers.length > 0), 4));
 
       // Section 5: Shadowing
       let s5html = '';
@@ -252,14 +254,14 @@ const pathParts = window.location.pathname.split('/');
           const ttsEntry = ttsKeys.find(k => k.index === i);
           const spkEntry = spk1Qs.find(q => q.index === i);
           s5html += `<div class="mb-4 p-3 border rounded-3 bg-light">
-            <div class="small fw-bold mb-2" style="color:#4f46e5;">Q${i+1}：${escHtml(ans.question || '')}</div>
+            <div class="small fw-bold mb-2 text-brand">Q${i+1}：${escHtml(ans.question || '')}</div>
             ${ttsEntry && ttsEntry.key ? `<div class="mb-2"><div class="small fw-semibold text-muted mb-1"><i class="bi bi-volume-up me-1"></i>示範音訊</div>${audioPlayer(ttsEntry.key, sub.id, `tts-q${i}`)}</div>` : ''}
             ${spkEntry && spkEntry.audio_key ? `<div class="mb-2"><div class="small fw-semibold text-muted mb-1"><i class="bi bi-mic me-1"></i>學生錄音（第 ${spkEntry.attempts} 次）</div>${audioPlayer(spkEntry.audio_key, sub.id, `s1-q${i}`)}</div>` : ''}
             ${spkEntry && spkEntry.transcript ? `<div><div class="small fw-semibold text-muted mb-1"><i class="bi bi-chat-text me-1"></i>語音辨識</div><div class="feedback-box"><pre>${escHtml(spkEntry.transcript)}</pre></div></div>` : ''}
           </div>`;
         });
       }
-      html.push(stageSection(5, AdminWorkflow.stageLabel(5), s5html || pendingHtml('尚未完成跟讀'), spk1Qs.length > 0));
+      html.push(stageSection(5, AdminWorkflow.stageLabel(5), s5html || pendingHtml('尚未完成跟讀'), spk1Qs.length > 0, 5));
 
       // Section 6: Roleplay
       let s6html = '';
@@ -294,7 +296,7 @@ const pathParts = window.location.pathname.split('/');
           });
         } catch { s6html = `<pre class="feedback-box">${escHtml(sub.roleplay_conversation)}</pre>`; }
       }
-      html.push(stageSection(6, AdminWorkflow.stageLabel(6), s6html || pendingHtml('尚未完成角色扮演'), !!sub.roleplay_conversation));
+      html.push(stageSection(6, AdminWorkflow.stageLabel(6), s6html || pendingHtml('尚未完成角色扮演'), !!sub.roleplay_conversation, 6));
 
       // Section 7: Report
       let s7reportHtml = '';
@@ -319,7 +321,7 @@ const pathParts = window.location.pathname.split('/');
       if (reflection.has_issue) {
         reflectionHtml += `<div class="alert alert-warning"><strong><i class="bi bi-exclamation-triangle-fill me-1"></i>問題回報：${escHtml(reflection.issue_category || '其他')}</strong><p class="mb-2 mt-2">${escHtml(reflection.issue_description || '')}</p>${reflection.has_photo ? `<button class="btn btn-sm btn-outline-warning" data-action="viewIssuePhoto" data-args='[${sub.id}]'><i class="bi bi-image me-1"></i>查看問題照片</button>` : ''}</div>`;
       }
-      html.push(stageSection(8, AdminWorkflow.sectionLabel(6), reflectionHtml || pendingHtml('尚未填寫心得'), !!reflection.submitted_at));
+      html.push(stageSection(8, AdminWorkflow.sectionLabel(6), reflectionHtml || pendingHtml('尚未填寫心得'), !!reflection.submitted_at, 8));
 
       document.getElementById('submissionContent').innerHTML = html.join('');
       loadProctorTimeline(sub);
@@ -411,7 +413,7 @@ const pathParts = window.location.pathname.split('/');
         <select class="form-select form-select-sm grade-level" data-key="${escAttr(criterion.key)}" ${canGrade ? '' : 'disabled'}>
           <option value="">請選擇等級</option>${options}
         </select>
-        <details class="small mt-2"><summary class="text-primary" style="cursor:pointer">查看各級評分標準</summary><ul class="mt-2 mb-0 ps-3">${guide}</ul></details>
+        <details class="small mt-2"><summary class="text-primary cursor-pointer">查看各級評分標準</summary><ul class="mt-2 mb-0 ps-3">${guide}</ul></details>
       </div>`;
     }
 
@@ -473,7 +475,7 @@ const pathParts = window.location.pathname.split('/');
         ${!canGrade?'<div class="alert alert-info small">學生完成心得並正式送出後才能批改。</div>':''}
         ${notesHtml}<div id="gradeCriteria">${gradeCriteriaHtml}</div>
         <div class="border-top pt-3"><div class="d-flex justify-content-between align-items-center"><span class="fw-bold">各項換算總分</span><span id="rubricScore" class="score-display">—</span></div><div class="mb-3"><label class="form-label fw-bold">老師評定成績</label><input id="finalScore" name="teacher_assigned_score" type="number" min="0" max="100" step="0.1" inputmode="decimal" class="form-control" value="${latest?latest.final_score:''}" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" ${canGrade?'':'disabled'}></div><div class="mb-3"><label class="form-label fw-bold">總評 *</label><textarea id="teacherComment" class="form-control" rows="3" maxlength="10000" ${canGrade?'':'disabled'}>${escHtml(latest?.teacher_comment||'')}</textarea></div><div class="mb-3"><label class="form-label fw-bold">改進建議 *</label><textarea id="teacherFeedback" class="form-control" rows="3" maxlength="10000" ${canGrade?'':'disabled'}>${escHtml(latest?.teacher_feedback||'')}</textarea></div><div class="mb-3"><label class="form-label fw-bold">異動／調分理由 <span id="reasonRequired" class="text-danger"></span></label><textarea id="changeReason" class="form-control" rows="2" maxlength="5000" placeholder="調整分數或更新既有成績時必填" ${canGrade?'':'disabled'}></textarea></div>${canGrade?`<div class="d-grid gap-2"><button id="saveGradeBtn" class="btn btn-primary" data-action="saveGrade" data-args='[false]'><i class="bi bi-save me-1"></i>儲存並立即公開</button><button class="btn btn-outline-primary" data-action="saveGrade" data-args='[true]'>儲存並前往下一位待批改</button></div>`:''}</div>
-        ${gradeHistory.length?`<details class="mt-4"><summary class="fw-bold" style="cursor:pointer">成績異動紀錄（${gradeHistory.length}）</summary><div class="mt-2">${gradeHistory.map(g=>`<div class="border rounded p-2 mb-2 small"><strong>第 ${g.revision_number} 版：${g.final_score} 分</strong><br>${escHtml(g.grader_name||g.grader_student_id)} · ${new Date(g.created_at).toLocaleString('zh-TW')}${g.change_reason?`<br>理由：${escHtml(g.change_reason)}`:''}</div>`).join('')}</div></details>`:''}`;
+        ${gradeHistory.length?`<details class="mt-4"><summary class="fw-bold cursor-pointer">成績異動紀錄（${gradeHistory.length}）</summary><div class="mt-2">${gradeHistory.map(g=>`<div class="border rounded p-2 mb-2 small"><strong>第 ${g.revision_number} 版：${g.final_score} 分</strong><br>${escHtml(g.grader_name||g.grader_student_id)} · ${new Date(g.created_at).toLocaleString('zh-TW')}${g.change_reason?`<br>理由：${escHtml(g.change_reason)}`:''}</div>`).join('')}</div></details>`:''}`;
       panel.querySelectorAll('.grade-level').forEach(select => select.addEventListener('change', () => calculateGrade(true)));
       finalScore?.addEventListener('input', updateReasonRequired);
       calculateGrade(!latest);
@@ -568,16 +570,90 @@ const pathParts = window.location.pathname.split('/');
       }
     }
 
+    // 退回階段：退到第 N 階段時，第 N 階段和之後的內容都會清掉。
+    const REWIND_STEPS = [
+      { stage: 1, label: '職位資料與學習鷹架' },
+      { stage: 2, label: '草稿' },
+      { stage: 3, label: 'AI 練習回饋' },
+      { stage: 4, label: '最終草稿' },
+      { stage: 5, label: '跟讀錄音' },
+      { stage: 6, label: '角色扮演與 AI 回饋報告' },
+      { stage: 8, label: '心得' },
+    ];
+    let rewindSub = null;
+    let rewindTarget = null;
+
+    function rewindButton(stage) {
+      if (!stage || !rewindSub || stage > rewindSub.stage) return '';
+      return `<button type="button" class="btn btn-sm btn-outline-danger ms-auto" data-action="openRewindModal" data-args='[${stage}]' title="清掉這一步和之後的內容，讓學生從這裡重新做">
+        <i class="bi bi-skip-backward me-1"></i>從這裡重做
+      </button>`;
+    }
+
+    function openRewindModal(stage) {
+      if (!rewindSub) return;
+      rewindTarget = stage;
+      const label = stage === 1 ? AdminWorkflow.sectionLabel(1)
+        : stage === 8 ? AdminWorkflow.sectionLabel(6)
+        : AdminWorkflow.stageLabel(stage);
+      document.getElementById('rewindStageLabel').textContent = label;
+      const items = REWIND_STEPS.filter((step) => step.stage >= stage).map((step) => step.label);
+      if (stage === 5) items[0] = '跟讀錄音（示範音檔會保留）';
+      document.getElementById('rewindClearList').innerHTML = items.map((item) => `<li>${escHtml(item)}</li>`).join('');
+      const notes = [];
+      if (rewindSub.submitted_at) notes.push('這份作業已經交出。退回後要等學生重新完成，才能再批改。');
+      const due = assignment && assignment.due_date ? new Date(assignment.due_date) : null;
+      const late = rewindSub.late_deadline ? new Date(rewindSub.late_deadline) : null;
+      if (due && new Date() > due && !(late && new Date() < late)) {
+        notes.push('作業已經截止，記得另外設定補繳期限，學生才能繼續做。');
+      }
+      const noteEl = document.getElementById('rewindNotes');
+      noteEl.innerHTML = notes.map((note) => `<div>${escHtml(note)}</div>`).join('');
+      noteEl.classList.toggle('d-none', !notes.length);
+      document.getElementById('rewindPassword').value = '';
+      document.getElementById('rewindError').classList.add('d-none');
+      new bootstrap.Modal(document.getElementById('rewindModal')).show();
+    }
+
+    async function confirmRewind() {
+      const errorEl = document.getElementById('rewindError');
+      const password = document.getElementById('rewindPassword').value.trim();
+      if (!password) { errorEl.textContent = '請輸入管理員密碼'; errorEl.classList.remove('d-none'); return; }
+      const btn = document.getElementById('btnConfirmRewind');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>處理中...';
+      try {
+        const res = await fetch(`/api/admin/assignments/${assignmentId}/students/${userId}/rewind`, {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ admin_password: password, target_stage: rewindTarget }),
+        });
+        if (res.ok) {
+          bootstrap.Modal.getInstance(document.getElementById('rewindModal')).hide();
+          showAlert(`已退回，學生下次進來會從「${document.getElementById('rewindStageLabel').textContent}」開始。`, 'success');
+          init();
+        } else {
+          const d = await res.json().catch(() => ({}));
+          errorEl.textContent = typeof d.detail === 'string' ? d.detail : '退回失敗，請稍後再試。';
+          errorEl.classList.remove('d-none');
+        }
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '確認退回';
+      }
+    }
+
     function pendingHtml(msg) {
       return `<div class="text-muted small fst-italic"><i class="bi bi-hourglass me-1"></i>${msg}</div>`;
     }
 
-    function stageSection(num, title, content, isDone) {
+    function stageSection(num, title, content, isDone, rewindStage = null) {
       return `
         <div class="stage-card">
           <div class="stage-header">
             <div class="stage-num ${isDone ? 'completed' : ''}">${isDone ? '<i class="bi bi-check"></i>' : num}</div>
             <span class="stage-title">${title}</span>
+            ${rewindButton(rewindStage)}
           </div>
           <div class="stage-body">${content}</div>
         </div>`;
@@ -664,7 +740,7 @@ const pathParts = window.location.pathname.split('/');
 
     // Render AI draft feedback (Stage 3)
     function renderCorrectionCards(corrections) {
-      if (!corrections || corrections.length === 0) return '<div class="text-muted small">未發現明顯文法錯誤。</div>';
+      if (!corrections || corrections.length === 0) return '<div class="text-muted small">未發現英文文法或用字錯誤。</div>';
       return corrections.map(item => {
         const original = safeStr(item.original || item.error || '');
         const corrected = safeStr(item.corrected || item.correction || '');
@@ -698,8 +774,8 @@ const pathParts = window.location.pathname.split('/');
         obj.questions.forEach(q => {
           const totalCorrections = (q.grammar_corrections || []).length;
           const qText = q.question || draftQuestionMap[q.index] || qs[q.index] || '';
-          html += `<div class="mb-3 p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0;">
-            <div class="small fw-bold mb-2" style="color:#4f46e5;"><i class="bi bi-chat-quote me-1"></i>Q${q.index+1}${qText ? '：' + escHtml(qText) : ''}</div>
+          html += `<div class="mb-3 p-3 rounded panel-muted">
+            <div class="small fw-bold mb-2 text-brand"><i class="bi bi-chat-quote me-1"></i>Q${q.index+1}${qText ? '：' + escHtml(qText) : ''}</div>
             <div class="mb-3">
               <div class="small fw-bold text-danger mb-2"><i class="bi bi-pencil-fill me-1"></i>文法修正（${totalCorrections} 處）</div>
               ${renderCorrectionCards(q.grammar_corrections)}
@@ -731,8 +807,8 @@ const pathParts = window.location.pathname.split('/');
           qs.forEach((qText, i) => {
             const corrs = corrByQ[i];
             if (!corrs.length) return;
-            html += `<div class="mb-3 p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0;">
-              <div class="small fw-bold mb-2" style="color:#4f46e5;"><i class="bi bi-chat-quote me-1"></i>Q${i+1}：${escHtml(qText)}</div>
+            html += `<div class="mb-3 p-3 rounded panel-muted">
+              <div class="small fw-bold mb-2 text-brand"><i class="bi bi-chat-quote me-1"></i>Q${i+1}：${escHtml(qText)}</div>
               <div class="small fw-bold text-danger mb-2"><i class="bi bi-pencil-fill me-1"></i>文法修正（${corrs.length} 處）</div>
               ${renderCorrectionCards(corrs)}
             </div>`;
@@ -1082,6 +1158,8 @@ const pathParts = window.location.pathname.split('/');
       openLateDeadlineModal,
       confirmLateDeadline,
       confirmRetake,
+      openRewindModal,
+      confirmRewind,
     });
 
     init();

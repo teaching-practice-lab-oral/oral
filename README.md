@@ -198,13 +198,10 @@ APP_ENV_FILE=.env.production
 # production compose 需要固定的 image digest，不能用可變的 :latest
 MEET_IMAGE=your-registry/meet@sha256:replace-with-built-image-digest
 PUBLIC_BASE_URL=https://your-domain.example.com
-WORKER_ONLY=false
 CORS_ORIGINS=https://your-domain.example.com
 TRUSTED_HOSTS=your-domain.example.com
 TRUSTED_PROXY_IPS=127.0.0.1,::1
 MAX_REQUEST_BODY_BYTES=58720256
-WORKER_MAX_REQUEST_BODY_BYTES=75497472
-WORKER_MAX_AUDIO_BASE64_CHARS=70000000
 FORWARDED_ALLOW_IPS=127.0.0.1
 PROTECTED_ADMIN_STUDENT_ID=12345678
 GUNICORN_WORKERS=4
@@ -232,14 +229,6 @@ OPENAI_TTS_MODEL=gpt-4o-mini-tts
 OPENAI_MAX_CONCURRENCY=15
 TTS_MAX_CONCURRENCY=10
 AUDIO_PROCESSING_MAX_CONCURRENCY=20
-
-# ── 可選的 CHT / Taiwan worker offload ─────────────────────
-CHT_WORKER_ENABLED=false
-CHT_WORKER_BASE_URL=https://worker.example.com
-CHT_WORKER_WEIGHT=0.5
-CHT_WORKER_SECRET=replace-with-a-long-random-worker-secret
-CHT_WORKER_TIMEOUT_SECONDS=90
-CHT_WORKER_COOLDOWN_SECONDS=60
 ```
 
 > `MAIL_PASSWORD` 請填入 SMTP 服務商核發的密碼，不一定與帳號登入密碼相同。
@@ -304,6 +293,38 @@ docker compose --env-file .env.production -f docker-compose-production.yml exec 
 
 ---
 
+## 維運：解除學生帳號鎖定
+
+學生連續登入失敗 5 次時，帳號會鎖定 15 分鐘。
+
+**全站一鍵解除**：指定管理員（`PROTECTED_ADMIN_STUDENT_ID`）可在 `/admin/login-audit` 的「登入稽核」分頁按「一鍵解除登入限制」。這會清掉所有帳號的失敗次數與鎖定時間，同時重設來源 IP 的失敗計數（只計算解除之後的失敗，登入紀錄不會被刪除）。每次操作都會記在「敏感操作」分頁。
+
+**只解除單一學生**：在正式環境執行：
+
+```bash
+docker compose --env-file .env.production -f docker-compose-production.yml \
+  exec web python scripts/unlock_student.py --student-id S12345678
+```
+
+將 `S12345678` 換成實際學號。工具會先顯示學生姓名、帳號狀態、登入失敗次數與鎖定截止時間；只有輸入完整小寫 `yes` 才會提交變更：
+
+```text
+學生帳號資訊：
+  學號：S12345678
+  姓名：測試學生
+  啟用狀態：是
+  登入失敗次數：5
+  鎖定至：2026-10-09 12:00:00
+請輸入 yes 確認解除此學生帳號的鎖定： yes
+已解除學生帳號 S12345678 的登入鎖定。
+```
+
+此指令只會將該學生的 `failed_login_count` 歸零並清除 `locked_until`，不會變更密碼、帳號啟用狀態或現有登入 session。不存在、非學生或已停用的帳號都會安全地拒絕操作。
+
+> 帳號鎖定與來源 IP 的登入頻率限制是兩個獨立機制。如果用這個指令解鎖後仍顯示「登入嘗試過於頻繁，請稍後再試。」，表示同一 IP 在 15 分鐘內的失敗次數已達上限，請改用上面的全站一鍵解除，或等時間窗結束。
+
+---
+
 ## 學生操作流程
 
 每個作業包含六個區段，依序完成：
@@ -356,7 +377,7 @@ docker compose --env-file .env.production -f docker-compose-production.yml logs 
 
 部署者可透過 `STAGE_HOURLY_LIMIT`、`DAILY_API_LIMIT` 與 `MAX_AUDIO_SECONDS` 調整這些限制。
 
-音訊上傳、心得照片與學生成果包匯出另使用短期的
+音訊上傳、心得照片與學生作業匯出另使用短期的
 `costly_action_usage_logs` 做跨 worker 原子限流；建議正式環境沿用
 [`.env.security-limits.example`](.env.security-limits.example) 的平衡型預設。
 這些紀錄預設保留兩天，和付費 API 的 `api_usage_logs` 分開計算。

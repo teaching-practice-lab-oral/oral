@@ -50,7 +50,6 @@ async function init() {
   document.getElementById('loadingMsg').classList.add('d-none');
   document.getElementById('content').classList.remove('d-none');
   document.getElementById('assignmentTitle').textContent = assignment.title;
-  document.getElementById('assignmentDesc').textContent = assignment.description || '';
   if (submission && submission.late_deadline && assignment.due_date && new Date() > new Date(assignment.due_date)) {
     const el = document.getElementById('dueDate');
     el.textContent = `補繳截止：${new Date(submission.late_deadline).toLocaleString('zh-TW')}`;
@@ -119,79 +118,8 @@ function getFinalDraftSavedMap(vs) {
 }
 
 function renderWritingTaskGuide(vs, stage, isCompleted, questions) {
-  const profile = (vs && vs.job_profile_data) || {};
-  const position = profile.desired_position || '你設定的目標職位';
-  const competencies = profile.required_competencies || '你想展現的工作能力';
-  const total=questions.length;
-  const draftCount=questions.filter((_,index)=>savedDraft1Indices.has(index)).length;
-  const finalCount=questions.filter((_,index)=>savedFinalDraftIndices.has(index)).length;
-  const state=viewId||isCompleted||stage>=5?'completed':isPastDue()?'read-only':'active';
-  if(state!=='active')return renderTaskGuide({title:'寫作階段已完成',progress:`終稿 ${finalCount}/${total} 題已儲存`,next:'回看時，比較草稿、AI 練習回饋與終稿，找出自己真正做了哪一項修改。',view:vs,state});
-
-  if(stage<=2){
-    const nextIndex=Math.max(0,questions.findIndex((_,index)=>!savedDraft1Indices.has(index)));
-    const questionScaffold=learningScaffoldQuestionHtml(vs,nextIndex,'writing');
-    return renderTaskGuide({
-      title:`先完成 Q${nextIndex+1}：第一版只求完整`,
-      progress:`草稿已儲存 ${draftCount}/${total} 題`,
-      actions:[
-        '第一句直接回答題目，不要先繞一大段背景。',
-        '經驗題補上情境、做法和結果；想法題補上理由和例子。',
-        '使用自己現在說得出口的英文，不必先追求難字。',
-      ],
-      support:{title:`Q${nextIndex+1} 的回答鷹架`,items:[
-        '例子可從課堂專題、社團、打工、實習或日常合作經驗中找。',
-        `目前職位是「${position}」；可連結的能力包括「${competencies}」。`,
-      ],html:questionScaffold},
-      starters:learningScaffoldStarters(vs,nextIndex,['I would say…','For example…','As a result…']),
-      checks:[
-        '第一句有直接回答這一題。',
-        '內容是真實經驗或真實想法。',
-        '這段英文可以由我自己說出口。',
-      ],
-      next:`儲存目前答案；${workflowLimit('core_question_count')} 題都儲存後取得 AI 練習回饋。`,
-      view:vs,
-    });
-  }
-
-  if(stage===3){
-    return renderTaskGuide({
-      title:`${total} 題都存好了，現在取得 AI 練習回饋`,
-      progress:`草稿已儲存 ${draftCount}/${total} 題`,
-      actions:[
-        '快速確認每一題都有回答到題目，不是貼錯題。',
-        '確認內容是自己的真實經驗，沒有為了完整而虛構。',
-        '按「獲取 AI 練習回饋」，等待回饋顯示。',
-      ],
-      support:{title:'送出前不確定時',items:['先看每題第一句；只要第一句答錯重點，就先回去修改。'],html:learningScaffoldModuleHtml()},
-      checks:['所有題目都已儲存。','沒有空白、貼錯題或明顯未完成的句子。','AI 練習回饋成功顯示。'],
-      next:'先找每題最值得修改的一點，再完成自己的終稿。',
-      view:vs,
-    });
-  }
-
-  const unresolvedFinalIndex=questions.findIndex((_,index)=>!savedFinalDraftIndices.has(index));
-  const finalIndex=Math.max(0,unresolvedFinalIndex);
-  const finalScaffold=unresolvedFinalIndex>=0
-    ? learningScaffoldQuestionHtml(vs,finalIndex,'writing')
-    : learningScaffoldModuleHtml();
-  return renderTaskGuide({
-    title:'先改內容，再修文法；完成你自己的終稿',
-    progress:`終稿已儲存 ${finalCount}/${total} 題`,
-    actions:[
-      '比較原稿與 AI 練習回饋，每題只挑一項最有幫助的建議。',
-      '保留自己的真實經驗，不把建議範文直接當成自己的答案。',
-      '改成自己說得出口的英文；逐題儲存，全部完成後再提交。',
-    ],
-    support:{title:`Q${finalIndex+1} 的修改鷹架`,items:[
-      '先補一個具體細節，再處理影響理解的文法或用字。',
-      '題目問到能力或經驗時，再補一句它和目標職位的關係。',
-    ],html:finalScaffold},
-    starters:unresolvedFinalIndex>=0?learningScaffoldStarters(vs,finalIndex,['One example is…','What I learned was…','This would help me…']):[],
-    checks:['每題都有直接回答並補充具體內容。','答案保留自己的事實與說話方式。',`${workflowLimit('core_question_count')} 題都已儲存，而且能拿來口說。`],
-    next:'提交終稿後，系統會產生示範音訊，接著進行跟讀。',
-    view:vs,
-  });
+  if (viewId || isCompleted || stage >= 5 || isPastDue()) return '';
+  return renderAiGuide(vs);
 }
 
 function renderSection1(container, stage, isCompleted) {
@@ -202,12 +130,11 @@ function renderSection1(container, stage, isCompleted) {
   card.className = `section-card ${isDone ? 'completed' : 'active'}`;
   card.innerHTML = `
     <div class="section-header">
-      <div class="section-icon"><i class="bi bi-pencil-square"></i></div>
       <div>
         <div class="section-title">寫作練習</div>
         <div class="section-subtitle">Writing Practice</div>
       </div>
-      ${isDone ? '<span class="ms-auto badge bg-white text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i>完成</span>' : ''}
+      ${isDone ? '<span class="section-status section-status-done"><i class="bi bi-check-circle-fill"></i>完成</span>' : '<span class="section-status section-status-active">進行中</span>'}
     </div>
     <div class="section-body" id="writingBody"></div>`;
   container.appendChild(card);
@@ -235,10 +162,10 @@ function renderSection1(container, stage, isCompleted) {
     questions.forEach((q, i) => {
       const saved = draft1Map[i];
       const isSaved = savedDraft1Indices.has(i);
-      draft1Html += `<div class="mb-3 p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0;">
-        <p id="draft1Label_${i}" class="fw-semibold mb-2 small" style="color:#4f46e5;">
+      draft1Html += `<div class="mb-3 p-3 rounded panel-muted">
+        <p id="draft1Label_${i}" class="fw-semibold mb-2 small text-brand">
           Q${i+1}：${escHtml(q)}
-          ${isSaved ? '<span class="ms-2 badge bg-success" style="font-size:0.7rem;">已儲存</span>' : ''}
+          ${isSaved ? '<span class="ms-2 badge bg-success fs-xs">已儲存</span>' : ''}
         </p>${learningScaffoldInlineHtml(vs,i,'writing')}`;
       if (isSaved && !draft1Editable) {
         draft1Html += `<div class="feedback-box"><pre>${escHtml(saved || '')}</pre></div>`;
@@ -246,7 +173,7 @@ function renderSection1(container, stage, isCompleted) {
         draft1Html += `<textarea class="form-control form-control-modern mb-2" id="draft1Input_${i}" rows="5" maxlength="2000"
           placeholder="請針對此題撰寫你的答案... / Write your answer here...">${escHtml(saved || '')}</textarea>
           <button class="btn btn-primary-custom btn-sm" id="draft1Btn_${i}" data-action="saveDraft1Answer" data-args='[${i}]'>
-            <i class="bi bi-save me-1"></i>${isSaved ? '更新儲存' : '儲存此題'}
+            ${isSaved ? '更新儲存' : '儲存此題'}
           </button>`;
       } else {
         draft1Html += `<div class="feedback-box"><pre>${escHtml(saved || '（未填寫）')}</pre></div>`;
@@ -270,15 +197,14 @@ function renderSection1(container, stage, isCompleted) {
   body.innerHTML += `
     <div class="sub-step ${doneB ? 'done' : activeB ? 'active-step' : ''}">
       <div class="sub-step-label">${doneB ? '✓ ' : ''}AI 練習回饋</div>
-      <div class="alert alert-light border small py-2"><i class="bi bi-info-circle me-1 text-primary"></i>這裡是協助修改的形成性練習回饋，不是正式成績；完成整次練習後，老師才會依評分規準進行正式評分。</div>
+      <div class="alert alert-light border small py-2">這是給你修改用的 AI 回饋，不算成績。成績由老師依評分規準另外評分。</div>
       ${hasFeedback ? renderFeedbackHtml(vs.draft2_ai_feedback) : ''}
       ${isActive && !hasFeedback ? `
         <div id="feedbackActionArea">
-          <p class="text-muted small mb-2">所有題目草稿儲存完畢後，點擊按鈕獲取 AI 練習回饋與改寫示例。</p>
           <button class="btn btn-outline-primary-custom" id="feedbackBtn" data-action="getFeedback" ${allDraft1Saved ? '' : 'disabled'}>
-            <i class="bi bi-stars me-1"></i>獲取 AI 練習回饋
+            獲取 AI 練習回饋
           </button>
-          <p id="feedbackHint" class="text-warning small mt-2 mb-0" ${allDraft1Saved ? 'style="display:none"' : ''}><i class="bi bi-exclamation-circle me-1"></i>請先儲存所有 ${questions.length} 題草稿（已完成 <span id="feedbackHintCount">${savedDraft1Indices.size}</span>/${questions.length}）</p>
+          <p id="feedbackHint" class="text-warning small mt-2 mb-0${allDraft1Saved ? ' d-none' : ''}"><i class="bi bi-exclamation-circle me-1"></i>請先儲存所有 ${questions.length} 題草稿（已完成 <span id="feedbackHintCount">${savedDraft1Indices.size}</span>/${questions.length}）</p>
         </div>` : ''}
       ${isActive && feedbackIsBroken ? `
         <div id="feedbackActionArea">
@@ -288,7 +214,7 @@ function renderSection1(container, stage, isCompleted) {
         </div>` : ''}
       ${canReFeedback ? `
         <div id="feedbackActionArea" class="mt-3">
-          <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>修改草稿後可再獲取一次 AI 練習回饋（已使用 ${feedbackCount}/${maxFeedbackCount} 次）。</p>
+          <p class="text-muted small mb-2">修改草稿後可再獲取一次 AI 練習回饋（已使用 ${feedbackCount}/${maxFeedbackCount} 次）。</p>
           <button class="btn btn-outline-primary-custom" id="feedbackBtn" data-action="getFeedback">
             <i class="bi bi-arrow-clockwise me-1"></i>重新取得 AI 練習回饋
           </button>
@@ -320,41 +246,41 @@ function renderSection1(container, stage, isCompleted) {
 
   let finalDraftHtml = `
     <div class="sub-step ${doneC ? 'done' : activeC ? 'active-step' : ''}">
-      <div class="sub-step-label">${doneC ? '✓ ' : ''}最終草稿 Final Draft</div>`;
+      <div class="sub-step-label">${doneC ? '✓ ' : ''}終稿</div>`;
 
   if (questions.length === 0) {
     finalDraftHtml += `<p class="text-muted small">（此作業未設定面試題目）</p>`;
   } else if (doneC || (vs && vs.final_draft_answers && vs.final_draft_answers.length > 0 && !activeC)) {
     questions.forEach((q, i) => {
       const savedText = finalMap[i];
-      finalDraftHtml += `<div class="mb-3 p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0;">
-        <p class="fw-semibold mb-2 small" style="color:#10b981;">Q${i+1}：${escHtml(q)}</p>
+      finalDraftHtml += `<div class="mb-3 p-3 rounded panel-muted">
+        <p class="fw-semibold mb-2 small text-emerald">Q${i+1}：${escHtml(q)}</p>
         <div class="feedback-box"><pre>${escHtml(savedText || '（未填寫）')}</pre></div>
       </div>`;
     });
   } else if (activeC) {
-    finalDraftHtml += `<div class="alert alert-info small py-2 mb-3"><i class="bi bi-info-circle me-1"></i>可參考上方 AI 建議範文修改你的答案。請保留自己的原意與經驗；每題儲存後，全部完成再提交。</div>`;
+    finalDraftHtml += `<div class="alert alert-info small py-2 mb-3">參考上方範文修改，但保留你自己的經驗。</div>`;
     questions.forEach((q, i) => {
       const savedText = finalMap[i];
       const isSaved = savedFinalDraftIndices.has(i);
-      finalDraftHtml += `<div class="mb-3 p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0;">
-        <p id="finalDraftLabel_${i}" class="fw-semibold mb-2 small" style="color:#4f46e5;">
+      finalDraftHtml += `<div class="mb-3 p-3 rounded panel-muted">
+        <p id="finalDraftLabel_${i}" class="fw-semibold mb-2 small text-brand">
           Q${i+1}：${escHtml(q)}
-          ${isSaved ? '<span class="ms-2 badge bg-success" style="font-size:0.7rem;">已儲存</span>' : ''}
+          ${isSaved ? '<span class="ms-2 badge bg-success fs-xs">已儲存</span>' : ''}
         </p>${learningScaffoldInlineHtml(vs,i,'writing')}
         <textarea class="form-control form-control-modern mb-2" id="finalDraftInput_${i}" rows="5" maxlength="2000"
           placeholder="請撰寫修改後的答案... / Write your revised answer here...">${escHtml(savedText || polishedMap[i] || '')}</textarea>
         <button class="btn btn-primary-custom btn-sm" id="finalDraftSaveBtn_${i}" data-action="saveFinalDraftAnswer" data-args='[${i}]'>
-          <i class="bi bi-save me-1"></i>${isSaved ? '更新儲存' : '儲存此題'}
+          ${isSaved ? '更新儲存' : '儲存此題'}
         </button>
       </div>`;
     });
     finalDraftHtml += `
       <button class="btn btn-success-custom" id="finalDraftBtn" data-action="submitFinalDraft" ${allFinalSaved ? '' : 'disabled'}>
         <span id="finalDraftSpinner" class="spinner-border spinner-border-sm d-none me-1"></span>
-        <i class="bi bi-send me-1"></i>提交最終草稿 Submit Final Draft
+        送出終稿
       </button>
-      <p id="finalDraftHint" class="text-warning small mt-2 mb-0" ${allFinalSaved ? 'style="display:none"' : ''}><i class="bi bi-exclamation-circle me-1"></i>請先儲存所有 ${questions.length} 題（已完成 <span id="finalDraftHintCount">${savedFinalDraftIndices.size}</span>/${questions.length}）</p>
+      <p id="finalDraftHint" class="text-warning small mt-2 mb-0${allFinalSaved ? ' d-none' : ''}"><i class="bi bi-exclamation-circle me-1"></i>請先儲存所有 ${questions.length} 題（已完成 <span id="finalDraftHintCount">${savedFinalDraftIndices.size}</span>/${questions.length}）</p>
       <small class="text-muted d-block mt-1"><i class="bi bi-clock me-1"></i>提交後將自動生成跟讀音訊（約 15-30 秒）</small>`;
   }
   finalDraftHtml += `</div>`;
@@ -407,12 +333,12 @@ function extractJsonObject(text) {
 }
 
 function renderCorrections(corrections) {
-  if (!corrections || corrections.length === 0) return '<div class="text-muted small">未發現明顯文法錯誤。</div>';
+  if (!corrections || corrections.length === 0) return '<div class="text-muted small">未發現英文文法或用字錯誤。</div>';
   return corrections.map(c => `
     <div class="correction-card">
-      <div class="cc-original"><i class="bi bi-x-circle me-1"></i>原句：${escHtml(safeStr(c.original))}</div>
-      <div class="cc-corrected"><i class="bi bi-check-circle me-1"></i>修正：${escHtml(safeStr(c.corrected))}</div>
-      ${c.explanation ? `<div class="cc-explanation"><i class="bi bi-chat-left-text me-1"></i>說明：${escHtml(safeStr(c.explanation))}</div>` : ''}
+      <div class="cc-original"><span class="cc-tag">原句</span>${escHtml(safeStr(c.original))}</div>
+      <div class="cc-corrected"><span class="cc-tag">修正</span>${escHtml(safeStr(c.corrected))}</div>
+      ${c.explanation ? `<div class="cc-explanation">${escHtml(safeStr(c.explanation))}</div>` : ''}
     </div>`).join('');
 }
 
@@ -435,12 +361,12 @@ function renderFeedbackHtml(fb) {
       const questionText = q.question || draftQuestionMap[q.index] || questions[q.index] || '';
       const qLabel = questionText ? `Q${q.index+1}：${escHtml(questionText)}` : `Q${q.index+1}`;
       const totalCorrections = Array.isArray(q.grammar_corrections) ? q.grammar_corrections.length : 0;
-      html += `<div class="mb-3 p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0;">
-        <p class="fw-semibold mb-2 small" style="color:#4f46e5;"><i class="bi bi-chat-quote me-1"></i>${qLabel}</p>
-        <p class="fw-semibold mb-2 small"><i class="bi bi-spellcheck me-1 text-danger"></i>文法修正（${totalCorrections} 處）</p>
+      html += `<div class="mb-3 p-3 rounded panel-muted">
+        <p class="fw-semibold mb-2 small text-brand"><i class="bi bi-chat-quote me-1"></i>${qLabel}</p>
+        <p class="fw-semibold mb-2 small">文法修正（${totalCorrections} 處）</p>
         ${renderCorrections(q.grammar_corrections)}`;
       if (q.polished_sample) {
-        html += `<p class="fw-semibold mb-2 mt-2 small"><i class="bi bi-stars me-1 text-primary"></i>建議範文</p>
+        html += `<p class="fw-semibold mb-2 mt-2 small">建議範文</p>
           <div class="polished-box"><pre>${escHtml(safeStr(q.polished_sample))}</pre></div>`;
       }
       html += `</div>`;
@@ -476,40 +402,40 @@ function renderFeedbackHtml(fb) {
         const corrs = corrByQ[i];
         const polished = polishedParts ? polishedParts[i] : (numQ === 1 ? safeStr(fb.polished_sample) : null);
         if (!corrs.length && !polished) return;
-        html += `<div class="mb-3 p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0;">
-          <p class="fw-semibold mb-2 small" style="color:#4f46e5;"><i class="bi bi-chat-quote me-1"></i>Q${i+1}：${escHtml(q)}</p>`;
+        html += `<div class="mb-3 p-3 rounded panel-muted">
+          <p class="fw-semibold mb-2 small text-brand"><i class="bi bi-chat-quote me-1"></i>Q${i+1}：${escHtml(q)}</p>`;
         if (corrs.length > 0) {
-          html += `<p class="fw-semibold mb-2 small"><i class="bi bi-spellcheck me-1 text-danger"></i>文法修正</p>`;
+          html += `<p class="fw-semibold mb-2 small">文法修正</p>`;
           html += renderCorrections(corrs);
         }
         if (polished) {
-          html += `<p class="fw-semibold mb-2 mt-2 small"><i class="bi bi-stars me-1 text-primary"></i>建議範文</p>
+          html += `<p class="fw-semibold mb-2 mt-2 small">建議範文</p>
             <div class="polished-box"><pre>${escHtml(polished)}</pre></div>`;
         }
         html += `</div>`;
       });
       if (unmatchedCorr.length > 0) {
-        html += `<p class="fw-semibold mb-2 small"><i class="bi bi-spellcheck me-1 text-danger"></i>其他文法修正</p>`;
+        html += `<p class="fw-semibold mb-2 small">其他文法修正</p>`;
         html += renderCorrections(unmatchedCorr);
       }
       // Show polished_sample flat only if splitting failed and numQ > 1
       if (!polishedParts && fb.polished_sample && numQ > 1) {
-        html += `<p class="fw-semibold mb-2 mt-3"><i class="bi bi-stars me-1 text-primary"></i>建議範文</p>
+        html += `<p class="fw-semibold mb-2 mt-3">建議範文</p>
           <div class="polished-box"><pre>${escHtml(safeStr(fb.polished_sample))}</pre></div>`;
       }
     } else {
       if (fb.grammar_corrections && fb.grammar_corrections.length > 0) {
-        html += `<p class="fw-semibold mb-2"><i class="bi bi-spellcheck me-1 text-danger"></i>文法修正</p>`;
+        html += `<p class="fw-semibold mb-2">文法修正</p>`;
         html += renderCorrections(fb.grammar_corrections);
       }
       if (fb.polished_sample) {
-        html += `<p class="fw-semibold mb-2 mt-3"><i class="bi bi-stars me-1 text-primary"></i>建議範文</p>
+        html += `<p class="fw-semibold mb-2 mt-3">建議範文</p>
           <div class="polished-box"><pre>${escHtml(safeStr(fb.polished_sample))}</pre></div>`;
       }
     }
   }
   if (fb.organization_suggestions && fb.organization_suggestions.length > 0) {
-    html += `<p class="fw-semibold mb-2 mt-3"><i class="bi bi-list-check me-1 text-warning"></i>組織架構建議</p>`;
+    html += `<p class="fw-semibold mb-2 mt-3">組織架構建議</p>`;
     html += `<ul class="mb-0">${fb.organization_suggestions.map(s => `<li>${escHtml(safeStr(s))}</li>`).join('')}</ul>`;
   }
   return html ? `<div class="mb-2">${html}</div>` : '';
@@ -531,31 +457,32 @@ async function saveDraft1Answer(index) {
   });
   const data = await res.json();
   if (!res.ok) {
-    if (btn) { btn.disabled = false; btn.innerHTML = `<i class="bi bi-save me-1"></i>儲存此題`; }
-    showAlert(data.detail || '儲存草稿時發生錯誤'); return;
+    if (btn) { btn.disabled = false; btn.innerHTML = `儲存此題`; }
+    showAlert(data.detail || '儲存失敗，請再試一次。'); return;
   }
   const previousStage = submission.stage;
   const feedbackWasInvalidated = !!submission.draft2_ai_feedback && !data.draft2_ai_feedback;
+  const containsChinese = /[\u3400-\u4dbf\u4e00-\u9fff]/.test(text);
+  const mixedDraftReminder = containsChinese ? '；中文可先保留，稍後請依 AI 回饋整理成英文' : '';
+  const savedMessage = `第 ${index+1} 題已儲存${mixedDraftReminder}。`;
   submission = data;
   savedDraft1Indices.add(index);
   if (previousStage !== data.stage || feedbackWasInvalidated) {
     renderAll();
     showAlert(
       feedbackWasInvalidated
-        ? '草稿已更新；先前 AI 回饋已失效，請依新版本重新取得回饋。'
-        : `第 ${index+1} 題草稿已儲存！`,
+        ? `草稿已更新；先前 AI 回饋已失效，請依新版本重新取得回饋${mixedDraftReminder}。`
+        : savedMessage,
       feedbackWasInvalidated ? 'warning' : 'success'
     );
     return;
   }
-  const currentGuide=document.querySelector('#sectionContainer .task-guide');
-  if(currentGuide)currentGuide.outerHTML=renderWritingTaskGuide(getView(),submission.stage,!!submission.submitted_at,getQuestions());
   // Update badge on this question's label
   const label = document.getElementById(`draft1Label_${index}`);
   if (label && !label.querySelector('.badge')) {
-    label.insertAdjacentHTML('beforeend', '<span class="ms-2 badge bg-success" style="font-size:0.7rem;">已儲存</span>');
+    label.insertAdjacentHTML('beforeend', '<span class="ms-2 badge bg-success fs-xs">已儲存</span>');
   }
-  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save me-1"></i>更新儲存'; }
+  if (btn) { btn.disabled = false; btn.innerHTML = '更新儲存'; }
   // Update AI feedback button and hint
   const allSaved = getQuestions().every((_, i) => savedDraft1Indices.has(i));
   const fbBtn = document.getElementById('feedbackBtn');
@@ -564,9 +491,9 @@ async function saveDraft1Answer(index) {
   if (fbHint) {
     const count = document.getElementById('feedbackHintCount');
     if (count) count.textContent = savedDraft1Indices.size;
-    fbHint.style.display = allSaved ? 'none' : '';
+    fbHint.classList.toggle('d-none', allSaved);
   }
-  showAlert(`第 ${index+1} 題草稿已儲存！`, 'success');
+  showAlert(savedMessage, 'success');
 }
 
 async function saveFinalDraftAnswer(index) {
@@ -585,7 +512,7 @@ async function saveFinalDraftAnswer(index) {
   });
   const data = await res.json();
   if (!res.ok) {
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = `<i class="bi bi-save me-1"></i>儲存此題`; }
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = `儲存此題`; }
     showAlert(data.detail || '儲存最終草稿時發生錯誤');
     return;
   }
@@ -594,9 +521,9 @@ async function saveFinalDraftAnswer(index) {
   // Update badge
   const label = document.getElementById(`finalDraftLabel_${index}`);
   if (label && !label.querySelector('.badge')) {
-    label.insertAdjacentHTML('beforeend', '<span class="ms-2 badge bg-success" style="font-size:0.7rem;">已儲存</span>');
+    label.insertAdjacentHTML('beforeend', '<span class="ms-2 badge bg-success fs-xs">已儲存</span>');
   }
-  if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="bi bi-save me-1"></i>更新儲存'; }
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '更新儲存'; }
   // Update submit button and hint
   const allSaved = getQuestions().every((_, i) => savedFinalDraftIndices.has(i));
   const submitBtn = document.getElementById('finalDraftBtn');
@@ -605,9 +532,9 @@ async function saveFinalDraftAnswer(index) {
   if (hint) {
     const count = document.getElementById('finalDraftHintCount');
     if (count) count.textContent = savedFinalDraftIndices.size;
-    hint.style.display = allSaved ? 'none' : '';
+    hint.classList.toggle('d-none', allSaved);
   }
-  showAlert(`第 ${index+1} 題最終草稿已儲存！`, 'success');
+  showAlert(`第 ${index+1} 題終稿已儲存。`, 'success');
 }
 
 async function submitFinalDraft() {
@@ -626,7 +553,7 @@ async function submitFinalDraft() {
   if (btn && btn.isConnected) { btn.disabled = false; if (spinner) spinner.classList.add('d-none'); }
   if (!res.ok) { showAlert(data.detail || '儲存最終草稿時發生錯誤'); return; }
   submission = data;
-  showAlert('最終草稿已提交！跟讀音訊已生成，前往跟讀練習。', 'success');
+  showAlert('終稿已送出，正在前往跟讀。', 'success');
   setTimeout(() => { navigateStudentPage(`/student/assignment/${assignmentId}/shadowing`); }, 1000);
 }
 
@@ -635,9 +562,9 @@ async function getFeedback() {
   if (!actionArea) return;
   actionArea.innerHTML = `
     <div class="processing-overlay">
-      <div class="spinner-border text-primary" style="flex-shrink:0"></div>
+      <div class="spinner-border text-primary flex-shrink-0"></div>
       <div>
-        <div class="fw-semibold" style="color:#4f46e5">AI 正在生成練習回饋...</div>
+        <div class="fw-semibold text-brand">AI 正在生成練習回饋...</div>
         <small id="feedbackStreamCount" class="text-muted">初始化中，請稍待 15～45 秒...</small>
       </div>
     </div>`;
@@ -678,7 +605,7 @@ async function getFeedback() {
           submission.feedback_count = event.feedback_count || ((submission.feedback_count || 0) + 1);
           submission.stage = 4;
           renderAll();
-          showAlert('已獲取 AI 回饋！', 'success');
+          showAlert('AI 回饋好了。', 'success');
         }
         if (event.error) {
           showAlert('生成回饋時發生錯誤：' + event.error);
@@ -687,7 +614,7 @@ async function getFeedback() {
       }
     }
   } catch {
-    showAlert('連線發生錯誤，請重試。');
+    showAlert('連線中斷，請再試一次。');
     renderAll();
   }
 }

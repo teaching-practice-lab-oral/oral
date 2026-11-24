@@ -52,7 +52,6 @@ async function init() {
   document.getElementById('loadingMsg').classList.add('d-none');
   document.getElementById('content').classList.remove('d-none');
   document.getElementById('assignmentTitle').textContent = assignment.title;
-  document.getElementById('assignmentDesc').textContent = assignment.description || '';
   if (submission && submission.late_deadline && assignment.due_date && new Date() > new Date(assignment.due_date)) {
     const el = document.getElementById('dueDate');
     el.textContent = `補繳截止：${new Date(submission.late_deadline).toLocaleString('zh-TW')}`;
@@ -107,12 +106,11 @@ function renderSection4(container, stage, isCompleted) {
   card.className = `section-card ${isLocked ? 'locked' : isDone ? 'completed' : 'active'}`;
   card.innerHTML = `
     <div class="section-header">
-      <div class="section-icon"><i class="bi bi-bar-chart-fill"></i></div>
       <div>
         <div class="section-title">學習回饋</div>
         <div class="section-subtitle">Learning Feedback</div>
       </div>
-      ${isDone ? '<span class="ms-auto badge bg-white text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i>完成</span>' : ''}
+      ${isDone ? '<span class="section-status section-status-done"><i class="bi bi-check-circle-fill"></i>完成</span>' : isLocked ? '<span class="section-status section-status-locked"><i class="bi bi-lock-fill"></i>未解鎖</span>' : '<span class="section-status section-status-active">進行中</span>'}
     </div>
     <div class="section-body" id="reportBody"></div>`;
   container.appendChild(card);
@@ -122,16 +120,7 @@ function renderSection4(container, stage, isCompleted) {
   const report = getView() && getView().report_data ? tryParseJson(getView().report_data) : null;
 
   if (!report) {
-    body.innerHTML = renderTaskGuide({
-      title:'AI 回饋正在整理',
-      progress:'角色扮演錄音與逐字稿已保留',
-      actions:['不用重新錄音或重做角色扮演。','先留在目前頁面，等待系統完成整理。','稍後仍未顯示時，重新整理此頁再試。'],
-      support:{title:'等待時先不用做什麼',items:['不要連續重整或重複提交；系統只是在重新整理回饋。']},
-      checks:['原本的角色扮演回答仍可回看。','AI 回饋已出現在下方。'],
-      next:'回饋出現後，先選一個優點與一個最先改善的地方。',
-      view:getView(),
-      state:viewId?'completed':isPastDue()?'read-only':'active',
-    });
+    body.innerHTML = '<p class="text-muted mb-0">回饋還在產生，等一下再重新整理這一頁。</p>';
     return;
   }
 
@@ -145,19 +134,8 @@ function renderSection4(container, stage, isCompleted) {
 
   const strengths = feedbackBulletItems(report.strengths);
   const suggestions = feedbackBulletItems(report.overall_suggestions);
-  const guideState=viewId||isCompleted?'completed':isPastDue()?'read-only':'active';
-  const guideHtml=renderTaskGuide({
-    title:guideState==='active'?'帶走一個優點＋一個最先改的地方':'這次 AI 回饋已整理完成',
-    progress:`${strengths.length} 個優點・${suggestions.length} 個改進建議`,
-    actions:['先從「優勢」找一點，回想它出現在哪一題或哪一輪。','再從「改進建議」只選一項，作為最先處理的重點。','想清楚下次要改哪個動作，不只記住「要加強」。'],
-    support:{title:'回饋很多，不知道先看哪裡時',items:['先看會影響聽者理解或回答是否切題的問題，再看小文法。','這是 AI 回饋，不是老師正式成績；要用自己的作答證據判斷是否適合。'],html:learningScaffoldStageHtml(getView(),'report')},
-    checks:['我能指出一個優點出現在哪裡。','我只選了一項優先改善重點。','我說得出下次要怎麼做得不一樣。'],
-    next:'前往心得，把選到的優點、問題與下一步寫成具體證據。',
-    view:getView(),
-    state:guideState,
-  });
 
-  let html = `${guideHtml}<p class="fw-bold mb-3"><i class="bi bi-clipboard-data me-1 text-primary"></i>詳細分析 Detailed Analysis</p>
+  let html = `<p class="fw-bold mb-3"><i class="bi bi-clipboard-data me-1 text-primary"></i>詳細分析</p>
     <div class="row g-3 mb-4">`;
   for (const [key, labels] of Object.entries(analysisLabels)) {
     const items = feedbackBulletItems(analysis[key]);
@@ -165,7 +143,7 @@ function renderSection4(container, stage, isCompleted) {
     html += `
       <div class="col-12 col-md-6">
         <div class="analysis-item">
-          <div class="analysis-label"><i class="bi bi-dot me-1"></i>${labels.zh} / ${labels.en}</div>
+          <div class="analysis-label"><i class="bi bi-dot me-1"></i>${labels.zh}</div>
           <ul class="mb-0 ps-3 small">${items.map(item => `<li class="mb-1">${escHtml(item)}</li>`).join('')}</ul>
         </div>
       </div>`;
@@ -173,13 +151,13 @@ function renderSection4(container, stage, isCompleted) {
   html += `</div>`;
 
   if (strengths.length > 0) {
-    html += `<p class="fw-bold mb-2"><i class="bi bi-stars me-1 text-success"></i>優勢 Strengths</p><ul class="mb-3">`;
+    html += `<p class="fw-bold mb-2">做得好的地方</p><ul class="mb-3">`;
     html += strengths.map(s => `<li class="mb-1"><span class="text-success me-1">✓</span>${escHtml(s)}</li>`).join('');
     html += `</ul>`;
   }
 
   if (suggestions.length > 0) {
-    html += `<p class="fw-bold mb-2"><i class="bi bi-lightbulb me-1 text-primary"></i>改進建議 Suggestions</p><ul class="mb-0">`;
+    html += `<p class="fw-bold mb-2">可以加強的地方</p><ul class="mb-0">`;
     html += suggestions.map(s => `<li class="mb-1"><span class="text-primary me-1">→</span>${escHtml(s)}</li>`).join('');
     html += `</ul>`;
   }

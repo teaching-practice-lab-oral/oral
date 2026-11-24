@@ -1,3 +1,12 @@
+import {
+  attemptAudioPlayback,
+  prepareAudioElement,
+} from '/static/student/audio-session.mjs';
+import {
+  RecordingPanel,
+  renderRecordingControls,
+} from '/static/student/recording-panel.mjs';
+
 const pathParts = window.location.pathname.split('/');
 window.assignmentId = parseInt(pathParts[3]);
 const urlParams = new URLSearchParams(window.location.search);
@@ -7,13 +16,32 @@ window.submission = null;
 window.assignment = null;
 window.viewedSubmission = null;
 
-let mediaRecorder = null;
-let recordingChunks = [];
-let timerInterval = null;
-let recordingSeconds = 0;
-let pendingAudioURL = null;
+let roleplaySubmitting = false;
+const interviewerAudioPlayers = new Map();
+const interviewerAudioPreparations = new Map();
+let activeInterviewerAudio = null;
+let interviewerPlaybackGeneration = 0;
 const MAX_RECORDING_SECONDS = 300;
 const SECRET_RECORDING_SECONDS = 90;
+
+function currentRecordingLimit() {
+  const conversation = tryParseJson(submission?.roleplay_conversation) || { turns: [] };
+  const turn = conversation.turns.find(t => t.turn_number === conversation.current_turn);
+  return turn?.source_question_index === workflowLimit('secret_question_source_index')
+    ? SECRET_RECORDING_SECONDS
+    : MAX_RECORDING_SECONDS;
+}
+
+const recorder = new RecordingPanel({
+  suffix: 'Rp',
+  logTag: 'roleplay',
+  maxSeconds: currentRecordingLimit,
+  showAlert: message => showAlert(message),
+  onBeforeStart: () => {
+    interviewerPlaybackGeneration += 1;
+    pauseInterviewerAudio();
+  },
+});
 
 function scratchpadKey(turnNumber) {
   return `roleplay-keywords:${submission?.id || 'unknown'}:${turnNumber}`;
@@ -36,84 +64,42 @@ function roleplayKeywordField(currentTurn, isSecret) {
   </div>`;
 }
 
+// One place derives roleplay progress; the guide, the controls and the
+// recovery prompts all read from it.
+function roleplayProgress(turns) {
+  const coreCount = workflowLimit('core_question_count');
+  const secretIndex = workflowLimit('secret_question_source_index');
+  const answered = turns.filter(turn => turn.student_transcript);
+  const completedCore = new Set(answered
+    .filter(turn => Number.isInteger(turn.source_question_index) && turn.source_question_index < coreCount)
+    .map(turn => turn.source_question_index)).size;
+  const secretAnswered = answered.some(turn => turn.source_question_index === secretIndex);
+  const allTurnsAnswered = turns.length > 0 && answered.length === turns.length;
+  return {
+    coreCount,
+    completedTurns: answered.length,
+    completedCore,
+    secretAnswered,
+    allTurnsAnswered,
+    awaitingReport: allTurnsAnswered && completedCore >= coreCount && secretAnswered,
+    awaitingNextQuestion: allTurnsAnswered && !(completedCore >= coreCount && secretAnswered),
+    label: `核心題 ${completedCore}/${coreCount}・追問 ${secretAnswered ? 1 : 0}/1`,
+  };
+}
+
 function renderRoleplayTaskGuide(vs, stage, isCompleted, turns, currentTurn) {
-  const completedTurns=turns.filter(turn=>turn.student_transcript).length;
-  const coreQuestionCount=workflowLimit('core_question_count');
-  const secretQuestionIndex=workflowLimit('secret_question_source_index');
-  const completedCore=new Set(turns.filter(turn=>turn.student_transcript&&Number.isInteger(turn.source_question_index)&&turn.source_question_index<coreQuestionCount).map(turn=>turn.source_question_index)).size;
-  const secretAnswered=turns.some(turn=>turn.student_transcript&&turn.source_question_index===secretQuestionIndex);
-  const allTurnsAnswered=turns.length>0&&turns.every(turn=>turn.student_transcript);
-  const state=viewId||isCompleted||stage>=8?'completed':isPastDue()?'read-only':'active';
-  const progress=`核心題目 ${completedCore}/${coreQuestionCount}・臨場追問 ${secretAnswered?'1/1':'0/1'}・已回答 ${completedTurns} 輪`;
-  if(state!=='active')return renderTaskGuide({title:'角色扮演已完成',progress,next:'回看時，找一輪自己的回答，確認是否先答題、再補真實細節。',view:vs,state});
-
-  if(stage===6){
-    const questions=Array.isArray(assignment?.questions)?assignment.questions:[];
-    const questionList=`<p class="small mb-2">你已寫過並跟讀過這 ${questions.length} 個主題；完成後還有一題事前不公開的臨場追問。</p><ol class="small mb-0 ps-3">${questions.map(question=>`<li class="mb-1">${escHtml(question)}</li>`).join('')}</ol>`;
-    return renderTaskGuide({
-      title:'準備好就開始：這次要回答，不是背稿',
-      progress:`尚未開始面試・${workflowLimit('core_question_count')} 個核心題目＋1 個臨場追問`,
-      actions:['確認環境安靜、麥克風可以使用。','按「開始面試」，先把面試官的問題聽完整。','先直接回答，再用簡單英文補上自己的真實經驗。'],
-      support:{title:'開始前想先確認時',items:['不必記住終稿的每一個字；記得每題的重點與例子即可。','若沒聽清楚，可使用題目旁的播放按鈕再聽一次。'],html:`${questionList}${learningScaffoldModuleHtml()}`},
-      starters:['I would say…','One reason is…','For example…'],
-      checks:['我準備用自己的話回答，不照稿朗讀。','我知道回答要先切題，再補理由或例子。','我已準備好開始錄音。'],
-      next:'按下開始後，依序完成每一輪；未使用英文或明顯偏題時，面試官可能重問。',
-      view:vs,
-    });
-  }
-
-  if(allTurnsAnswered&&completedCore>=coreQuestionCount&&secretAnswered){
-    return renderTaskGuide({
-      title:'錄音都已保留，只要重新產生 AI 回饋',
-      progress,
-      actions:[`不要重新錄音；${workflowLimit('core_question_count')+1} 題回答都已經儲存。`,'按「重新產生 AI 回饋」。','留在目前頁面，等系統完成整理。'],
-      support:{title:'擔心答案消失時',items:['重新產生只會重做回饋，不會覆蓋已儲存的錄音與逐字稿。']},
-      checks:['四個核心題目與臨場追問都已有回答。','頁面顯示不需要重新錄音。','AI 回饋成功產生。'],
-      next:'系統會自動前往 AI 回饋頁。',
-      view:vs,
-    });
-  }
-
-  if(allTurnsAnswered){
-    return renderTaskGuide({
-      title:'上一輪已儲存，準備下一題後繼續',
-      progress,
-      actions:['不要重新錄製上一輪。','按「準備下一題並繼續」。','下一題出現後，先聽完整再作答。'],
-      support:{title:'畫面看起來停住時',items:['上一輪的錄音與逐字稿已保留，這個按鈕只會接續產生下一題。']},
-      checks:['上一輪已顯示在對話紀錄中。','下一題已出現並可播放。','錄音按鈕重新開放。'],
-      next:`回答下一題，直到 ${workflowLimit('core_question_count')} 個核心題目與一個臨場追問都完成。`,
-      view:vs,
-    });
-  }
+  const p = roleplayProgress(turns);
+  if (viewId || isCompleted || stage >= 8 || isPastDue()) return '';
+  if (stage === 6) return renderAiGuide(vs);
+  if (p.awaitingReport || p.awaitingNextQuestion) return '';
 
   const activeTurn = turns.find(turn => turn.turn_number === currentTurn) || {};
   const sourceIndex = Number.isInteger(activeTurn.source_question_index)
     ? activeTurn.source_question_index
     : Math.max(0, currentTurn - 1);
-  const profile = getView()?.job_profile_data || {};
-  const isSecret=sourceIndex===workflowLimit('secret_question_source_index');
-  if(isSecret)return renderTaskGuide({
-    title:'臨場追問：補一個真實細節就好',
-    progress,
-    actions:['先找出面試官正在追問哪個細節：做法、困難或結果。','只回答這個細節，不必重講整份答案。','使用自己的真實經驗；簡單、完整的短句就可以。'],
-    support:{title:'一時不知道怎麼開始時',items:['先重複題目中的關鍵字，再補你當時實際做了什麼。'],html:learningScaffoldPositionHtml(vs)},
-    starters:['What I did was…','The difficult part was…','As a result…'],
-    persistentHtml:roleplayKeywordField(currentTurn,true),
-    checks:['我有直接回答追問的細節。','內容是自己真的做過或想過的事。','回答使用英文，而且沒有照讀完整稿件。'],
-    next:'提交後，系統會整理整場面試並產生 AI 回饋。',
-    view:vs,
-  });
-  return renderTaskGuide({
-    title:`第 ${currentTurn} 輪：先回答面試官現在問的重點`,
-    progress,
-    actions:['沒聽清楚時，先用播放按鈕再聽一次。','只記 1–3 個英文關鍵字，不寫完整句子。','先直接回答，再補理由或例子；適合時再連結目標職位。'],
-    support:{title:`Q${sourceIndex+1} 的即席回答提示`,items:[`你的目標職位是「${profile.desired_position||'尚未填寫'}」；想展現的能力是「${profile.required_competencies||'尚未填寫'}」。`,'例子可用課堂專題、社團、打工、實習或日常合作經驗。'],html:learningScaffoldQuestionHtml(vs,sourceIndex,'roleplay')},
-    starters:learningScaffoldStarters(vs,sourceIndex,['I would say…','One reason is…','For example…']),
-    persistentHtml:roleplayKeywordField(currentTurn,false),
-    checks:['開頭有直接回應面試官的問題。','回答包含真實理由、做法或例子。','我用自己的話回答，沒有朗讀完整稿件。'],
-    next:'回聽並提交這一輪；系統會接著準備下一題。',
-    view:vs,
-  });
+  const isSecret = sourceIndex === workflowLimit('secret_question_source_index');
+  const aiHtml = isSecret ? '' : learningScaffoldQuestionHtml(vs, sourceIndex, 'roleplay');
+  return `${renderAiGuide(vs, aiHtml)}${roleplayKeywordField(currentTurn, isSecret)}`;
 }
 
 async function init() {
@@ -157,7 +143,6 @@ async function init() {
   document.getElementById('loadingMsg').classList.add('d-none');
   document.getElementById('content').classList.remove('d-none');
   document.getElementById('assignmentTitle').textContent = assignment.title;
-  document.getElementById('assignmentDesc').textContent = assignment.description || '';
   if (submission && submission.late_deadline && assignment.due_date && new Date() > new Date(assignment.due_date)) {
     const el = document.getElementById('dueDate');
     el.textContent = `補繳截止：${new Date(submission.late_deadline).toLocaleString('zh-TW')}`;
@@ -171,6 +156,7 @@ async function init() {
   }
 
   renderAll();
+  if (!viewId && !isCompleted && stage === 7) autoplayCurrentQuestion();
 }
 
 function renderAll() {
@@ -183,6 +169,7 @@ function renderAll() {
   renderViewBanner();
   const isViewingPast = viewedSubmission && submission && viewedSubmission.id !== submission.id;
 
+  disposeInterviewerAudioPlayers();
   const container = document.getElementById('sectionContainer');
   container.innerHTML = '';
   renderSection3(container, stage, isCompleted);
@@ -209,12 +196,11 @@ function renderSection3(container, stage, isCompleted) {
   card.className = `section-card ${isLocked ? 'locked' : isDone ? 'completed' : 'active'}`;
   card.innerHTML = `
     <div class="section-header">
-      <div class="section-icon"><i class="bi bi-chat-dots-fill"></i></div>
       <div>
         <div class="section-title">口說練習二：角色扮演</div>
         <div class="section-subtitle">Speaking Practice 2 — Role Play</div>
       </div>
-      ${isDone ? '<span class="ms-auto badge bg-white text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i>完成</span>' : ''}
+      ${isDone ? '<span class="section-status section-status-done"><i class="bi bi-check-circle-fill"></i>完成</span>' : isLocked ? '<span class="section-status section-status-locked"><i class="bi bi-lock-fill"></i>未解鎖</span>' : '<span class="section-status section-status-active">進行中</span>'}
     </div>
     <div class="section-body" id="roleplayBody"></div>`;
   container.appendChild(card);
@@ -229,12 +215,6 @@ function renderSection3(container, stage, isCompleted) {
   body.innerHTML = renderRoleplayTaskGuide(vs,stage,isCompleted,turns,currentTurn);
 
   if (turns.length > 0) {
-    const completedTurns = turns.filter(t => t.student_transcript).length;
-    const coreQuestionCount = workflowLimit('core_question_count');
-    const secretQuestionIndex = workflowLimit('secret_question_source_index');
-    const completedCore = new Set(turns.filter(t => t.student_transcript && Number.isInteger(t.source_question_index) && t.source_question_index < coreQuestionCount).map(t => t.source_question_index)).size;
-    const secretAnswered = turns.some(t => t.student_transcript && t.source_question_index === secretQuestionIndex);
-    body.innerHTML += `<div class="mb-3"><span class="turn-badge">核心題目 ${completedCore} / ${coreQuestionCount}・臨場追問 ${secretAnswered ? '1 / 1' : '0 / 1'}（已回答 ${completedTurns} 輪）</span></div>`;
     body.innerHTML += `<div class="chat-container mb-3" id="chatContainer">${renderChatBubbles(turns)}</div>`;
   }
 
@@ -243,62 +223,35 @@ function renderSection3(container, stage, isCompleted) {
       body.innerHTML += `
         <button class="btn btn-primary-custom" id="startInterviewBtn" data-action="startRoleplay">
           <span id="startInterviewSpinner" class="spinner-border spinner-border-sm d-none me-1"></span>
-          <i class="bi bi-play-fill me-1"></i>開始面試 Start Interview
+          <i class="bi bi-play-fill me-1"></i>開始面試
         </button>`;
     } else if (stage === 7 && currentTurn <= workflowLimit('max_roleplay_turns')) {
-      const allTurnsAnswered = turns.length > 0 && turns.every(t => t.student_transcript);
-      const completedCore = new Set(turns.filter(t => t.student_transcript && Number.isInteger(t.source_question_index) && t.source_question_index < workflowLimit('core_question_count')).map(t => t.source_question_index)).size;
-      const secretAnswered = turns.some(t => t.student_transcript && t.source_question_index === workflowLimit('secret_question_source_index'));
-      if (allTurnsAnswered && completedCore >= workflowLimit('core_question_count') && secretAnswered) {
+      const progress = roleplayProgress(turns);
+      if (progress.awaitingReport) {
         body.innerHTML += `
-          <div class="alert alert-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>五個面試題目都已完成，但 AI 回饋尚未產生。你的錄音與回答已保留，不需要重新錄音。</div>
+          <div class="alert alert-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>回答都已保存，但回饋還沒產生成功。</div>
           <button class="btn btn-primary-custom" id="retryReportBtn" data-action="retryRoleplayReport">
             <span id="retryReportSpinner" class="spinner-border spinner-border-sm d-none me-1"></span>
             <i class="bi bi-arrow-clockwise me-1"></i>重新產生 AI 回饋
           </button>`;
-      } else if (allTurnsAnswered) {
+      } else if (progress.awaitingNextQuestion) {
         body.innerHTML += `
-          <div class="alert alert-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>上一輪回答已經儲存，但下一題還沒準備完成。你不需要重新錄音，可以直接從這裡接著進行。</div>
+          <div class="alert alert-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>上一輪已保存，下一題還沒出來。</div>
           <button class="btn btn-primary-custom" id="startInterviewBtn" data-action="startRoleplay">
             <span id="startInterviewSpinner" class="spinner-border spinner-border-sm d-none me-1"></span>
             <i class="bi bi-arrow-clockwise me-1"></i>準備下一題並繼續
           </button>`;
       } else {
         body.innerHTML += `
-          <p class="fw-semibold mb-2"><i class="bi bi-mic me-1 text-danger"></i>第 ${currentTurn} 輪：請錄製你的回答</p>
-          <p class="text-muted small mb-3">${turns.find(t => t.turn_number === currentTurn)?.source_question_index === workflowLimit('secret_question_source_index') ? '臨場追問最長 90 秒' : '最長 5 分鐘 / Max 5 minutes'}</p>
-          <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
-            <button class="btn btn-record" id="recordBtnRp" data-action="startRecording">
-              <i class="bi bi-record-circle me-1"></i>開始錄音
-            </button>
-            <button class="btn btn-stop d-none" id="stopBtnRp" data-action="stopRecording">
-              <i class="bi bi-stop-circle me-1"></i>停止
-            </button>
-            <span class="timer-display d-none" id="timerRp">0:00</span>
-          </div>
-          <div id="statusRp" class="text-muted small mb-2"></div>
-          <div id="previewRp" class="d-none mb-3">
-            <p class="fw-semibold mb-2" style="color:#10b981"><i class="bi bi-play-circle me-1"></i>錄音預覽，確認後再提交</p>
-            <audio id="previewAudioRp" controls class="d-block mb-3" style="max-width:400px"></audio>
-            <div class="d-flex gap-2">
-              <button class="btn btn-outline-secondary btn-sm" data-action="reRecord">
-                <i class="bi bi-arrow-repeat me-1"></i>重錄
-              </button>
-              <button class="btn btn-success-custom btn-sm" data-action="submitAudio">
-                <i class="bi bi-send me-1"></i>確認提交
-              </button>
-            </div>
-          </div>
-          <div id="spinnerRp" class="d-none processing-overlay">
-            <div class="spinner-border text-primary"></div>
-            <span>音訊處理中，請稍候... Processing audio...</span>
-          </div>`;
+          <p class="fw-semibold mb-2"><i class="bi bi-mic me-1 text-danger"></i>錄下你的回答</p>
+          <p class="text-muted small mb-3">最長 ${currentRecordingLimit() === SECRET_RECORDING_SECONDS ? '90 秒' : '5 分鐘'}</p>
+          ${renderRecordingControls({ suffix: 'Rp' })}`;
       }
     }
   }
 
   if (isDone) {
-    body.innerHTML += `<div class="alert alert-success py-2 mt-2"><i class="bi bi-check-circle me-1"></i>角色扮演已完成！AI 回饋已產生。</div>`;
+    body.innerHTML += `<div class="alert alert-success py-2 mt-2"><i class="bi bi-check-circle me-1"></i>模擬面試已完成，回饋已產生。</div>`;
   }
 
   if (turns.length > 0) {
@@ -313,8 +266,8 @@ function renderChatBubbles(turns) {
   return turns.map(t => {
     let html = `
       <div class="d-flex flex-column mb-1">
-        <div class="chat-label text-muted" style="margin-left:4px">
-          <i class="bi bi-person-workspace me-1"></i>面試官 Interviewer · 第 ${t.turn_number} 輪
+        <div class="chat-label text-muted ms-1">
+          面試官 Interviewer · 第 ${t.turn_number} 輪
         </div>
         <div class="chat-bubble chat-interviewer">
           ${escHtml(t.interviewer_question)}
@@ -329,8 +282,8 @@ function renderChatBubbles(turns) {
     if (t.student_transcript) {
       html += `
         <div class="d-flex flex-column align-items-end mb-1">
-          <div class="chat-label text-muted" style="margin-right:4px">
-            <i class="bi bi-person me-1"></i>你的回答
+          <div class="chat-label text-muted me-1">
+            你的回答
           </div>
           <div class="chat-bubble chat-student">
             ${escHtml(t.student_transcript)}
@@ -347,21 +300,163 @@ function renderChatBubbles(turns) {
   }).join('');
 }
 
-async function loadChatTTS(turnNumber) {
+function disposeInterviewerAudioPlayers() {
+  interviewerPlaybackGeneration += 1;
+  for (const { audio } of interviewerAudioPlayers.values()) {
+    try { audio.pause(); } catch (_) {}
+  }
+  interviewerAudioPlayers.clear();
+  interviewerAudioPreparations.clear();
+  activeInterviewerAudio = null;
+}
+
+function pauseInterviewerAudio() {
+  for (const { audio } of interviewerAudioPlayers.values()) {
+    try { audio.pause(); } catch (_) {}
+  }
+  activeInterviewerAudio = null;
+}
+
+function showInterviewerLoadFailure(turnNumber, message = '面試官語音載入失敗，請重試。') {
   const box = document.getElementById(`tts-player-${turnNumber}`);
   if (!box) return;
-  box.innerHTML = '<span class="text-muted" style="font-size:0.8rem">載入中...</span>';
+  box.innerHTML = `<div class="text-danger small mb-1">${escHtml(message)}</div>
+    <button class="btn btn-sm btn-outline-secondary py-0 px-2" data-action="retryInterviewerTTS" data-args='[${turnNumber}]'>
+      <i class="bi bi-arrow-clockwise me-1"></i>重新載入語音
+    </button>`;
+}
+
+function showInterviewerPlaybackFallback(turnNumber) {
+  const status = document.getElementById(`tts-status-${turnNumber}`);
+  const fallback = document.getElementById(`tts-fallback-${turnNumber}`);
+  if (status) {
+    status.className = 'alert alert-warning py-1 px-2 mt-2 mb-1 small';
+    status.textContent = 'iPad／iPhone 未允許自動播放，請點一下「播放問題」。';
+  }
+  if (fallback) fallback.classList.remove('d-none');
+}
+
+async function resumeInterviewerTTS(turnNumber) {
+  if (recorder.isRecording()) {
+    showAlert('先停止錄音，再播放問題。', 'warning');
+    return;
+  }
+  const entry = interviewerAudioPlayers.get(turnNumber);
+  if (!entry?.audio) {
+    await prepareInterviewerTTS(turnNumber, { attemptAutoplay: true });
+    return;
+  }
+  const result = await attemptAudioPlayback(entry.audio);
+  if (result.status === 'blocked') {
+    console.warn('[roleplay-tts:autoplay-blocked]');
+    showInterviewerPlaybackFallback(turnNumber);
+  } else if (result.status === 'failed') {
+    console.warn('[roleplay-tts:playback-failed]', result.error?.name || 'unknown');
+    showInterviewerLoadFailure(turnNumber, '面試官語音無法播放，請重新載入。');
+  }
+}
+
+async function mountInterviewerTTS(turnNumber) {
+  const box = document.getElementById(`tts-player-${turnNumber}`);
+  if (!box) return null;
+  box.innerHTML = '<span class="text-muted fs-sm"><span class="spinner-border spinner-border-sm me-1"></span>載入面試官語音…</span>';
   try {
-    const res = await apiCall(`/api/student/submissions/${getView().id}/audio/roleplay-tts/${turnNumber}`);
-    if (res.ok) {
+    const audio = await prepareAudioElement(async () => {
+      const res = await apiCall(`/api/student/submissions/${getView().id}/audio/roleplay-tts/${turnNumber}`);
+      if (!res.ok) throw new Error(`tts_http_${res.status}`);
       const data = await res.json();
-      const _a1 = document.createElement('audio'); _a1.controls = true; _a1.style.cssText = 'height:30px;max-width:220px;margin-top:4px';
-      const _s1 = document.createElement('source'); _s1.src = data.url; _s1.type = 'audio/mpeg';
-      _a1.appendChild(_s1); box.textContent = ''; box.appendChild(_a1);
-    } else {
-      box.textContent = '載入失敗';
+      return data.url;
+    });
+    if (!box.isConnected) return null;
+    audio.controls = true;
+    audio.preload = 'auto';
+    audio.playsInline = true;
+    audio.style.cssText = 'height:38px;max-width:100%;margin-top:4px';
+    audio.setAttribute('aria-label', `第 ${turnNumber} 輪面試官問題`);
+
+    const status = document.createElement('div');
+    status.id = `tts-status-${turnNumber}`;
+    status.className = 'text-muted small mt-1';
+    status.textContent = '面試官語音已準備完成。';
+    const fallback = document.createElement('button');
+    fallback.type = 'button';
+    fallback.id = `tts-fallback-${turnNumber}`;
+    fallback.className = 'btn btn-sm btn-primary mt-1 d-none';
+    fallback.dataset.action = 'resumeInterviewerTTS';
+    fallback.dataset.args = JSON.stringify([turnNumber]);
+    fallback.innerHTML = '<i class="bi bi-play-fill me-1"></i>播放問題';
+
+    audio.addEventListener('play', () => {
+      if (activeInterviewerAudio && activeInterviewerAudio !== audio) {
+        try { activeInterviewerAudio.pause(); } catch (_) {}
+      }
+      activeInterviewerAudio = audio;
+      status.className = 'text-primary small mt-1';
+      status.textContent = '正在播放面試官問題…';
+      fallback.classList.add('d-none');
+    });
+    audio.addEventListener('ended', () => {
+      if (activeInterviewerAudio === audio) activeInterviewerAudio = null;
+      status.className = 'text-success small mt-1';
+      status.textContent = '問題播放完成，可以開始錄音。';
+    });
+    audio.addEventListener('error', () => {
+      console.warn('[roleplay-tts:media-error]');
+      showInterviewerLoadFailure(turnNumber, '面試官語音格式暫時無法播放，請重新載入。');
+    }, { once: true });
+
+    box.textContent = '';
+    box.append(audio, status, fallback);
+    interviewerAudioPlayers.set(turnNumber, { audio });
+    try { audio.load(); } catch (error) {
+      console.warn('[roleplay-tts:load-failed]', error?.name || 'unknown');
+      showInterviewerLoadFailure(turnNumber);
+      return null;
     }
-  } catch { box.textContent = '載入失敗'; }
+    return audio;
+  } catch (error) {
+    console.warn('[roleplay-tts:url-load-failed]', error?.name || 'unknown');
+    showInterviewerLoadFailure(turnNumber);
+    return null;
+  }
+}
+
+async function prepareInterviewerTTS(turnNumber, { attemptAutoplay = false } = {}) {
+  const playbackGeneration = interviewerPlaybackGeneration;
+  const existing = interviewerAudioPlayers.get(turnNumber);
+  if (existing?.audio) {
+    if (attemptAutoplay) await resumeInterviewerTTS(turnNumber);
+    return existing.audio;
+  }
+
+  let preparation = interviewerAudioPreparations.get(turnNumber);
+  if (!preparation) {
+    preparation = mountInterviewerTTS(turnNumber);
+    interviewerAudioPreparations.set(turnNumber, preparation);
+  }
+  let audio = null;
+  try {
+    audio = await preparation;
+  } finally {
+    if (interviewerAudioPreparations.get(turnNumber) === preparation) {
+      interviewerAudioPreparations.delete(turnNumber);
+    }
+  }
+  if (attemptAutoplay && audio && playbackGeneration === interviewerPlaybackGeneration) {
+    await resumeInterviewerTTS(turnNumber);
+  }
+  return audio;
+}
+
+async function loadChatTTS(turnNumber) {
+  await prepareInterviewerTTS(turnNumber, { attemptAutoplay: true });
+}
+
+async function retryInterviewerTTS(turnNumber) {
+  const existing = interviewerAudioPlayers.get(turnNumber);
+  try { existing?.audio?.pause(); } catch (_) {}
+  interviewerAudioPlayers.delete(turnNumber);
+  await prepareInterviewerTTS(turnNumber, { attemptAutoplay: true });
 }
 
 async function loadChatStudentAudio(turnNumber) {
@@ -376,220 +471,156 @@ async function loadChatStudentAudio(turnNumber) {
       const _s2 = document.createElement('source'); _s2.src = data.url; _s2.type = 'audio/mpeg';
       _a2.appendChild(_s2); box.textContent = ''; box.appendChild(_a2);
     } else {
-      box.innerHTML = '<span style="font-size:0.8rem;opacity:0.8">載入失敗</span>';
+      box.innerHTML = '<span class="chat-audio-label">載入失敗</span>';
     }
-  } catch { box.innerHTML = '<span style="font-size:0.8rem;opacity:0.8">載入失敗</span>'; }
+  } catch { box.innerHTML = '<span class="chat-audio-label">載入失敗</span>'; }
 }
 
 async function playInterviewerTTS(turnNumber) {
-  try {
-    const res = await apiCall(`/api/student/submissions/${getView().id}/audio/roleplay-tts/${turnNumber}`);
-    if (res.ok) {
-      const data = await res.json();
-      const audio = new Audio(data.url);
-      audio.play().catch(() => {});
-      setTimeout(() => loadChatTTS(turnNumber), 100);
-    }
-  } catch {}
+  await prepareInterviewerTTS(turnNumber, { attemptAutoplay: true });
+}
+
+function autoplayCurrentQuestion() {
+  const conversation = tryParseJson(submission?.roleplay_conversation) || { turns: [] };
+  const currentTurn = conversation.current_turn || 1;
+  const current = conversation.turns.find(turn => turn.turn_number === currentTurn);
+  if (current?.interviewer_tts_key) playInterviewerTTS(currentTurn);
 }
 
 async function startRoleplay() {
   const btn = document.getElementById('startInterviewBtn');
   const spinner = document.getElementById('startInterviewSpinner');
   const priorConversation = tryParseJson(submission.roleplay_conversation) || { turns: [] };
-  const isRecovery = priorConversation.turns.length > 0
-    && priorConversation.turns.every(t => t.student_transcript);
+  const isRecovery = roleplayProgress(priorConversation.turns).allTurnsAnswered;
   if (btn) btn.disabled = true;
   if (spinner) spinner.classList.remove('d-none');
   const res = await apiCall(`/api/student/submissions/${submission.id}/roleplay/start`, { method: 'POST' });
   const data = await res.json();
   if (!res.ok) {
     if (btn && btn.isConnected) { btn.disabled = false; if (spinner) spinner.classList.add('d-none'); }
-    showAlert(data.detail || '開始面試時發生錯誤');
+    showAlert(data.detail || '無法開始面試，請再試一次。');
     return;
   }
   submission = data.submission;
   renderAll();
-  showAlert(isRecovery ? '下一題已準備完成，可以接著回答。' : '面試已開始！請聆聽問題並錄製你的回答。', 'success');
-  if (data.first_question_tts_key) {
-    const conversation = tryParseJson(submission.roleplay_conversation) || { current_turn: 1 };
-    setTimeout(() => playInterviewerTTS(conversation.current_turn || 1), 400);
-  }
+  showAlert(isRecovery ? '下一題來了。' : '面試開始。', 'success');
+  if (data.first_question_tts_key) autoplayCurrentQuestion();
 }
 
 async function startRecording() {
-  if (!window.isSecureContext) {
-    showAlert('麥克風功能需要安全連線（HTTPS）才能使用。請確認網址以 <strong>https://</strong> 開頭後再試。');
-    return;
-  }
-  if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
-    showAlert('你的瀏覽器不支援麥克風錄音功能。請改用 Chrome 或 Firefox 最新版本。');
-    return;
-  }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
-    recordingChunks = [];
-    recordingSeconds = 0;
-
-    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordingChunks.push(e.data); };
-    mediaRecorder.onstop = () => showPreview();
-    // Let the browser finalize one complete native audio container on stop.
-    // This is especially important for Safari's MP4 output.
-    mediaRecorder.start();
-
-    document.getElementById('recordBtnRp').classList.add('d-none');
-    document.getElementById('stopBtnRp').classList.remove('d-none');
-    document.getElementById('timerRp').classList.remove('d-none');
-    const status = document.getElementById('statusRp');
-    if (status) status.textContent = '錄音中... Recording...';
-
-    const activeConversation = tryParseJson(submission.roleplay_conversation) || { turns: [] };
-    const activeTurn = activeConversation.turns.find(
-      turn => turn.turn_number === activeConversation.current_turn
-    );
-    const recordingLimit = activeTurn?.source_question_index === workflowLimit('secret_question_source_index')
-      ? SECRET_RECORDING_SECONDS
-      : MAX_RECORDING_SECONDS;
-
-    timerInterval = setInterval(() => {
-      recordingSeconds++;
-      const m = Math.floor(recordingSeconds / 60);
-      const s = recordingSeconds % 60;
-      document.getElementById('timerRp').textContent = `${m}:${s.toString().padStart(2, '0')}`;
-      if (recordingSeconds >= recordingLimit) stopRecording();
-    }, 1000);
-  } catch (err) {
-    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-      showAlert('麥克風存取被拒絕。請點選瀏覽器網址列旁的鎖頭圖示，允許本網站使用麥克風後重新整理頁面再試。');
-    } else if (err.name === 'NotFoundError') {
-      showAlert('找不到麥克風裝置。請確認電腦已連接麥克風後再試。');
-    } else if (err.name === 'NotReadableError') {
-      showAlert('麥克風目前被其他程式佔用中，請關閉其他正在使用麥克風的應用程式後再試。');
-    } else {
-      showAlert(`無法存取麥克風（${err.name || '未知錯誤'}）。請確認麥克風已連接且瀏覽器已授權使用。`);
-    }
-  }
+  if (roleplaySubmitting) return;
+  const conversation = tryParseJson(submission?.roleplay_conversation);
+  const turnNumber = conversation?.current_turn;
+  if (!Number.isInteger(turnNumber) || submission?.stage !== 7) return;
+  await recorder.start({ turnNumber });
 }
 
-function stopRecording() {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
-    mediaRecorder.stream.getTracks().forEach(t => t.stop());
-  }
-  clearInterval(timerInterval);
-  document.getElementById('stopBtnRp').classList.add('d-none');
-  document.getElementById('timerRp').classList.add('d-none');
-  const status = document.getElementById('statusRp');
-  if (status) status.textContent = '錄音完成，可先預覽再提交。 Recording complete.';
+async function stopRecording() {
+  await recorder.stop();
 }
 
 function showPreview() {
-  if (recordingChunks.length === 0) { reRecord(); return; }
-  const { blob } = buildRecordedAudio(recordingChunks, mediaRecorder);
-  if (pendingAudioURL) URL.revokeObjectURL(pendingAudioURL);
-  pendingAudioURL = URL.createObjectURL(blob);
-  setAudioPreview(document.getElementById('previewAudioRp'), pendingAudioURL);
-  document.getElementById('previewRp').classList.remove('d-none');
+  recorder.showPreview();
 }
 
 function reRecord() {
-  if (pendingAudioURL) { URL.revokeObjectURL(pendingAudioURL); pendingAudioURL = null; }
-  recordingChunks = [];
-  document.getElementById('previewRp').classList.add('d-none');
-  document.getElementById('recordBtnRp').classList.remove('d-none');
+  recorder.reset();
+}
+
+function setRoleplaySubmitting(busy) {
+  roleplaySubmitting = busy;
+  for (const button of document.querySelectorAll('[data-action="submitAudio"], [data-action="reRecord"], [data-action="startRecording"]')) {
+    button.disabled = busy;
+  }
+  recorder.setBusy(busy);
+}
+
+async function syncRoleplayAfterUpload(turnNumber) {
+  try {
+    const res = await apiCall(`/api/student/submissions/${submission.id}`);
+    if (!res.ok) return false;
+    const fresh = await res.json();
+    const conversation = tryParseJson(fresh.roleplay_conversation);
+    const saved = conversation?.turns?.some(turn => turn.turn_number === turnNumber && turn.student_transcript);
+    // Preserve the pending recording if the server still awaits this exact
+    // turn. Otherwise discard it before presenting any later question.
+    if (!saved && fresh.stage === 7 && conversation?.current_turn === turnNumber) return false;
+    reRecord();
+    submission = fresh;
+    renderAll();
+    showAlert(saved ? '這一輪已經保存過了。' : '進度已更新，請看目前的題目再錄音。', 'success');
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 async function submitAudio() {
-  const previewEl = document.getElementById('previewRp');
-  const spinnerEl = document.getElementById('spinnerRp');
-  spinnerEl.classList.remove('d-none');
-
-  const { blob, filename } = buildRecordedAudio(recordingChunks, mediaRecorder);
-  const formData = new FormData();
-  formData.append('audio', blob, filename);
-
-  let res;
-  let data;
-  try {
-    res = await fetch(`/api/student/submissions/${submission.id}/roleplay/turn`, {
-      method: 'POST',
-      credentials: 'include',
-      body: formData,
-    });
-    data = await res.json();
-  } catch (error) {
-    spinnerEl.classList.add('d-none');
-    previewEl.classList.remove('d-none');
-    showAlert('無法送出錄音，請檢查網路後再試一次。');
+  if (roleplaySubmitting) return;
+  const recordedAudio = recorder.recordedAudio;
+  if (!recordedAudio?.blob?.size || !Number.isInteger(recordedAudio.turnNumber)) {
+    showAlert('請先錄音再送出。');
     return;
   }
-  spinnerEl.classList.add('d-none');
+  const { blob, filename, durationMs, turnNumber } = recordedAudio;
+  const formData = new FormData();
+  formData.append('audio', blob, filename);
+  formData.append('client_duration_ms', String(durationMs));
+  formData.append('expected_turn_number', String(turnNumber));
+  setRoleplaySubmitting(true);
 
-  if (!res.ok) {
-    const detail = data && data.detail;
-    if (detail && typeof detail === 'object' && detail.code === 'roleplay_response_rejected') {
-      showAlert(detail.message || "Let's stay focused on the interview. Please answer the current question in English.");
-      reRecord();
-      const conversation = tryParseJson(submission.roleplay_conversation) || { current_turn: 1, turns: [] };
-      const current = conversation.turns.find(turn => turn.turn_number === conversation.current_turn);
-      if (detail.replay_current_question && current?.interviewer_tts_key) {
-        setTimeout(() => playInterviewerTTS(conversation.current_turn || 1), 300);
+  try {
+    let res;
+    let data;
+    try {
+      res = await fetch(`/api/student/submissions/${submission.id}/roleplay/turn`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+      data = await res.json();
+    } catch (_) {
+      if (!await syncRoleplayAfterUpload(turnNumber)) {
+        showAlert('連線中斷，還不確定是否送出。錄音還在，網路恢復後再按一次送出就好，不會重複。');
       }
       return;
     }
-    showAlert(typeof detail === 'string' ? detail : '音訊處理時發生錯誤');
-    if (res.status === 503) {
-      const refreshed = await apiCall(`/api/student/submissions/${submission.id}`);
-      if (refreshed.ok) {
-        submission = await refreshed.json();
-        renderAll();
+
+    if (!res.ok) {
+      const detail = data?.detail;
+      if (detail && typeof detail === 'object' && detail.code === 'roleplay_response_rejected') {
+        showAlert(detail.message || "Please answer the current question in English.");
+        reRecord();
+        const conversation = tryParseJson(submission.roleplay_conversation);
+        const current = conversation?.turns?.find(turn => turn.turn_number === turnNumber);
+        if (detail.replay_current_question && current?.interviewer_tts_key) playInterviewerTTS(turnNumber);
+        return;
       }
+      if (!await syncRoleplayAfterUpload(turnNumber)) {
+        showAlert(typeof detail === 'string' ? detail : '錄音處理失敗。錄音還在，可以再送一次。');
+      }
+      return;
+    }
+
+    // The server supplies the whole conversation, including answers committed
+    // before an earlier response was lost. Do not append guesses locally.
+    if (!data.submission) {
+      if (!await syncRoleplayAfterUpload(turnNumber)) showAlert('請重新整理頁面確認進度。');
+      return;
+    }
+    reRecord();
+    submission = data.submission;
+    renderAll();
+    if (submission.stage >= 8) {
+      clearRoleplayScratchpads();
+      showAlert('面試結束，正在前往回饋頁。', 'success');
+      setTimeout(() => { navigateStudentPage(`/student/assignment/${assignmentId}/report`); }, 1200);
     } else {
-      previewEl.classList.remove('d-none');
+      showAlert(`第 ${turnNumber} 輪已送出。`, 'success');
+      autoplayCurrentQuestion();
     }
-    return;
-  }
-
-  if (pendingAudioURL) { URL.revokeObjectURL(pendingAudioURL); pendingAudioURL = null; }
-  previewEl.classList.add('d-none');
-
-  if (data.is_complete) {
-    submission.report_data = JSON.stringify(data.report);
-    submission.stage = 8;
-    clearRoleplayScratchpads();
-    showAlert('面試完成！AI 回饋已生成，前往查看回饋。', 'success');
-    setTimeout(() => { navigateStudentPage(`/student/assignment/${assignmentId}/report`); }, 1200);
-    return;
-  }
-
-  submission.stage = 7;
-  const conv = tryParseJson(submission.roleplay_conversation) || { current_turn: 1, turns: [] };
-  const currentTurn = data.turn_number;
-  for (const t of conv.turns) {
-    if (t.turn_number === currentTurn) {
-      t.source_question_index = data.source_question_index;
-      t.student_transcript = data.student_transcript;
-      t.student_audio_key = data.student_audio_key || null;
-      break;
-    }
-  }
-  if (data.next_question) {
-    conv.turns.push({
-      turn_number: currentTurn + 1,
-      source_question_index: data.next_question_source_index,
-      interviewer_question: data.next_question,
-      interviewer_tts_key: data.next_question_tts_key || null,
-      student_transcript: null,
-      student_audio_key: null,
-    });
-    conv.current_turn = currentTurn + 1;
-  }
-  submission.roleplay_conversation = JSON.stringify(conv);
-  renderAll();
-  showAlert(`第 ${currentTurn} 輪完成！請回答下一個問題。`, 'success');
-  if (data.next_question_tts_key) {
-    setTimeout(() => playInterviewerTTS(currentTurn + 1), 400);
+  } finally {
+    setRoleplaySubmitting(false);
   }
 }
 
@@ -612,6 +643,11 @@ async function retryRoleplayReport() {
   setTimeout(() => { navigateStudentPage(`/student/assignment/${assignmentId}/report`); }, 700);
 }
 
+window.addEventListener('pagehide', () => {
+  recorder.release();
+  disposeInterviewerAudioPlayers();
+});
+
 init().catch(error=>renderStudentPageLoadError(error));
 
 Object.assign(window, {
@@ -625,6 +661,8 @@ Object.assign(window, {
   renderSection3,
   renderChatBubbles,
   loadChatTTS,
+  retryInterviewerTTS,
+  resumeInterviewerTTS,
   loadChatStudentAudio,
   playInterviewerTTS,
   startRoleplay,

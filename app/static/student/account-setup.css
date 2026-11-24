@@ -1,23 +1,23 @@
 #changePwModal {
   --pw-primary: var(--primary);
-  --pw-ink: #1f2937;
-  --pw-muted: #64748b;
-  --pw-line: #dbe3ef;
+  --pw-ink: var(--ink);
+  --pw-muted: var(--muted);
+  --pw-line: var(--border);
 }
 
 #changePwModal .modal-dialog { width: min(100% - 1rem, 520px); max-width: 520px; }
 #changePwModal .modal-content {
   overflow: hidden;
   border: 1px solid var(--glass-border);
-  border-radius: 20px;
+  border-radius: var(--radius);
   background: #fff;
-  box-shadow: var(--shadow);
+  box-shadow: none;
 }
 #changePwModal .change-pw-header {
   align-items: flex-start;
   padding: 1.15rem 1.25rem .95rem;
   border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #fff, #f7f8ff);
+  background: #fff;
 }
 #changePwModal .change-pw-heading { display: flex; align-items: center; gap: .75rem; min-width: 0; }
 #changePwModal .change-pw-icon,
@@ -25,9 +25,9 @@
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   color: var(--pw-primary);
-  background: #eef2ff;
+  background: var(--primary-soft);
 }
 #changePwModal .change-pw-icon { width: 40px; height: 40px; }
 #changePwModal .legal-doc-link .doc-icon { width: 34px; height: 34px; }
@@ -46,10 +46,10 @@
   gap: .7rem;
   margin-bottom: 1rem;
   padding: .85rem .95rem;
-  border: 1px solid #f0e4b0;
-  border-radius: 14px;
-  color: #7c5b12;
-  background: #fffdf2;
+  border: 1px solid #EAD7B5;
+  border-radius: var(--radius);
+  color: #774700;
+  background: var(--warning-soft);
   font-size: .88rem;
 }
 #changePwModal .legal-doc-list,
@@ -60,11 +60,11 @@
   gap: .72rem;
   padding: .78rem .85rem;
   border: 1px solid #e2e8f0;
-  border-radius: 13px;
+  border-radius: var(--radius-sm);
   color: #334155;
   text-decoration: none;
 }
-#changePwModal .legal-doc-link:hover { border-color: #c7d2fe; background: #f8faff; }
+#changePwModal .legal-doc-link:hover { border-color: var(--primary-light); background: var(--surface-soft); }
 #changePwModal .legal-doc-link .doc-text { flex: 1; min-width: 0; font-size: .88rem; font-weight: 650; }
 #changePwModal .consent-panel { margin-top: .85rem; }
 #changePwModal .consent-item {
@@ -72,9 +72,9 @@
   margin: 0;
   padding: .78rem .85rem .78rem 2.65rem;
   border: 1px solid var(--pw-line);
-  border-radius: 13px;
+  border-radius: var(--radius-sm);
 }
-#changePwModal .consent-item:has(.form-check-input:checked) { border-color: #c7d2fe; background: #f8faff; }
+#changePwModal .consent-item:has(.form-check-input:checked) { border-color: var(--primary-light); background: var(--primary-soft); }
 #changePwModal .consent-item .form-check-input { position: absolute; top: .92rem; left: .9rem; margin: 0; }
 #changePwModal .consent-item .form-check-label { font-size: .86rem; line-height: 1.5; cursor: pointer; }
 #changePwModal .password-group { margin-bottom: .9rem; }
@@ -91,9 +91,9 @@
   min-height: 48px;
   padding: .72rem 3rem .72rem 2.65rem;
   border: 1px solid var(--pw-line);
-  border-radius: 13px;
+  border-radius: var(--radius-sm);
 }
-#changePwModal .password-field .form-control:focus { border-color: #a5b4fc; box-shadow: 0 0 0 3px rgba(79, 70, 229, .08); }
+#changePwModal .password-field .form-control:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(31, 58, 95, .12); }
 #changePwModal .password-toggle {
   position: absolute;
   top: 50%;
@@ -103,15 +103,15 @@
   height: 36px;
   transform: translateY(-50%);
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   color: #718096;
   background: transparent;
 }
 #changePwModal .password-hint { margin-top: .42rem; color: #7b8798; font-size: .76rem; }
 #changePwModal .modal-footer { gap: .65rem; padding: .9rem 1.25rem 1.15rem; }
-#changePwModal .modal-footer .btn { min-height: 46px; border-radius: 12px; font-weight: 750; }
-#changePwModal #changePwSubmitBtn { min-width: 142px; border: 0; background: linear-gradient(90deg, var(--pw-primary), #7c3aed); }
-#changePwModal #changePwAlert { border: 0; border-radius: 13px; font-size: .86rem; }
+#changePwModal .modal-footer .btn { min-height: 46px; border-radius: var(--radius-sm); font-weight: 700; }
+#changePwModal #changePwSubmitBtn { min-width: 142px; border: 0; background: var(--pw-primary); }
+#changePwModal #changePwAlert { border: 0; border-radius: var(--radius-sm); font-size: .86rem; }
 
 @media (max-width: 575.98px) {
   #changePwModal .modal-dialog { margin: .5rem auto; }

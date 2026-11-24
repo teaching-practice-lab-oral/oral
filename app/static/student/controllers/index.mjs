@@ -1,5 +1,5 @@
 const studentHomeNativeFetch = window.fetch.bind(window);
-const StudentApiClientReady = import('/static/js/api-client.mjs?v=2');
+const StudentApiClientReady = import('/static/js/api-client.mjs');
 window.StudentApiClientReady = StudentApiClientReady;
 window.StudentApiNativeFetch = studentHomeNativeFetch;
 window.fetch = (url, options = {}) => {

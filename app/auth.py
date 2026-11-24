@@ -2,10 +2,10 @@ import hashlib
 from datetime import timedelta
 from typing import Optional
 
+import bcrypt
 import jwt
 from jwt.exceptions import InvalidTokenError
 from fastapi import Depends, HTTPException, Request, status
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -15,7 +15,11 @@ from app.services.legal_acknowledgement import requires_acknowledgement
 from app.services.presence import touch_student_presence
 from app.utils import get_client_ip, taipei_now
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt only reads the first 72 bytes. passlib (used before) truncated
+# silently, so stored hashes were made from the truncated bytes; bcrypt>=5
+# raises instead.  Truncating here keeps every existing hash verifiable.
+_BCRYPT_MAX_BYTES = 72
+_BCRYPT_ROUNDS = 12
 
 _PASSWORD_CHANGE_ALLOWED_PATHS = {
     "/api/auth/me",
@@ -26,12 +30,41 @@ _PASSWORD_CHANGE_ALLOWED_PATHS = {
 }
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+def _bcrypt_input(password: str) -> bytes:
+    return password.encode("utf-8")[:_BCRYPT_MAX_BYTES]
+
+
+def verify_password(plain_password: str, hashed_password: str | None) -> bool:
+    if not hashed_password:
+        return False
+    try:
+        return bcrypt.checkpw(_bcrypt_input(plain_password), hashed_password.encode("ascii"))
+    except ValueError:
+        # Malformed or non-bcrypt hash: treat as a failed login, not a 500.
+        return False
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(
+        _bcrypt_input(password), bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)
+    ).decode("ascii")
+
+
+# Spend the same bcrypt work when the account does not exist, so response
+# time does not reveal which student IDs are registered.
+_DUMMY_PASSWORD_HASH = hash_password("dummy-password-for-timing")
+
+
+def verify_password_or_dummy(plain_password: str, hashed_password: str | None) -> bool:
+    if hashed_password is None:
+        verify_password(plain_password, _DUMMY_PASSWORD_HASH)
+        return False
+    return verify_password(plain_password, hashed_password)
+
+
+def session_lifetime(role: str) -> timedelta:
+    hours = settings.ADMIN_TOKEN_EXPIRE_HOURS if role == "admin" else settings.ACCESS_TOKEN_EXPIRE_HOURS
+    return timedelta(hours=hours)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -71,7 +104,6 @@ def prune_expired_sessions(db: Session, now=None) -> int:
 def _refresh_session(db: Session, token: str, request: Request, user: "User") -> None:
     th = _token_hash(token)
     now = taipei_now()
-    expire_hours = settings.ADMIN_TOKEN_EXPIRE_HOURS if user.role == "admin" else settings.ACCESS_TOKEN_EXPIRE_HOURS
     client_ip = get_client_ip(request)
     # Throttle the write: only touch the row once per SESSION_TOUCH_SECONDS window.
     # Outside that window the UPDATE matches 0 rows, so the vast majority of
@@ -80,7 +112,7 @@ def _refresh_session(db: Session, token: str, request: Request, user: "User") ->
     touched = db.query(ActiveSession).filter(
         ActiveSession.token_hash == th,
         ActiveSession.last_seen_at < touch_before,
-    ).update({"last_seen_at": now, "ip_address": client_ip, "expires_at": now + timedelta(hours=expire_hours)})
+    ).update({"last_seen_at": now, "ip_address": client_ip, "expires_at": now + session_lifetime(user.role)})
     if touched and user.role != "admin":
         session = db.query(ActiveSession).filter(ActiveSession.token_hash == th).first()
         touch_student_presence(

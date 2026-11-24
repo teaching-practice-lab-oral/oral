@@ -11,24 +11,20 @@
   <meta property="og:image" content="/static/favicon.svg" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-  integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
-  crossorigin="anonymous" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
-  integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD"
-  crossorigin="anonymous" />
-  <link rel="stylesheet" href="/static/admin/css/common.css?v=3" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD" crossorigin="anonymous"/>
+  <link rel="stylesheet" href="/static/admin/css/common.css" />
   <style>
     .main-card {
       background: white;
-      border-radius: 16px;
+      border-radius: var(--admin-radius);
       border: 1px solid #e2e8f0;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       overflow: hidden;
     }
     .table tbody tr:hover { background: #f8fafc; }
     .search-bar { max-width: 280px; }
   </style>
+  <link rel="stylesheet" href="/static/css/ui.css">
 </head>
 <body>
   <nav class="navbar navbar-admin navbar-expand-lg"></nav>
@@ -42,7 +38,7 @@
           <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
           <input type="text" class="form-control" id="searchInput" maxlength="256" placeholder="搜尋學號或姓名..." data-action-input="filterTable" autocomplete="off" readonly data-action-focus="clearReadonlyAttr" />
         </div>
-        <select class="form-select form-select-sm" id="classFilter" style="max-width:160px" data-action-change="filterTable">
+        <select class="form-select form-select-sm maxw-160" id="classFilter" data-action-change="filterTable">
           <option value="">全部班級</option>
         </select>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
@@ -244,9 +240,9 @@
               <span>寄送進度</span>
               <span id="sendEmailProgressText">0 / 0</span>
             </div>
-            <div class="progress" style="height: 8px;">
-              <div id="sendEmailProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
-                   role="progressbar" style="width: 0%;"></div>
+            <div class="progress progress-h8">
+              <div id="sendEmailProgressBar" class="progress-bar progress-bar-striped progress-bar-animated pct-w-0"
+                   role="progressbar"></div>
             </div>
           </div>
           <div id="sendEmailAlert" class="alert d-none mt-3"></div>
@@ -326,10 +322,8 @@
     </div>
   </div>
 
-  <script src="/static/admin/js/common.js?v=8"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-  integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
-  crossorigin="anonymous"></script>
+  <script src="/static/admin/js/common.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
   <script>
     function authHeaders(json=true) {
       const h = {};
@@ -617,7 +611,7 @@
         document.getElementById('createForm').reset();
         document.getElementById('createAlert').className = 'alert d-none';
         bootstrap.Modal.getInstance(document.getElementById('createUserModal')).hide();
-        showAlert('alertBox', data.message || '使用者建立成功！', data.email_sent === false ? 'warning' : 'success');
+        showAlert('alertBox', data.message || '使用者已建立。', data.email_sent === false ? 'warning' : 'success');
         loadUsers();
       } catch (e) {
         showAlert('createAlert', '建立使用者時發生錯誤：' + (e && e.message ? e.message : e));
@@ -655,7 +649,7 @@
         return;
       }
       bootstrap.Modal.getInstance(document.getElementById('editClassModal')).hide();
-      showAlert('alertBox', '班級已更新！', 'success');
+      showAlert('alertBox', '班級已更新。', 'success');
       loadUsers();
     }
 
@@ -688,7 +682,7 @@
         return;
       }
       bootstrap.Modal.getInstance(document.getElementById('editBackupEmailModal')).hide();
-      showAlert('alertBox', '備用信箱已更新！', 'success');
+      showAlert('alertBox', '備用信箱已更新。', 'success');
       loadUsers();
     }
 
@@ -887,7 +881,7 @@
         if (res.status === 403) { showAlert('resetAlert', data.detail || '無法重設密碼'); return; }
         if (!res.ok) { showAlert('resetAlert', data.detail || '發生錯誤'); return; }
         bootstrap.Modal.getInstance(document.getElementById('resetPwModal')).hide();
-        showAlert('alertBox', data.message || '密碼重設成功！', data.email_sent === false ? 'warning' : 'success');
+        showAlert('alertBox', data.message || '密碼已重設。', data.email_sent === false ? 'warning' : 'success');
       } catch (e) {
         showAlert('resetAlert', '發生錯誤：' + (e && e.message ? e.message : e));
       } finally {

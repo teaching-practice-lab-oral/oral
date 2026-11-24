@@ -14,7 +14,7 @@ from app.models import User, Assignment, Submission, Rubric, RubricVersion, Subm
 from app.schemas import (
     AssignmentCreate, AssignmentUpdate, AssignmentResponse,
     StudentResultItem,
-    DeleteConfirmRequest, LateDeadlineRequest, BatchLateDeadlineRequest,
+    DeleteConfirmRequest, LateDeadlineRequest, BatchLateDeadlineRequest, SubmissionRewindRequest,
     SubmissionResponse,
     UserResponse,
 )
@@ -27,7 +27,6 @@ from app.services.admin_scope import (
     assignment_visible_to_admin,
     ensure_admin_can_access_assignment,
     ensure_admin_can_mutate_assignment,
-    ensure_admin_can_reset_visible_submissions,
     ensure_admin_can_access_student_assignment,
     ensure_admin_can_assign_course_nums,
     ensure_privileged_admin,
@@ -39,6 +38,7 @@ from app.services.submission_data import (
     question_snapshot_for_attempt,
     replace_question_snapshot,
 )
+from app.services.submission_rewind import REWINDABLE_STAGES, rewind_submission, rewind_summary
 from app.services.grading import default_published_rubric_version, latest_grades_by_submission, grade_student_payload
 from app.services.input_validator import normalize_http_text
 from app.services.assignment_questions import (
@@ -539,59 +539,6 @@ def get_student_detail(
     }
 
 
-@router.delete("/assignments/{assignment_id}/submissions", status_code=204)
-def reset_assignment_submissions(
-    assignment_id: int,
-    payload: DeleteConfirmRequest,
-    request: Request,
-    background_tasks: BackgroundTasks,
-    admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db),
-):
-    verify_admin_password_or_raise(admin, payload.admin_password, "初始化作業操作")
-    assignment = _get_accessible_assignment(db, admin, assignment_id)
-    ensure_admin_can_reset_visible_submissions(admin, assignment)
-    visible_students = _get_visible_students_for_assignment(db, admin, assignment)
-    visible_student_ids = [student.id for student in visible_students]
-    asset_refs = list_submission_asset_refs(
-        db,
-        assignment_id=assignment_id,
-        user_ids=visible_student_ids,
-    )
-    queued_prefixes = enqueue_submission_asset_cleanup(db, asset_refs)
-    deleted_count = (
-        db.query(Submission)
-        .filter(
-            Submission.assignment_id == assignment_id,
-            Submission.user_id.in_(visible_student_ids) if visible_student_ids else False,
-        )
-        .count()
-        if visible_student_ids
-        else 0
-    )
-    log_admin_action(
-        db,
-        admin,
-        "admin.assignment.reset_submissions",
-        request=request,
-        target_type="assignment",
-        target_id=assignment.id,
-        target_label=assignment.title,
-        summary=f"重設作業提交紀錄：{assignment.title}",
-        details={
-            "deleted_submission_count": deleted_count,
-            "queued_object_prefixes": queued_prefixes,
-        },
-    )
-    if visible_student_ids:
-        db.query(Submission).filter(
-            Submission.assignment_id == assignment_id,
-            Submission.user_id.in_(visible_student_ids),
-        ).delete()
-    db.commit()
-    background_tasks.add_task(process_object_deletion_queue_async)
-
-
 @router.post("/assignments/{assignment_id}/students/{user_id}/retake", response_model=SubmissionResponse)
 def allow_retake(
     assignment_id: int,
@@ -641,6 +588,70 @@ def allow_retake(
     db.refresh(new_sub)
     hydrate_submission_from_normalized(db, new_sub)
     return SubmissionResponse.model_validate(new_sub)
+
+
+@router.post(
+    "/assignments/{assignment_id}/students/{user_id}/rewind",
+    response_model=SubmissionResponse,
+)
+def rewind_student_submission(
+    assignment_id: int,
+    user_id: int,
+    payload: SubmissionRewindRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Send the student's latest attempt back to an earlier stage."""
+    verify_admin_password_or_raise(admin, payload.admin_password, "退回階段操作")
+    if payload.target_stage not in REWINDABLE_STAGES:
+        raise HTTPException(status_code=422, detail="這個階段不能作為重新開始的位置。")
+    assignment = _get_accessible_assignment(db, admin, assignment_id)
+    student = db.query(User).filter(User.id == user_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    ensure_admin_can_access_student_assignment(admin, student, assignment)
+    latest = get_latest_submission(db, user_id, assignment_id)
+    if latest is None:
+        raise HTTPException(status_code=404, detail="這位學生還沒有作答紀錄。")
+    sub = (
+        db.query(Submission)
+        .filter(Submission.id == latest.id)
+        .with_for_update()
+        .first()
+    )
+    if payload.target_stage > sub.stage:
+        raise HTTPException(status_code=409, detail="學生還沒做到這個階段，無法退回。")
+    before = snapshot_submission(sub)
+    result = rewind_submission(db, sub, payload.target_stage)
+    summary = rewind_summary(result)
+    log_admin_action(
+        db,
+        admin,
+        "admin.assignment.rewind_submission",
+        request=request,
+        target_type="submission",
+        target_id=sub.id,
+        target_label=f"assignment:{assignment_id}/user:{user_id}",
+        before=before,
+        after=snapshot_submission(sub),
+        summary=summary,
+        details={
+            "assignment_id": assignment_id,
+            "user_id": user_id,
+            "from_stage": result.from_stage,
+            "to_stage": result.to_stage,
+            "cleared": result.cleared,
+            "queued_objects": result.queued_objects,
+        },
+    )
+    db.commit()
+    if result.queued_objects:
+        background_tasks.add_task(process_object_deletion_queue_async)
+    db.refresh(sub)
+    hydrate_submission_from_normalized(db, sub)
+    return SubmissionResponse.model_validate(sub)
 
 
 @router.post("/assignments/{assignment_id}/students/{user_id}/late-deadline")

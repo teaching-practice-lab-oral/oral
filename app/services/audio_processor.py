@@ -20,7 +20,7 @@ from uuid import uuid4
 from fastapi import HTTPException, UploadFile
 
 from app.config import settings
-from app.services import storage, whisper, worker_client
+from app.services import storage, whisper
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class AudioProbe:
     family: str
     format_name: str
     codec_name: str
-    duration_seconds: float
+    duration_seconds: float | None
     channels: int
     sample_rate: int
 
@@ -146,7 +146,12 @@ async def _run_subprocess_job(function, data: bytes):
         raise
 
 
-def _validated_probe_payload(data: bytes, payload: object) -> AudioProbe:
+def _validated_probe_payload(
+    data: bytes,
+    payload: object,
+    *,
+    strict_duration: bool,
+) -> AudioProbe:
     if not isinstance(payload, dict):
         raise _invalid_audio()
     streams = payload.get("streams")
@@ -192,12 +197,8 @@ def _validated_probe_payload(data: bytes, payload: object) -> AudioProbe:
     duration = _positive_finite_float(format_data.get("duration"))
     if duration is None:
         duration = _positive_finite_float(stream.get("duration"))
-    if duration is None:
-        raise _invalid_audio("無法確認音訊長度，請重新錄製後再試。")
-    if duration > settings.MAX_AUDIO_SECONDS + 1.0:
-        raise _invalid_audio(
-            f"錄音最長為 {settings.MAX_AUDIO_SECONDS // 60} 分鐘，請縮短後再上傳。"
-        )
+    if strict_duration:
+        _validate_trusted_duration(duration)
     return AudioProbe(
         family=magic_family,
         format_name=",".join(sorted(format_names)),
@@ -252,19 +253,47 @@ def _probe_audio_sync(data: bytes) -> object:
         raise _invalid_audio() from exc
 
 
-async def probe_audio(data: bytes, *, content_type: str | None = None) -> AudioProbe:
-    """Return a strict ffprobe description of one supported audio-only stream."""
+def _validate_trusted_duration(duration: float | None) -> float:
+    """Require a finite decoded duration that remains inside the hard limit."""
+    if duration is None:
+        raise _invalid_audio("無法確認音訊長度，請重新錄製後再試。")
+    if duration > settings.MAX_AUDIO_SECONDS + 1.0:
+        raise _invalid_audio(
+            f"錄音最長為 {settings.MAX_AUDIO_SECONDS // 60} 分鐘，請縮短後再上傳。"
+        )
+    return duration
+
+
+async def probe_audio(
+    data: bytes,
+    *,
+    content_type: str | None = None,
+    strict_duration: bool = True,
+) -> AudioProbe:
+    """Return a structural description of one supported audio-only stream.
+
+    Browser-authored source containers may have missing or corrupt duration
+    metadata.  Callers may treat that value as advisory while retaining every
+    other structural check; canonical decoded audio always uses the strict
+    default.
+    """
     validate_audio_upload(data)
     async with _audio_probe_semaphore:
         payload = await _run_subprocess_job(_probe_audio_sync, data)
-    probe = _validated_probe_payload(data, payload)
+    probe = _validated_probe_payload(
+        data,
+        payload,
+        strict_duration=strict_duration,
+    )
     _validate_content_type(content_type, probe.family)
     return probe
 
 
 async def validate_audio_duration(data: bytes) -> float:
     """Compatibility wrapper that now performs complete structural probing."""
-    return (await probe_audio(data)).duration_seconds
+    duration = (await probe_audio(data)).duration_seconds
+    assert duration is not None
+    return duration
 
 
 def _normalize_with_ffmpeg_sync(data: bytes) -> bytes:
@@ -293,6 +322,14 @@ def _normalize_with_ffmpeg_sync(data: bytes) -> bytes:
                     "-map", "0:a:0",
                     "-vn", "-sn", "-dn",
                     "-map_metadata", "-1",
+                    # Browser WebM duration/timestamps are advisory.  Rebuild
+                    # the output timeline from decoded sample count so a short
+                    # Android recording with an 8-hour offset remains short.
+                    "-af", "asetpts=N/SR/TB",
+                    # Bound real long-form input before it can consume excess
+                    # CPU or temporary disk.  The extra two seconds ensure the
+                    # strict canonical probe below still rejects it.
+                    "-t", str(settings.MAX_AUDIO_SECONDS + 2),
                     "-ac", "1",
                     "-ar", "48000",
                     "-codec:a", "libmp3lame",
@@ -307,10 +344,7 @@ def _normalize_with_ffmpeg_sync(data: bytes) -> bytes:
                 timeout=_FFMPEG_TIMEOUT_SECONDS,
                 check=False,
             )
-            error_file.seek(0)
-            error_text = error_file.read(4096).decode("utf-8", errors="replace")
             if result.returncode != 0:
-                logger.info("Rejected undecodable audio: %s", error_text[:512])
                 raise _invalid_audio("音訊無法完整解碼，請重新錄製後再試。")
             output_file.seek(0, 2)
             output_size = output_file.tell()
@@ -330,11 +364,19 @@ async def _normalize_with_ffmpeg(data: bytes) -> bytes:
         return await _run_subprocess_job(_normalize_with_ffmpeg_sync, data)
 
 
-async def validate_canonical_mp3(data: bytes) -> AudioProbe:
+async def validate_canonical_mp3(
+    data: bytes,
+    *,
+    strict_duration: bool = True,
+) -> AudioProbe:
     """Validate the only audio representation trusted by downstream systems."""
     if len(data) > MAX_NORMALIZED_AUDIO_BYTES:
         raise _invalid_audio("正規化音訊超過允許大小。")
-    probe = await probe_audio(data, content_type="audio/mpeg")
+    probe = await probe_audio(
+        data,
+        content_type="audio/mpeg",
+        strict_duration=strict_duration,
+    )
     if (
         probe.family != "mp3"
         or probe.codec_name != "mp3"
@@ -345,14 +387,113 @@ async def validate_canonical_mp3(data: bytes) -> AudioProbe:
     return probe
 
 
-async def normalize_audio(data: bytes, *, content_type: str | None = None) -> tuple[bytes, AudioProbe]:
+def _duration_is_anomalous(first: float | None, second: float | None) -> bool:
+    if first is None or second is None:
+        return True
+    return abs(first - second) > max(5.0, second * 0.2)
+
+
+def _audio_diagnostic(
+    *,
+    workflow: str,
+    outcome: str,
+    reason: str,
+    data: bytes,
+    content_type: str | None,
+    client_duration_ms: int | None,
+    source_duration: float | None = None,
+    normalized_duration: float | None = None,
+) -> None:
+    safe_workflow = workflow if workflow in {"shadowing", "roleplay"} else "unknown"
+    logger.info(
+        "audio_validation workflow=%s outcome=%s reason=%s family=%s "
+        "content_type=%s upload_bytes=%d client_duration_ms=%s "
+        "source_duration_seconds=%s normalized_duration_seconds=%s",
+        safe_workflow,
+        outcome,
+        reason,
+        _magic_family(data) or "unknown",
+        (content_type or "").split(";", 1)[0].strip().lower() or "unknown",
+        len(data),
+        client_duration_ms,
+        source_duration,
+        normalized_duration,
+    )
+
+
+async def normalize_audio(
+    data: bytes,
+    *,
+    content_type: str | None = None,
+    workflow: str = "unknown",
+    client_duration_ms: int | None = None,
+) -> tuple[bytes, AudioProbe]:
     """Fully decode one supported audio-only input into canonical MP3."""
-    source_probe = await probe_audio(data, content_type=content_type)
-    mp3_bytes = await _normalize_with_ffmpeg(data)
-    canonical_probe = await validate_canonical_mp3(mp3_bytes)
-    # A corrupt or adversarial conversion must not manufacture a longer file.
-    if canonical_probe.duration_seconds > source_probe.duration_seconds + 1.0:
-        raise _invalid_audio("正規化後的音訊長度與原始錄音不相符。")
+    source_probe = None
+    canonical_probe = None
+    validation_stage = "source"
+    try:
+        source_probe = await probe_audio(
+            data,
+            content_type=content_type,
+            strict_duration=False,
+        )
+        validation_stage = "normalization"
+        mp3_bytes = await _normalize_with_ffmpeg(data)
+        validation_stage = "canonical"
+        canonical_probe = await validate_canonical_mp3(
+            mp3_bytes,
+            strict_duration=False,
+        )
+        validation_stage = "duration"
+        _validate_trusted_duration(canonical_probe.duration_seconds)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else ""
+        if detail.startswith("錄音最長為"):
+            reason = "duration_exceeded"
+        elif validation_stage == "source":
+            reason = "source_rejected"
+        elif validation_stage == "normalization":
+            reason = "normalization_failed"
+        else:
+            reason = "canonical_rejected"
+        _audio_diagnostic(
+            workflow=workflow,
+            outcome="rejected",
+            reason=reason,
+            data=data,
+            content_type=content_type,
+            client_duration_ms=client_duration_ms,
+            source_duration=source_probe.duration_seconds if source_probe else None,
+            normalized_duration=(
+                canonical_probe.duration_seconds if canonical_probe else None
+            ),
+        )
+        raise
+
+    client_duration = (
+        client_duration_ms / 1000.0
+        if client_duration_ms is not None and client_duration_ms >= 0
+        else None
+    )
+    if (
+        _duration_is_anomalous(
+            source_probe.duration_seconds,
+            canonical_probe.duration_seconds,
+        )
+        or client_duration is not None
+        and _duration_is_anomalous(client_duration, canonical_probe.duration_seconds)
+    ):
+        _audio_diagnostic(
+            workflow=workflow,
+            outcome="accepted",
+            reason="duration_metadata_mismatch",
+            data=data,
+            content_type=content_type,
+            client_duration_ms=client_duration_ms,
+            source_duration=source_probe.duration_seconds,
+            normalized_duration=canonical_probe.duration_seconds,
+        )
     return mp3_bytes, canonical_probe
 
 
@@ -371,12 +512,20 @@ async def read_audio_checked(audio: UploadFile) -> bytes:
     return await audio.read(MAX_AUDIO_BYTES + 1)
 
 
-async def prepare_audio_upload(audio: UploadFile, key_stem: str) -> PreparedAudioUpload:
+async def prepare_audio_upload(
+    audio: UploadFile,
+    key_stem: str,
+    *,
+    workflow: str = "unknown",
+    client_duration_ms: int | None = None,
+) -> PreparedAudioUpload:
     """Validate and normalize before any external API allowance is consumed."""
     audio_bytes = await read_audio_checked(audio)
     canonical_mp3, _probe = await normalize_audio(
         audio_bytes,
         content_type=audio.content_type,
+        workflow=workflow,
+        client_duration_ms=client_duration_ms,
     )
     return PreparedAudioUpload(
         data=canonical_mp3,
@@ -391,15 +540,11 @@ async def transcribe_prepared_audio(
     """Transcribe canonical MP3 without creating an object-storage side effect."""
     canonical_mp3 = prepared.data
     await validate_canonical_mp3(canonical_mp3)
-    worker_result = await worker_client.process_audio(canonical_mp3, prepared.source_filename)
-    if worker_result is not None:
-        mp3_bytes, transcript, metrics = worker_result
-    else:
-        async with _audio_processing_semaphore:
-            transcript, metrics = await whisper.transcribe_with_metrics(
-                canonical_mp3, prepared.source_filename
-            )
-        mp3_bytes = canonical_mp3
+    async with _audio_processing_semaphore:
+        transcript, metrics = await whisper.transcribe_with_metrics(
+            canonical_mp3, prepared.source_filename
+        )
+    mp3_bytes = canonical_mp3
 
     if len(transcript) > MAX_TRANSCRIPT_CHARS or "\x00" in transcript:
         raise _invalid_audio("語音辨識結果無效，請重新錄製後再試。")

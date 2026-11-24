@@ -148,6 +148,10 @@ function applyFilterSort() {
   const startButton = document.getElementById('btnStartGrading');
   startButton.classList.toggle('d-none', pendingCount === 0);
   startButton.querySelector('span').textContent = `開始批改${pendingCount ? `（${pendingCount}）` : ''}`;
+  // Only one solid primary in the header: grading first, sending once nothing is pending.
+  const sendButton = document.getElementById('btnSendResults');
+  sendButton.classList.toggle('btn-primary', pendingCount === 0);
+  sendButton.classList.toggle('btn-outline-secondary', pendingCount > 0);
 
   saveNavState();
   renderTable();
@@ -207,7 +211,7 @@ function renderTable() {
           aria-label="選取 ${escAttr(s.name)}"
         >
       </td>
-      <td><code class="text-primary">${escHtml(s.student_id)}</code></td>
+      <td><span class="font-monospace small text-muted">${escHtml(s.student_id)}</span></td>
       <td>
         <a href="/admin/assignments/${assignmentId}/students/${s.user_id}"
            class="text-decoration-none fw-semibold"
@@ -215,39 +219,34 @@ function renderTable() {
           ${escHtml(s.name)}
         </a>
       </td>
-      <td>${s.course_num ? `<span class="badge bg-info text-white">${escHtml(s.course_num)}</span>` : '<span class="text-muted">—</span>'}</td>
+      <td>${s.course_num ? escHtml(s.course_num) : '<span class="text-muted">—</span>'}</td>
       <td>
         <div class="d-flex align-items-center gap-2">
-          <div class="progress" style="width:60px;height:6px">
-            <div class="progress-bar ${s.is_submitted ? 'bg-success' : 'bg-primary'}" style="width:${Math.round(({1:1,2:2,3:2,4:2,5:3,6:4,7:4,8:6,9:6}[s.latest_stage]||0)/6*100)}%"></div>
+          <div class="progress progress-mini">
+            <div class="progress-bar ${s.is_submitted ? 'bg-success' : 'bg-primary'} pct-w-${Math.round(({1:1,2:2,3:2,4:2,5:3,6:4,7:4,8:6,9:6}[s.latest_stage]||0)/6*100)}"></div>
           </div>
-          <span class="badge bg-light text-dark border">${({1:1,2:2,3:2,4:2,5:3,6:4,7:4,8:6,9:6}[s.latest_stage]||0)}/6</span>
+          <span class="small fw-semibold">${({1:1,2:2,3:2,4:2,5:3,6:4,7:4,8:6,9:6}[s.latest_stage]||0)}/6</span>
           <small class="text-muted d-none d-xl-inline">${stageNameZh(s.latest_stage)}</small>
         </div>
       </td>
       <td class="text-center">${s.attempt_count}</td>
-      <td><span class="badge ${s.has_feedback ? 'bg-primary' : 'bg-light text-muted border'}">
-        <i class="bi bi-${s.has_feedback ? 'chat-square-text' : 'dash-circle'} me-1"></i>
-        ${s.has_feedback ? '已產生' : '尚未產生'}
-      </span></td>
+      <td><span class="badge ${s.has_feedback ? 'bg-primary' : 'bg-light'}">${s.has_feedback ? '已產生' : '尚未產生'}</span></td>
       <td class="text-center fw-bold">${s.latest_final_score == null ? '<span class="text-muted">—</span>' : `${s.latest_final_score}`}</td>
-      <td>${s.grading_status === 'graded' ? `<span class="badge bg-success">已批改</span><div class="small text-muted mt-1">${escHtml(s.latest_grader_name || '—')}</div>` : s.grading_status === 'pending' ? '<span class="badge bg-warning text-dark">待批改</span>' : '<span class="badge bg-light text-muted border">未就緒</span>'}</td>
-      <td>${s.has_issue ? '<span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>有問題</span>' : '<span class="text-muted">—</span>'}</td>
-      <td><span class="badge ${s.is_submitted ? 'bg-success' : 'bg-warning text-dark'}">
-        <i class="bi bi-${s.is_submitted ? 'check-circle' : 'hourglass-split'} me-1"></i>
-        ${s.is_submitted ? '已完成' : '進行中'}
-      </span></td>
+      <td>${s.grading_status === 'graded' ? `<span class="badge bg-success">已批改</span><div class="small text-muted mt-1">${escHtml(s.latest_grader_name || '—')}</div>` : s.grading_status === 'pending' ? '<span class="badge bg-warning text-dark">待批改</span>' : '<span class="badge bg-light">未就緒</span>'}</td>
+      <td>${s.has_issue ? '<span class="badge bg-danger">有問題</span>' : '<span class="text-muted">—</span>'}</td>
+      <td><span class="badge ${s.is_submitted ? 'bg-success' : 'bg-warning'}">${s.is_submitted ? '已完成' : '進行中'}</span></td>
       <td class="small text-muted">${s.updated_at ? new Date(s.updated_at).toLocaleDateString('zh-TW') : '—'}</td>
       <td>
-        <div class="d-flex gap-1">
+        <div class="row-actions">
           <a href="/admin/assignments/${assignmentId}/students/${s.user_id}"
-             class="btn btn-sm ${s.grading_status === 'pending' ? 'btn-primary' : 'btn-outline-primary'}" data-action="saveNavState">
-            <i class="bi bi-pencil-square me-1"></i>${s.is_submitted ? '批改' : '查看'}
-          </a>
-          ${(() => { const overdue = assignmentDueDate && new Date() > new Date(assignmentDueDate); return overdue ? `<button class="btn btn-sm btn-outline-secondary" disabled title="作業已截止，無法允許重作"><i class="bi bi-arrow-repeat me-1"></i>允許重作</button>` : `<button class="btn btn-sm btn-outline-secondary" data-action="openRetakeModal" data-args='[${s.user_id}]'><i class="bi bi-arrow-repeat me-1"></i>允許重作</button>`; })()}
-          <button class="btn btn-sm btn-outline-secondary" data-action="openLateDeadlineModal" data-args='[${s.user_id}]'>
-            <i class="bi bi-calendar-plus me-1"></i>補繳設定
-          </button>
+             class="row-action-link${s.grading_status === 'pending' ? ' is-pending' : ''}" data-action="saveNavState">${s.is_submitted ? '批改' : '查看'}</a>
+          <div class="dropdown">
+            <button type="button" class="btn btn-sm row-more-btn" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false" aria-label="${escAttr(s.name)} 的更多操作"><i class="bi bi-three-dots" aria-hidden="true"></i></button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              ${(() => { const overdue = assignmentDueDate && new Date() > new Date(assignmentDueDate); return overdue ? '<li><button type="button" class="dropdown-item" disabled>允許重作（作業已截止）</button></li>' : `<li><button type="button" class="dropdown-item" data-action="openRetakeModal" data-args='[${s.user_id}]'>允許重作</button></li>`; })()}
+              <li><button type="button" class="dropdown-item" data-action="openLateDeadlineModal" data-args='[${s.user_id}]'>補繳設定</button></li>
+            </ul>
+          </div>
         </div>
       </td>
     </tr>`;
@@ -720,10 +719,22 @@ async function retryResultDelivery() {
   }
 }
 
+// Exports live inside the "匯出" dropdown, which closes on click; show progress on its toggle.
+let _exportsRunning = 0;
+function setExportBusy(busy) {
+  _exportsRunning = Math.max(0, _exportsRunning + (busy ? 1 : -1));
+  const toggle = document.getElementById('exportMenuToggle');
+  if (!toggle) return;
+  toggle.disabled = _exportsRunning > 0;
+  toggle.innerHTML = _exportsRunning > 0
+    ? '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>匯出中…'
+    : '匯出';
+}
+
 async function exportLatestWords() {
   const btn = document.getElementById('btnExportLatest');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>匯出中...';
+  setExportBusy(true);
   try {
     const res = await fetch(`/api/admin/assignments/${assignmentId}/export-words-latest`, { headers: authHeaders() });
     if (!res.ok) {
@@ -742,14 +753,14 @@ async function exportLatestWords() {
     }
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-file-earmark-zip me-1"></i>批次匯出最新版本';
+    setExportBusy(false);
   }
 }
 
 async function exportGradesXlsx() {
   const btn = document.getElementById('btnExportXlsx');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>匯出中...';
+  setExportBusy(true);
   try {
     const res = await fetch(`/api/admin/assignments/${assignmentId}/export-xlsx`, { headers: authHeaders() });
     if (res.status === 401) {
@@ -774,14 +785,14 @@ async function exportGradesXlsx() {
     showAlert('匯出成績失敗，請檢查網路連線後再試。');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-file-earmark-spreadsheet me-1"></i>匯出成績 XLSX';
+    setExportBusy(false);
   }
 }
 
 async function exportAllWords() {
   const btn = document.getElementById('btnExportWords');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>匯出中...';
+  setExportBusy(true);
   try {
     const res = await fetch(`/api/admin/assignments/${assignmentId}/export-words`, { headers: authHeaders() });
     if (!res.ok) {
@@ -800,7 +811,7 @@ async function exportAllWords() {
     }
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-file-earmark-zip me-1"></i>批次匯出所有版本';
+    setExportBusy(false);
   }
 }
 

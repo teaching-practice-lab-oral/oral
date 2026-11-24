@@ -96,13 +96,6 @@ def ensure_admin_can_mutate_assignment(admin: User, assignment: Assignment) -> N
         raise HTTPException(status_code=403, detail="只有最高權限管理員可以修改全域或跨課程作業")
 
 
-def ensure_admin_can_reset_visible_submissions(admin: User, assignment: Assignment) -> None:
-    """Authorize a course-local reset without granting assignment-wide control."""
-    ensure_admin_can_access_assignment(admin, assignment)
-    if not is_privileged_admin(admin) and normalize_course_nums(assignment.course_nums) is None:
-        raise HTTPException(status_code=403, detail="只有最高權限管理員可以重設全域作業")
-
-
 def ensure_admin_can_access_user(admin: User, user: User) -> None:
     if not student_visible_to_admin(admin, user):
         raise HTTPException(status_code=403, detail="您無權存取這位學生")

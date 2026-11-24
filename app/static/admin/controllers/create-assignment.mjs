@@ -10,9 +10,9 @@ function toggleModule(name) {
 }
 
 function updateFlowPreview() {
-  const icons = ['💼', '📝', '🎤', '🎭', '🤖', '📓'];
+  const icons = ['bi-briefcase', 'bi-pencil-square', 'bi-mic', 'bi-people', 'bi-chat-square-text', 'bi-journal-text'];
   const steps = icons.map((icon, index) => ({
-    label: `${icon} ${AdminWorkflow.sectionLabel(index + 1)}`,
+    label: `<i class="bi ${icon} me-1" aria-hidden="true"></i>${escHtml(AdminWorkflow.sectionLabel(index + 1))}`,
     on: true,
   }));
   const html = steps
@@ -122,10 +122,10 @@ function renderSummary() {
   const isActive = document.getElementById('s2IsActive').checked;
 
   const modBadges = [
-    `<span class="badge-module badge bg-success">📝 寫作練習</span>`,
-    `<span class="badge-module badge bg-primary">🎤 跟讀練習</span>`,
-    `<span class="badge-module badge bg-purple" style="background:#7c3aed">🎭 角色扮演+報告</span>`,
-    `<span class="badge-module badge bg-info">📓 心得撰寫</span>`,
+    `<span class="badge-module badge bg-success"><i class="bi bi-pencil-square me-1"></i>寫作練習</span>`,
+    `<span class="badge-module badge bg-primary"><i class="bi bi-mic me-1"></i>跟讀練習</span>`,
+    `<span class="badge-module badge bg-purple"><i class="bi bi-people me-1"></i>角色扮演＋回饋</span>`,
+    `<span class="badge-module badge bg-info"><i class="bi bi-journal-text me-1"></i>心得撰寫</span>`,
   ].filter(Boolean).join(' ');
 
   document.getElementById('summaryContent').innerHTML = `

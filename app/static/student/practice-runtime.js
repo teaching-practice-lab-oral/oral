@@ -147,7 +147,7 @@
       overlay = document.createElement('div');
       overlay.id = 'practiceFullscreenGate';
       overlay.style.cssText = 'position:fixed;inset:0;z-index:20000;background:rgba(15,23,42,.96);color:#fff;display:flex;align-items:center;justify-content:center;padding:1.5rem;text-align:center';
-      overlay.innerHTML = `<div style="max-width:520px"><i class="bi bi-arrows-fullscreen" style="font-size:3rem;color:#a5b4fc"></i><h2 class="h4 fw-bold mt-3">全螢幕練習模式</h2><p id="practiceFullscreenMessage" style="color:#cbd5e1"></p><button id="practiceEnterFullscreen" type="button" class="btn btn-primary btn-lg"><i class="bi bi-arrows-fullscreen me-2"></i>進入全螢幕並繼續</button><p class="small mt-3 mb-0" style="color:#94a3b8">離開全螢幕、切換分頁及貼上文字會留下紀錄供老師複查。</p></div>`;
+      overlay.innerHTML = `<div class="maxw-520"><i class="bi bi-arrows-fullscreen fullscreen-icon"></i><h2 class="h4 fw-bold mt-3">全螢幕練習模式</h2><p class="text-slate-light" id="practiceFullscreenMessage"></p><button id="practiceEnterFullscreen" type="button" class="btn btn-primary btn-lg"><i class="bi bi-arrows-fullscreen me-2"></i>進入全螢幕並繼續</button><p class="small mt-3 mb-0 text-slate-soft">離開全螢幕、切換分頁及貼上文字會留下紀錄供老師複查。</p></div>`;
       document.body.appendChild(overlay);
       overlay.querySelector('#practiceEnterFullscreen').addEventListener('click', async () => {
         const button = overlay.querySelector('#practiceEnterFullscreen');
@@ -180,23 +180,13 @@
     gate.setAttribute('role', 'dialog');
     gate.setAttribute('aria-modal', 'true');
     gate.style.cssText = 'position:fixed;inset:0;z-index:30000;background:#f8fafc;color:#0f172a;overflow:auto;padding:1.25rem;display:flex;align-items:center;justify-content:center';
-    gate.innerHTML = `<div style="width:min(100%,560px);background:#fff;border:1px solid #cbd5e1;border-radius:20px;padding:1.4rem"><h1 class="h4 fw-bold">請從主畫面 Web App 開始練習</h1><p>${deviceName}必須先安裝本系統；完成前不會載入題目。</p>${embeddedBrowser ? '<div class="alert alert-warning">請改用 Safari 或 Chrome。</div>' : ''}<ol>${steps}<li>點「AI 英語面試」圖示重新進入。</li></ol></div>`;
+    gate.innerHTML = `<div class="gate-card"><h1 class="h4 fw-bold">請從主畫面 Web App 開始練習</h1><p>${deviceName}必須先安裝本系統；完成前不會載入題目。</p>${embeddedBrowser ? '<div class="alert alert-warning">請改用 Safari 或 Chrome。</div>' : ''}<ol>${steps}<li>點「AI 英語面試」圖示重新進入。</li></ol></div>`;
     document.body.appendChild(gate);
   }
 
   function activateMobileLayout() {
     document.documentElement.classList.add('mobile-practice-app-mode');
     document.body.classList.add('mobile-practice-app-mode');
-    if (!document.getElementById('mobilePracticeAppStyles')) {
-      const style = document.createElement('style');
-      style.id = 'mobilePracticeAppStyles';
-      style.textContent = `
-        html.mobile-practice-app-mode,body.mobile-practice-app-mode{min-height:100%;min-height:100dvh;overscroll-behavior-y:none;background:#f8fafc}
-        body.mobile-practice-app-mode{padding-bottom:max(1rem,env(safe-area-inset-bottom))}
-        body.mobile-practice-app-mode .navbar{position:sticky;top:0;z-index:1030}
-      `;
-      document.head.appendChild(style);
-    }
   }
 
   function installInputAndFocusControls() {

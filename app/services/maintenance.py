@@ -10,7 +10,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import (
     ActiveSession, AdminAuditLog, ApiUsageLog, CostlyActionUsageLog, LoginEvent, PasswordResetToken,
-    ObjectDeletionTask, StudentPresence, SubmissionProctorEvent, WorkerRoutingEvent,
+    ObjectDeletionTask, StudentPresence, SubmissionProctorEvent,
     ResultPackage,
 )
 from app.utils import taipei_now
@@ -79,13 +79,6 @@ def cleanup_expired_records(db: Session, now=None) -> dict[str, int]:
             CostlyActionUsageLog,
             CostlyActionUsageLog.called_at,
             settings.COSTLY_ACTION_RETENTION_DAYS,
-            now,
-        ),
-        "worker_routing_events": _delete_older_than(
-            db,
-            WorkerRoutingEvent,
-            WorkerRoutingEvent.created_at,
-            settings.API_USAGE_RETENTION_DAYS,
             now,
         ),
         "submission_proctor_events": _delete_older_than(

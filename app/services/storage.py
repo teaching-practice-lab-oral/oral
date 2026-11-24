@@ -79,6 +79,7 @@ def _get_client():
         # Keep the optional storage SDK out of app/test import paths until an
         # object operation is actually requested.
         import boto3
+        from botocore.config import Config
 
         _s3_client = boto3.client(
             "s3",
@@ -86,6 +87,13 @@ def _get_client():
             aws_access_key_id=settings.OCI_ACCESS_KEY_ID,
             aws_secret_access_key=settings.OCI_SECRET_ACCESS_KEY,
             region_name=settings.OCI_REGION,
+            # boto3>=1.36 adds CRC checksums to every upload by default, which
+            # S3-compatible stores such as OCI may reject. Keep the pre-1.36
+            # behaviour: send checksums only when an operation requires them.
+            config=Config(
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+            ),
         )
     return _s3_client
 

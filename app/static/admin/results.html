@@ -11,19 +11,14 @@
   <meta property="og:image" content="/static/favicon.svg" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-  integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
-  crossorigin="anonymous" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
-  integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD"
-  crossorigin="anonymous" />
-  <link rel="stylesheet" href="/static/admin/css/common.css?v=3" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD" crossorigin="anonymous"/>
+  <link rel="stylesheet" href="/static/admin/css/common.css" />
   <style>
     .main-card {
       background: white;
-      border-radius: 16px;
-      border: 1px solid #e2e8f0;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      border-radius: var(--admin-radius);
+      border: 1px solid var(--admin-border);
       overflow: hidden;
     }
     .table th { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; }
@@ -36,22 +31,21 @@
     /* Filter/sort toolbar */
     .filter-toolbar {
       background: white;
-      border-radius: 12px;
-      border: 1px solid #e2e8f0;
+      border-radius: var(--admin-radius);
+      border: 1px solid var(--admin-border);
       padding: 0.75rem 1rem;
       margin-bottom: 1rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
       display: flex;
       flex-wrap: wrap;
       gap: 0.5rem;
       align-items: center;
     }
-    .sort-btn { font-size: 0.78rem; padding: 0.22rem 0.55rem; border-radius: 6px; white-space: nowrap; }
-    .sort-btn.active { background: #4f46e5; color: white; border-color: #4f46e5; }
-    .sort-btn.active:hover { background: #4338ca; border-color: #4338ca; }
+    .sort-btn { font-size: 0.78rem; padding: 0.22rem 0.55rem; white-space: nowrap; }
+    .sort-btn.active, .sort-btn.active:hover { background: var(--admin-primary-soft); color: var(--admin-primary); border-color: #C9D3E0; font-weight: 700; }
     .select-col { width: 44px; }
     .selection-summary { font-size: 0.82rem; }
   </style>
+  <link rel="stylesheet" href="/static/css/ui.css">
 </head>
 <body>
   <nav class="navbar navbar-admin navbar-expand-lg"></nav>
@@ -70,32 +64,29 @@
       </div>
       <div class="ms-auto d-flex gap-2 flex-wrap admin-page-actions">
         <button class="btn btn-primary d-none" data-action="startPendingGrading" id="btnStartGrading">
-          <i class="bi bi-clipboard-check me-1"></i><span>開始批改</span>
+          <span>開始批改</span>
         </button>
-        <a class="btn btn-outline-secondary" id="btnEditAssignment" href="#">
-          <i class="bi bi-pencil me-1"></i>編輯
-        </a>
-        <button class="btn btn-outline-success" data-action="exportGradesXlsx" id="btnExportXlsx">
-          <i class="bi bi-file-earmark-spreadsheet me-1"></i>匯出成績 XLSX
-        </button>
+        <a class="btn btn-link admin-text-btn" id="btnEditAssignment" href="#">編輯作業</a>
+        <div class="dropdown">
+          <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="exportMenuToggle" data-bs-toggle="dropdown" aria-expanded="false">匯出</button>
+          <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="exportMenuToggle">
+            <li><button class="dropdown-item" type="button" data-action="exportGradesXlsx" id="btnExportXlsx">匯出成績 XLSX</button></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><button class="dropdown-item" type="button" data-action="exportLatestWords" id="btnExportLatest">批次匯出最新版本（Word）</button></li>
+            <li><button class="dropdown-item" type="button" data-action="exportAllWords" id="btnExportWords">批次匯出所有版本（Word）</button></li>
+          </ul>
+        </div>
         <button class="btn btn-primary" data-action="openResultDeliveryModal" id="btnSendResults">
-          <i class="bi bi-envelope-paper me-1"></i><span>寄給學生</span>
-        </button>
-        <button class="btn btn-outline-secondary" data-action="exportLatestWords" id="btnExportLatest">
-          <i class="bi bi-file-earmark-zip me-1"></i>批次匯出最新版本
-        </button>
-        <button class="btn btn-outline-primary" data-action="exportAllWords" id="btnExportWords">
-          <i class="bi bi-file-earmark-zip me-1"></i>批次匯出所有版本
+          <span>寄給學生</span>
         </button>
       </div>
     </div>
 
     <!-- Filter/sort toolbar -->
     <div class="filter-toolbar">
-      <input type="text" id="searchInput" class="form-control form-control-sm" maxlength="256"
-        style="max-width:200px" placeholder="搜尋姓名或學號…" aria-label="搜尋姓名或學號" data-action-input="applyFilterSort" autocomplete="off" readonly data-action-focus="clearReadonlyAttr">
+      <input type="text" id="searchInput" class="form-control form-control-sm maxw-200" maxlength="256" placeholder="搜尋姓名或學號…" aria-label="搜尋姓名或學號" data-action-input="applyFilterSort" autocomplete="off" readonly data-action-focus="clearReadonlyAttr">
 
-      <select id="classFilter" class="form-select form-select-sm" style="max-width:160px" aria-label="依班級篩選" data-action-change="applyFilterSort">
+      <select id="classFilter" class="form-select form-select-sm maxw-160" aria-label="依班級篩選" data-action-change="applyFilterSort">
         <option value="">全部班級</option>
       </select>
 
@@ -106,8 +97,8 @@
         <button id="qf-incomplete" class="btn btn-outline-secondary sort-btn"        data-action="setStatusFilter" data-args='["incomplete"]'>未完成</button>
         <button id="qf-completed"  class="btn btn-outline-secondary sort-btn"        data-action="setStatusFilter" data-args='["completed"]'>已完成</button>
         <button id="qf-pending"    class="btn btn-outline-secondary sort-btn"        data-action="setStatusFilter" data-args='["pending"]'>待批改</button>
-        <button id="qf-graded"     class="btn btn-outline-success sort-btn"          data-action="setStatusFilter" data-args='["graded"]'>已批改</button>
-        <button id="qf-issue"      class="btn btn-outline-danger sort-btn"           data-action="setStatusFilter" data-args='["issue"]'>有問題回報</button>
+        <button id="qf-graded"     class="btn btn-outline-secondary sort-btn"        data-action="setStatusFilter" data-args='["graded"]'>已批改</button>
+        <button id="qf-issue"      class="btn btn-outline-secondary sort-btn"        data-action="setStatusFilter" data-args='["issue"]'>有問題回報</button>
         <button id="qf-late"       class="btn btn-outline-secondary sort-btn"        data-action="setStatusFilter" data-args='["late"]'>補繳</button>
       </div>
 
@@ -122,8 +113,8 @@
         <button class="btn btn-outline-secondary sort-btn" data-sort="updated_at"  data-action="setSort" data-args='["updated_at"]'>更新</button>
       </div>
 
-      <button class="btn btn-info btn-sm text-white" id="btnBulkLateDeadline" data-action="openBulkLateDeadlineModal" disabled>
-        <i class="bi bi-calendar-plus me-1"></i>批量補繳設定
+      <button class="btn btn-outline-secondary btn-sm" id="btnBulkLateDeadline" data-action="openBulkLateDeadlineModal" disabled>
+        批量補繳設定
       </button>
       <button class="btn btn-outline-secondary btn-sm" id="btnClearSelection" data-action="clearSelection" disabled>
         清除選取
@@ -171,16 +162,14 @@
     </div>
   </div>
 
-  <script src="/static/admin/js/common.js?v=8"></script>
+  <script src="/static/admin/js/common.js"></script>
   <script src="/static/admin/js/date-time-picker.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-  integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
-  crossorigin="anonymous"></script>
-  <script type="module" src="/static/admin/controllers/results.mjs?v=6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+  <script type="module" src="/static/admin/controllers/results.mjs"></script>
 
   <!-- 學習成果寄送 Modal -->
   <div class="modal fade" id="resultDeliveryModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered" style="max-width:560px">
+    <div class="modal-dialog modal-dialog-centered maxw-560">
       <div class="modal-content">
         <div class="modal-header">
           <h6 class="modal-title fw-bold">
@@ -218,11 +207,10 @@
               <strong id="resultDeliveryProgressTitle">準備中…</strong>
               <span class="small text-muted" id="resultDeliveryProgressCount">0 / 0</span>
             </div>
-            <div class="progress mb-3" style="height:10px">
+            <div class="progress mb-3 progress-h10">
               <div
-                class="progress-bar progress-bar-striped progress-bar-animated"
+                class="progress-bar progress-bar-striped progress-bar-animated pct-w-0"
                 id="resultDeliveryProgressBar"
-                style="width:0%"
               ></div>
             </div>
             <div class="row g-2 text-center mb-3">
@@ -264,7 +252,7 @@
 
   <!-- 補繳設定 Modal -->
   <div class="modal fade" id="lateDeadlineModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+    <div class="modal-dialog modal-dialog-centered maxw-420">
       <div class="modal-content">
         <div class="modal-header">
           <h6 class="modal-title fw-bold"><i class="bi bi-calendar-plus me-2 text-info"></i><span id="lateDeadlineTitleText">補繳設定</span></h6>
@@ -293,7 +281,7 @@
 
   <!-- 允許重作密碼確認 Modal -->
   <div class="modal fade" id="retakeModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered" style="max-width:400px">
+    <div class="modal-dialog modal-dialog-centered maxw-400">
       <div class="modal-content">
         <div class="modal-header">
           <h6 class="modal-title fw-bold"><i class="bi bi-arrow-repeat me-2 text-warning"></i>允許重作</h6>

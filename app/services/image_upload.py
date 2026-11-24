@@ -59,7 +59,7 @@ def normalize_reflection_photo(data: bytes, declared_content_type: str | None) -
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(io.BytesIO(data)) as probe:
+            with Image.open(io.BytesIO(data), formats=list(_FORMAT_MIMES)) as probe:
                 source_format = str(probe.format or "").upper()
                 if source_format not in _FORMAT_MIMES:
                     raise _invalid_photo("照片只接受 JPEG、PNG、WebP、HEIC 或 HEIF")
@@ -74,7 +74,7 @@ def normalize_reflection_photo(data: bytes, declared_content_type: str | None) -
             if declared not in {"", "application/octet-stream", "binary/octet-stream"} and declared not in allowed_mimes:
                 raise _invalid_photo("照片的 MIME 類型與實際內容不一致")
 
-            with Image.open(io.BytesIO(data)) as source:
+            with Image.open(io.BytesIO(data), formats=list(_FORMAT_MIMES)) as source:
                 if int(getattr(source, "n_frames", 1)) != 1:
                     raise _invalid_photo("照片不可為動畫或多幀圖片")
                 source.load()

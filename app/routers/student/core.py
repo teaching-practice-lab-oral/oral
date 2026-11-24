@@ -39,7 +39,7 @@ from app.schemas import (
     Draft1AnswersRequest,
 )
 from app.services.grading import grade_student_history_payload, latest_grades_by_submission
-from app.services.input_validator import validate_draft_text
+from app.services.input_validator import validate_draft1_text
 from app.services.operation_lock import FEEDBACK_OPERATION, acquire_operation_lock
 from app.services.workflow_policy import workflow_limits_payload
 from ._common import (
@@ -438,7 +438,7 @@ async def save_draft1(
         raise HTTPException(status_code=409, detail="請先完成欲應徵的職位資料")
     answers = bind_answers_to_snapshot(db, sub, payload.draft1_answers, require_all=False)
     for item in answers:
-        validate_draft_text(item["text"])
+        validate_draft1_text(item["text"])
     lease = await acquire_operation_lock(submission_id, FEEDBACK_OPERATION)
     try:
         current_answers = list_answers(db, sub, "draft1")

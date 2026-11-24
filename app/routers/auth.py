@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import httpx
 
 from app.auth import (
-    verify_password, hash_password, create_access_token, get_current_user, _token_hash,
+    verify_password, verify_password_or_dummy, session_lifetime, hash_password, create_access_token, get_current_user, _token_hash,
     decode_token, prune_expired_sessions,
 )
 from app.config import settings
@@ -34,6 +34,20 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 
 _COOKIE_NAME = "access_token"
+
+
+def _set_session_cookie(response: Response, token: str, expires: timedelta) -> None:
+    response.set_cookie(
+        key=_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=settings.APP_ENV == "production",
+        max_age=int(expires.total_seconds()),
+        path="/",
+    )
+
+
 _RESET_REQUEST_RESPONSE = {
     "message": "若資料與系統紀錄相符，密碼重設連結將寄至可用信箱，請檢查收件匣與垃圾郵件匣。"
 }
@@ -397,7 +411,7 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
             detail="帳號已暫時鎖定，請 15 分鐘後再試。",
         )
 
-    if not user or not verify_password(payload.password, user.hashed_password):
+    if not verify_password_or_dummy(payload.password, user.hashed_password if user else None):
         if user:
             user.failed_login_count = (user.failed_login_count or 0) + 1
             if user.failed_login_count >= 5:
@@ -419,7 +433,7 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
     user.locked_until = None
 
     token_data: dict = {"sub": str(user.id), "role": user.role}
-    expires = timedelta(hours=settings.ADMIN_TOKEN_EXPIRE_HOURS if user.role == "admin" else settings.ACCESS_TOKEN_EXPIRE_HOURS)
+    expires = session_lifetime(user.role)
     if user.role != "admin":
         user.session_version = (user.session_version or 0) + 1
         token_data["sv"] = user.session_version
@@ -454,16 +468,7 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
 
     _record_login(db, payload.student_id, True, client_ip, user_agent, user.id)
 
-    is_secure = settings.APP_ENV == "production"
-    response.set_cookie(
-        key=_COOKIE_NAME,
-        value=token,
-        httponly=True,
-        samesite="lax",
-        secure=is_secure,
-        max_age=int(expires.total_seconds()),
-        path="/",
-    )
+    _set_session_cookie(response, token, expires)
     return LoginResponse(
         role=user.role,
         name=user.name,
@@ -502,11 +507,7 @@ def change_password(
     if current_user.role != "admin":
         current_user.session_version = (current_user.session_version or 0) + 1
 
-    expires = timedelta(
-        hours=settings.ADMIN_TOKEN_EXPIRE_HOURS
-        if current_user.role == "admin"
-        else settings.ACCESS_TOKEN_EXPIRE_HOURS
-    )
+    expires = session_lifetime(current_user.role)
     token_data: dict = {"sub": str(current_user.id), "role": current_user.role}
     if current_user.role != "admin":
         token_data["sv"] = current_user.session_version
@@ -532,15 +533,7 @@ def change_password(
             device_type=active_session.device_type,
         )
     db.commit()
-    response.set_cookie(
-        key=_COOKIE_NAME,
-        value=new_token,
-        httponly=True,
-        samesite="lax",
-        secure=settings.APP_ENV == "production",
-        max_age=int(expires.total_seconds()),
-        path="/",
-    )
+    _set_session_cookie(response, new_token, expires)
     return MessageResponse(message="密碼已成功更新")
 
 
@@ -582,7 +575,7 @@ def refresh_session(request: Request, response: Response, db: Session = Depends(
     session = db.query(ActiveSession).filter(ActiveSession.token_hash == th).first()
     if session is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session 已失效，請重新登入。")
-    expires = timedelta(hours=settings.ADMIN_TOKEN_EXPIRE_HOURS if user.role == "admin" else settings.ACCESS_TOKEN_EXPIRE_HOURS)
+    expires = session_lifetime(user.role)
     token_data: dict = {"sub": str(user.id), "role": user.role}
     if user.role != "admin":
         token_data["sv"] = user.session_version
@@ -607,16 +600,7 @@ def refresh_session(request: Request, response: Response, db: Session = Depends(
             now=now,
         )
     db.commit()
-    is_secure = settings.APP_ENV == "production"
-    response.set_cookie(
-        key=_COOKIE_NAME,
-        value=new_token,
-        httponly=True,
-        samesite="lax",
-        secure=is_secure,
-        max_age=int(expires.total_seconds()),
-        path="/",
-    )
+    _set_session_cookie(response, new_token, expires)
     return {"ok": True, "role": user.role, "name": user.name}
 
 

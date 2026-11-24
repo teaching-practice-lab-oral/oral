@@ -1,3 +1,8 @@
+import {
+  RecordingPanel,
+  renderRecordingControls,
+} from '/static/student/recording-panel.mjs';
+
 const pathParts = window.location.pathname.split('/');
 window.assignmentId = parseInt(pathParts[3]);
 const urlParams = new URLSearchParams(window.location.search);
@@ -7,7 +12,7 @@ window.submission = null;
 window.assignment = null;
 window.viewedSubmission = null;
 
-const recorderState = {};
+const recorders = {};
 const ttsSubtitles = new TtsSubtitleController();
 const MAX_RECORDING_SECONDS = 300;
 
@@ -49,7 +54,6 @@ async function init() {
   document.getElementById('loadingMsg').classList.add('d-none');
   document.getElementById('content').classList.remove('d-none');
   document.getElementById('assignmentTitle').textContent = assignment.title;
-  document.getElementById('assignmentDesc').textContent = assignment.description || '';
   if (submission && submission.late_deadline && assignment.due_date && new Date() > new Date(assignment.due_date)) {
     const el = document.getElementById('dueDate');
     el.textContent = `補繳截止：${new Date(submission.late_deadline).toLocaleString('zh-TW')}`;
@@ -97,27 +101,6 @@ function renderAll() {
 
 // ── Section 2: Shadowing ───────────────────────────────────────────────
 
-function renderShadowingTaskGuide(vs, nextToRecord, total, allShadowingDone, answerText = '') {
-  const state=viewId||allShadowingDone?'completed':isPastDue()?'read-only':'active';
-  if(state!=='active')return renderTaskGuide({title:'跟讀階段已完成',progress:`跟讀錄音 ${Math.min(nextToRecord,total)}/${total} 題已提交`,next:'回看時，找出一個最想帶進角色扮演的調整，例如說清楚關鍵字或減少不自然停頓。',view:vs,state});
-  return renderTaskGuide({
-    title:`Q${nextToRecord+1}：先聽懂，再錄自己的版本`,
-    progress:`跟讀錄音已提交 ${nextToRecord}/${total} 題`,
-    actions:[
-      '先播放示範音訊，從字幕找出 1–2 個最重要的字。',
-      '再聽一次，留意重點字怎麼說，以及句子在哪裡停頓。',
-      '錄完先回聽；若關鍵字不清楚或逐字稿漏字，放慢後再錄。',
-    ],
-    support:{title:`Q${nextToRecord+1} 的口說焦點`,items:[
-      '先求關鍵字清楚、句子有停頓、速度穩定，一次只調整一件事。',
-      '不用模仿母語者口音；重點是讓聽者容易理解。',
-    ],html:learningScaffoldQuestionHtml(vs,nextToRecord,'shadowing',answerText)},
-    checks:['整段回答都有錄到，沒有少念一大段。','關鍵字聽得清楚，速度沒有快到吃字。','我已回聽，並能指出這次調整的一個地方。'],
-    next:nextToRecord+1<total?'提交後開放下一題。':'提交最後一題後，進入角色扮演，用同一批內容即席回答。',
-    view:vs,
-  });
-}
-
 function renderSection2(container, stage, isCompleted) {
   const allShadowingDone = stage >= 6 || isCompleted;
   const isLocked = stage < 5 && !isCompleted;
@@ -126,12 +109,11 @@ function renderSection2(container, stage, isCompleted) {
   card.className = `section-card ${isLocked ? 'locked' : allShadowingDone ? 'completed' : 'active'}`;
   card.innerHTML = `
     <div class="section-header">
-      <div class="section-icon"><i class="bi bi-mic-fill"></i></div>
       <div>
         <div class="section-title">口說練習一：跟讀</div>
         <div class="section-subtitle">Speaking Practice 1 — Shadowing</div>
       </div>
-      ${allShadowingDone ? '<span class="ms-auto badge bg-white text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i>完成</span>' : ''}
+      ${allShadowingDone ? '<span class="section-status section-status-done"><i class="bi bi-check-circle-fill"></i>完成</span>' : isLocked ? '<span class="section-status section-status-locked"><i class="bi bi-lock-fill"></i>未解鎖</span>' : '<span class="section-status section-status-active">進行中</span>'}
     </div>
     <div class="section-body" id="shadowingBody"></div>`;
   container.appendChild(card);
@@ -145,8 +127,7 @@ function renderSection2(container, stage, isCompleted) {
   ((vs && vs.speaking1_questions) || []).forEach(q => { recordedMap[q.index] = q; });
   const nextToRecord = Object.keys(recordedMap).length;
 
-  const activeAnswer=finalAnswers[nextToRecord]&&finalAnswers[nextToRecord].text||'';
-  body.innerHTML = `${renderShadowingTaskGuide(vs,nextToRecord,finalAnswers.length,allShadowingDone,activeAnswer)}<div id="questionBlocks"></div>`;
+  body.innerHTML = '<div id="questionBlocks"></div>';
 
   const blocksContainer = body.querySelector('#questionBlocks');
 
@@ -171,18 +152,18 @@ function renderSection2(container, stage, isCompleted) {
       <div class="q-label ${labelClass}">${labelText}</div>
       <div class="q-question">Q${i+1}：${escHtml(item.question || '')}</div>
       <div class="mb-3">
-        <p class="fw-semibold mb-2 small" style="color:#64748b;"><i class="bi bi-volume-up me-1"></i>示範音訊 Model Audio</p>
+        <p class="fw-semibold mb-2 small text-slate"><i class="bi bi-volume-up me-1"></i>示範音檔</p>
         <div id="ttsBox_${i}">
           ${hasTts
             ? `<button class="btn btn-outline-primary-custom btn-sm" data-action="loadTtsAudio" data-args='[${i}]'>
                 <i class="bi bi-play-circle me-1"></i>播放示範音訊
               </button>`
             : canPrepareTts
-              ? `<button class="btn btn-outline-primary-custom btn-sm" data-action="prepareTtsAudio" data-args='[${i}]'><i class="bi bi-stars me-1"></i>產生示範音訊</button>`
+              ? `<button class="btn btn-outline-primary-custom btn-sm" data-action="prepareTtsAudio" data-args='[${i}]'>產生示範音訊</button>`
               : `<span class="text-muted small"><i class="bi bi-volume-mute me-1"></i>沒有可播放的示範音訊</span>`}
         </div>
       </div>
-      <p class="fw-semibold mb-1 small" style="color:#64748b;"><i class="bi bi-type me-1"></i>跟讀字幕 Subtitle — 請跟著朗讀</p>
+      <p class="fw-semibold mb-1 small text-slate">跟讀字幕 Subtitle — 請跟著朗讀</p>
       <div class="q-subtitle mb-3" id="subtitle_${i}">${escHtml(item.text || '')}</div>
       <p class="tts-sync-note d-none" id="ttsSyncNotice_${i}" role="status"></p>`;
 
@@ -191,7 +172,7 @@ function renderSection2(container, stage, isCompleted) {
       const remainingRetries = Math.max(0, workflowLimit('max_shadowing_attempts') - recorded.attempts);
       html += `
         <div class="mb-3">
-          <p class="fw-semibold mb-2 small" style="color:#059669;"><i class="bi bi-mic me-1"></i>你的錄音</p>
+          <p class="fw-semibold mb-2 small text-emerald-dark"><i class="bi bi-mic me-1"></i>你的錄音</p>
           <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
             <button class="btn btn-outline-primary-custom btn-sm" id="playRecBtn_${i}" data-action="loadRecordingAudio" data-args='[${i}]'>
               <i class="bi bi-play me-1"></i>播放錄音
@@ -206,7 +187,7 @@ function renderSection2(container, stage, isCompleted) {
         </div>
         ${recorded.transcript ? `
           <div class="mb-2">
-            <p class="fw-semibold mb-1 small" style="color:#475569;"><i class="bi bi-chat-text me-1"></i>語音辨識結果</p>
+            <p class="fw-semibold mb-1 small text-slate-dark"><i class="bi bi-chat-text me-1"></i>語音辨識結果</p>
             <div class="feedback-box"><pre>${escHtml(recorded.transcript)}</pre></div>
           </div>` : ''}
         ${canRetry
@@ -215,42 +196,22 @@ function renderSection2(container, stage, isCompleted) {
     }
 
     if ((isActive || (!isDone && !allShadowingDone && i === nextToRecord)) && !isPastDue()) {
-      html += `
-        <div id="recordSection_${i}">
-          <p class="fw-semibold mb-2 small" style="color:#ef4444;"><i class="bi bi-mic me-1"></i>錄製跟讀 Record Shadowing</p>
-          <p class="text-muted small mb-3">最長 5 分鐘 / Max 5 minutes</p>
-          <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
-            <button class="btn btn-record" id="recordBtn_${i}" data-action="startRecording" data-args='[${i}]'>
-              <i class="bi bi-record-circle me-1"></i>開始錄音
-            </button>
-            <button class="btn btn-stop d-none" id="stopBtn_${i}" data-action="stopRecording" data-args='[${i}]'>
-              <i class="bi bi-stop-circle me-1"></i>停止
-            </button>
-            <span class="timer-display d-none" id="timer_${i}">0:00</span>
-          </div>
-          <div id="status_${i}" class="text-muted small mb-2"></div>
-          <div id="preview_${i}" class="d-none mb-3">
-            <p class="fw-semibold mb-2" style="color:#10b981"><i class="bi bi-play-circle me-1"></i>錄音預覽，確認後再提交</p>
-            <audio id="previewAudio_${i}" controls class="d-block mb-3" style="max-width:400px"></audio>
-            <div class="d-flex gap-2">
-              <button class="btn btn-outline-secondary btn-sm" data-action="reRecord" data-args='[${i}]'>
-                <i class="bi bi-arrow-repeat me-1"></i>重錄
-              </button>
-              <button class="btn btn-success-custom btn-sm" data-action="submitAudio" data-args='[${i}]'>
-                <i class="bi bi-send me-1"></i>確認提交
-              </button>
-            </div>
-          </div>
-          <div id="spinner_${i}" class="d-none processing-overlay">
-            <div class="spinner-border text-primary"></div>
-            <span>音訊處理中，請稍候... Processing audio...</span>
-          </div>
-        </div>`;
+      html += renderRecordingSection(i);
     }
 
     qBlock.innerHTML = html;
     blocksContainer.appendChild(qBlock);
   });
+}
+
+// Shared controls for a new answer and a retry of a submitted answer.
+function renderRecordingSection(i) {
+  return `
+        <div id="recordSection_${i}">
+          <p class="fw-semibold mb-2 small recording-section-title"><i class="bi bi-mic me-1"></i>錄下你的跟讀</p>
+          <p class="text-muted small mb-3">最長 5 分鐘</p>
+          ${renderRecordingControls({ suffix: `_${i}`, args: [i] })}
+        </div>`;
 }
 
 // ── TTS Audio ─────────────────────────────────────────────────────────────
@@ -274,7 +235,7 @@ async function loadTtsAudio(qIndex) {
         <button class="btn btn-outline-danger btn-sm ms-2" data-action="prepareTtsAudio" data-args='[${qIndex},true]'><i class="bi bi-arrow-clockwise me-1"></i>重新產生</button>`;
     }
   } catch {
-    box.innerHTML = `<button class="btn btn-outline-primary-custom btn-sm" data-action="loadTtsAudio" data-args='[${qIndex}]'><i class="bi bi-arrow-clockwise me-1"></i>重試載入</button><button class="btn btn-outline-danger btn-sm ms-2" data-action="prepareTtsAudio" data-args='[${qIndex},true]'><i class="bi bi-stars me-1"></i>重新產生音訊</button>`;
+    box.innerHTML = `<button class="btn btn-outline-primary-custom btn-sm" data-action="loadTtsAudio" data-args='[${qIndex}]'><i class="bi bi-arrow-clockwise me-1"></i>重試載入</button><button class="btn btn-outline-danger btn-sm ms-2" data-action="prepareTtsAudio" data-args='[${qIndex},true]'>重新產生音訊</button>`;
   }
 }
 
@@ -336,118 +297,64 @@ async function loadRecordingAudio(qIndex) {
 // ── Recording ─────────────────────────────────────────────────────────────
 
 function getState(qIndex) {
-  if (!recorderState[qIndex]) recorderState[qIndex] = { chunks: [], seconds: 0, pendingURL: null, timerInterval: null };
-  return recorderState[qIndex];
+  if (!recorders[qIndex]) {
+    recorders[qIndex] = new RecordingPanel({
+      suffix: `_${qIndex}`,
+      logTag: 'shadowing',
+      maxSeconds: () => MAX_RECORDING_SECONDS,
+      showAlert,
+    });
+  }
+  return recorders[qIndex];
 }
 
 function startRetry(qIndex) {
+  const vs = getView();
+  const recorded = vs?.speaking1_questions?.find(q => q.index === qIndex);
+  if (viewId || vs?.submitted_at || vs?.stage !== 5 || isPastDue()
+      || !recorded || recorded.attempts >= workflowLimit('max_shadowing_attempts')) return;
+
   const block = document.getElementById(`qBlock_${qIndex}`);
   if (!block) return;
+  // Append only to this question: rebuilding the page would discard other
+  // questions' recording/preview controls and loaded model audio.
+  if (!document.getElementById(`recordSection_${qIndex}`)) {
+    block.insertAdjacentHTML('beforeend', renderRecordingSection(qIndex));
+  }
   const recSection = document.getElementById(`recordSection_${qIndex}`);
-  if (recSection) { recSection.style.display = ''; return; }
-  renderAll();
+  recSection.style.display = '';
+  recSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 async function startRecording(qIndex) {
-  if (!window.isSecureContext) {
-    showAlert('麥克風功能需要安全連線（HTTPS）才能使用。請確認網址以 <strong>https://</strong> 開頭後再試。');
-    return;
-  }
-  if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
-    showAlert('你的瀏覽器不支援麥克風錄音功能。請改用 Chrome 或 Firefox 最新版本。');
-    return;
-  }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const st = getState(qIndex);
-    st.chunks = [];
-    st.seconds = 0;
-
-    const mr = new MediaRecorder(stream);
-    st.mediaRecorder = mr;
-    mr.ondataavailable = e => { if (e.data.size > 0) st.chunks.push(e.data); };
-    mr.onstop = () => showPreview(qIndex);
-    // Let the browser finalize one complete native audio container on stop.
-    // This is especially important for Safari's MP4 output.
-    mr.start();
-
-    document.getElementById(`recordBtn_${qIndex}`).classList.add('d-none');
-    document.getElementById(`stopBtn_${qIndex}`).classList.remove('d-none');
-    document.getElementById(`timer_${qIndex}`).classList.remove('d-none');
-    const statusEl = document.getElementById(`status_${qIndex}`);
-    if (statusEl) statusEl.textContent = '錄音中... Recording...';
-
-    st.timerInterval = setInterval(() => {
-      st.seconds++;
-      const m = Math.floor(st.seconds / 60);
-      const s = st.seconds % 60;
-      const timerEl = document.getElementById(`timer_${qIndex}`);
-      if (timerEl) timerEl.textContent = `${m}:${s.toString().padStart(2, '0')}`;
-      if (st.seconds >= MAX_RECORDING_SECONDS) stopRecording(qIndex);
-    }, 1000);
-  } catch (err) {
-    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-      showAlert('麥克風存取被拒絕。請點選瀏覽器網址列旁的鎖頭圖示，允許本網站使用麥克風後重新整理頁面再試。');
-    } else if (err.name === 'NotFoundError') {
-      showAlert('找不到麥克風裝置。請確認電腦已連接麥克風後再試。');
-    } else if (err.name === 'NotReadableError') {
-      showAlert('麥克風目前被其他程式佔用中，請關閉其他正在使用麥克風的應用程式後再試。');
-    } else {
-      showAlert(`無法存取麥克風（${err.name || '未知錯誤'}）。請確認麥克風已連接且瀏覽器已授權使用。`);
-    }
-  }
+  await getState(qIndex).start();
 }
 
-function stopRecording(qIndex) {
-  const st = getState(qIndex);
-  if (st.mediaRecorder && st.mediaRecorder.state !== 'inactive') {
-    st.mediaRecorder.stop();
-    st.mediaRecorder.stream.getTracks().forEach(t => t.stop());
-  }
-  clearInterval(st.timerInterval);
-  const stopBtn = document.getElementById(`stopBtn_${qIndex}`);
-  const timerEl = document.getElementById(`timer_${qIndex}`);
-  if (stopBtn) stopBtn.classList.add('d-none');
-  if (timerEl) timerEl.classList.add('d-none');
-  const statusEl = document.getElementById(`status_${qIndex}`);
-  if (statusEl) statusEl.textContent = '錄音完成，可先預覽再提交。 Recording complete.';
+async function stopRecording(qIndex) {
+  await getState(qIndex).stop();
 }
 
 function showPreview(qIndex) {
-  const st = getState(qIndex);
-  if (st.chunks.length === 0) { reRecord(qIndex); return; }
-  const { blob } = buildRecordedAudio(st.chunks, st.mediaRecorder);
-  if (st.pendingURL) URL.revokeObjectURL(st.pendingURL);
-  st.pendingURL = URL.createObjectURL(blob);
-  const previewAudio = document.getElementById(`previewAudio_${qIndex}`);
-  setAudioPreview(previewAudio, st.pendingURL);
-  const previewEl = document.getElementById(`preview_${qIndex}`);
-  if (previewEl) previewEl.classList.remove('d-none');
+  getState(qIndex).showPreview();
 }
 
 function reRecord(qIndex) {
-  const st = getState(qIndex);
-  if (st.pendingURL) { URL.revokeObjectURL(st.pendingURL); st.pendingURL = null; }
-  st.chunks = [];
-  const previewEl = document.getElementById(`preview_${qIndex}`);
-  const recordBtn = document.getElementById(`recordBtn_${qIndex}`);
-  if (previewEl) previewEl.classList.add('d-none');
-  if (recordBtn) recordBtn.classList.remove('d-none');
+  getState(qIndex).reset();
 }
 
 async function submitAudio(qIndex) {
   const st = getState(qIndex);
-  if (!st.chunks || st.chunks.length === 0) {
+  if (!st.recordedAudio?.blob?.size) {
     showAlert('請先完成錄音再提交');
     return;
   }
   const previewEl = document.getElementById(`preview_${qIndex}`);
-  const spinnerEl = document.getElementById(`spinner_${qIndex}`);
-  if (spinnerEl) spinnerEl.classList.remove('d-none');
+  st.setBusy(true);
 
-  const { blob, filename } = buildRecordedAudio(st.chunks, st.mediaRecorder);
+  const { blob, filename } = st.recordedAudio;
   const formData = new FormData();
   formData.append('audio', blob, filename);
+  formData.append('client_duration_ms', String(st.recordedAudio.durationMs));
 
   let res;
   let data;
@@ -459,16 +366,16 @@ async function submitAudio(qIndex) {
     });
     data = await res.json();
   } catch (error) {
-    if (spinnerEl) spinnerEl.classList.add('d-none');
+    st.setBusy(false);
     if (previewEl) previewEl.classList.remove('d-none');
-    showAlert('無法送出錄音，請檢查網路後再試一次。');
+    showAlert('送出失敗，請檢查網路後再試。錄音還在。');
     return;
   }
-  if (spinnerEl) spinnerEl.classList.add('d-none');
+  st.setBusy(false);
 
-  if (!res.ok) { showAlert(data.detail || '音訊處理時發生錯誤'); return; }
+  if (!res.ok) { showAlert(data.detail || '錄音處理失敗，請再試一次。'); return; }
 
-  if (st.pendingURL) { URL.revokeObjectURL(st.pendingURL); st.pendingURL = null; }
+  st.release();
   if (previewEl) previewEl.classList.add('d-none');
 
   // Update local submission state
@@ -481,9 +388,9 @@ async function submitAudio(qIndex) {
 
   if (data.all_done) {
     submission.stage = 6;
-    showAlert('所有題目跟讀錄音已提交完成！', 'success');
+    showAlert('跟讀全部完成。', 'success');
   } else {
-    showAlert(`Q${qIndex + 1} 錄音已提交！請繼續完成下一題。`, 'success');
+    showAlert(`Q${qIndex + 1} 已送出。`, 'success');
   }
 
   renderAll();
@@ -495,12 +402,15 @@ async function submitAudio(qIndex) {
   }
 }
 
+window.addEventListener('pagehide', () => {
+  for (const recorder of Object.values(recorders)) recorder.release();
+});
+
 init().catch(error=>renderStudentPageLoadError(error));
 
 Object.assign(window, {
   init,
   renderAll,
-  renderShadowingTaskGuide,
   renderSection2,
   loadTtsAudio,
   seekTtsCue,

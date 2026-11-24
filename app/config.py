@@ -66,17 +66,12 @@ class Settings(BaseSettings):
     # App
     APP_ENV: str = "development"
     PUBLIC_BASE_URL: str = ""
-    WORKER_ONLY: bool = False
     CORS_ORIGINS: str = ""
     TRUSTED_HOSTS: str = ""
     TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
     # Must be slightly above the largest accepted 50 MiB audio file to allow
     # for multipart framing, while still protecting form parsing globally.
     MAX_REQUEST_BODY_BYTES: int = 56 * 1024 * 1024
-    # Worker audio is JSON/base64, so its envelope must account for 4/3
-    # expansion while remaining independently bounded.
-    WORKER_MAX_REQUEST_BODY_BYTES: int = 72 * 1024 * 1024
-    WORKER_MAX_AUDIO_BASE64_CHARS: int = 70_000_000
 
     # Cloudflare Turnstile
     TURNSTILE_SECRET_KEY: str = ""
@@ -102,8 +97,6 @@ class Settings(BaseSettings):
     STUDENT_EXPORT_RESOURCE_WINDOW_MINUTES: int = 10
     STUDENT_EXPORT_RESOURCE_WINDOW_LIMIT: int = 3
     STUDENT_EXPORT_HOURLY_LIMIT: int = 10
-    STUDENT_EXPORT_MAX_ASSET_BYTES: int = 50 * 1024 * 1024
-    STUDENT_EXPORT_MAX_TOTAL_SOURCE_BYTES: int = 256 * 1024 * 1024
     STUDENT_EXPORT_MAX_CONCURRENCY: int = 2
     COSTLY_ACTION_RETENTION_DAYS: int = 2
 
@@ -111,15 +104,6 @@ class Settings(BaseSettings):
     OPENAI_MAX_CONCURRENCY: int = 15
     TTS_MAX_CONCURRENCY: int = 10
     AUDIO_PROCESSING_MAX_CONCURRENCY: int = 20
-
-    # Optional CHT/Taiwan worker offload. The main app keeps DB/session/storage
-    # ownership; the worker only handles stateless, slow audio/TTS work.
-    CHT_WORKER_ENABLED: bool = False
-    CHT_WORKER_BASE_URL: str = ""
-    CHT_WORKER_WEIGHT: float = 0.5
-    CHT_WORKER_SECRET: str = ""
-    CHT_WORKER_TIMEOUT_SECONDS: float = 90.0
-    CHT_WORKER_COOLDOWN_SECONDS: int = 60
 
     # Login throttling (per source IP, independent of per-account lockout)
     LOGIN_IP_WINDOW_MINUTES: int = 15
@@ -167,35 +151,18 @@ class Settings(BaseSettings):
             if address.strip()
         }
 
-    @property
-    def cht_worker_weight_ratio(self) -> float:
-        """Accept 0..1 ratios and 1..100 percentage-style weights."""
-        if self.CHT_WORKER_WEIGHT > 1:
-            return self.CHT_WORKER_WEIGHT / 100
-        return self.CHT_WORKER_WEIGHT
-
     @model_validator(mode="after")
     def validate_production_settings(self):
         if self.ALGORITHM != "HS256":
             raise ValueError("ALGORITHM must be HS256")
         placeholder_markers = ("your-secret", "change-me", "changeme", "replace-with")
-        if not self.WORKER_ONLY:
-            stripped_secret = self.SECRET_KEY.strip()
-            normalized_secret = stripped_secret.casefold()
-            if len(stripped_secret) < 32 or any(marker in normalized_secret for marker in placeholder_markers):
-                raise ValueError(
-                    "SECRET_KEY must be an explicit random value of at least 32 characters"
-                )
-        if self.CHT_WORKER_ENABLED or self.WORKER_ONLY:
-            stripped_worker_secret = self.CHT_WORKER_SECRET.strip()
-            normalized_worker_secret = stripped_worker_secret.casefold()
-            if len(stripped_worker_secret) < 32 or any(
-                marker in normalized_worker_secret for marker in placeholder_markers
-            ):
-                raise ValueError(
-                    "CHT_WORKER_SECRET must be an explicit random value of at least 32 characters"
-                )
-        if self.APP_ENV == "production" and not self.WORKER_ONLY:
+        stripped_secret = self.SECRET_KEY.strip()
+        normalized_secret = stripped_secret.casefold()
+        if len(stripped_secret) < 32 or any(marker in normalized_secret for marker in placeholder_markers):
+            raise ValueError(
+                "SECRET_KEY must be an explicit random value of at least 32 characters"
+            )
+        if self.APP_ENV == "production":
             required = (
                 "DATABASE_URL",
                 "SECRET_KEY",
@@ -249,10 +216,6 @@ class Settings(BaseSettings):
             raise ValueError("RESULT_DOWNLOAD_REDIRECT_SECONDS must be between 60 and 900")
         if self.MAX_REQUEST_BODY_BYTES < 1024 * 1024:
             raise ValueError("MAX_REQUEST_BODY_BYTES must be at least 1 MiB")
-        if self.WORKER_MAX_REQUEST_BODY_BYTES < 1024 * 1024:
-            raise ValueError("WORKER_MAX_REQUEST_BODY_BYTES must be at least 1 MiB")
-        if self.WORKER_MAX_AUDIO_BASE64_CHARS < 1:
-            raise ValueError("worker audio payload limit must be positive")
         if self.MAX_AUDIO_SECONDS < 1:
             raise ValueError("MAX_AUDIO_SECONDS must be positive")
         positive_cost_limits = (
@@ -263,25 +226,13 @@ class Settings(BaseSettings):
             self.STUDENT_EXPORT_RESOURCE_WINDOW_MINUTES,
             self.STUDENT_EXPORT_RESOURCE_WINDOW_LIMIT,
             self.STUDENT_EXPORT_HOURLY_LIMIT,
-            self.STUDENT_EXPORT_MAX_ASSET_BYTES,
-            self.STUDENT_EXPORT_MAX_TOTAL_SOURCE_BYTES,
             self.STUDENT_EXPORT_MAX_CONCURRENCY,
             self.COSTLY_ACTION_RETENTION_DAYS,
         )
         if any(value < 1 for value in positive_cost_limits):
             raise ValueError("costly-action limits must be positive")
-        if self.STUDENT_EXPORT_MAX_TOTAL_SOURCE_BYTES < self.STUDENT_EXPORT_MAX_ASSET_BYTES:
-            raise ValueError("student export total limit must be at least the per-asset limit")
         if self.OPERATION_LOCK_POOL_SIZE < 1 or self.OPERATION_LOCK_POOL_TIMEOUT < 1:
             raise ValueError("operation lock pool settings must be positive")
-        if not 0 <= self.CHT_WORKER_WEIGHT <= 100:
-            raise ValueError("CHT_WORKER_WEIGHT must be between 0 and 1, or between 1 and 100 when using percent style")
-        if self.CHT_WORKER_ENABLED:
-            if not self.CHT_WORKER_BASE_URL.strip():
-                raise ValueError("CHT_WORKER_BASE_URL is required when CHT_WORKER_ENABLED=true")
-        if self.WORKER_ONLY:
-            if not self.OPENAI_API_KEY:
-                raise ValueError("OPENAI_API_KEY is required when WORKER_ONLY=true")
         return self
 
 

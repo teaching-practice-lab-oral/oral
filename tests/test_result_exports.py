@@ -273,62 +273,6 @@ def test_result_package_is_all_or_nothing_when_audio_is_missing(monkeypatch):
         )
 
 
-def test_student_streaming_package_never_uploads_and_does_not_buffer_audio(monkeypatch):
-    submission = current_submission()
-    monkeypatch.setattr(export_builders.storage.settings, "OBJECT_STORAGE_NAMESPACE", "generation")
-    payloads = {}
-    for asset in export_builders.submission_audio_assets(submission):
-        payloads[asset.key] = f"streamed:{asset.key}".encode()
-    monkeypatch.setattr(export_builders.storage, "object_size", lambda key: len(payloads[key]))
-
-    def stream_to(key, target, *, max_bytes):
-        assert len(payloads[key]) <= max_bytes
-        target.write(payloads[key])
-        return len(payloads[key])
-
-    monkeypatch.setattr(export_builders.storage, "download_file_to", stream_to)
-    monkeypatch.setattr(
-        export_builders.storage,
-        "upload_file",
-        lambda *_args, **_kwargs: pytest.fail("student export must never upload an object"),
-    )
-    output = BytesIO()
-
-    size = export_builders.write_submission_result_package(
-        output,
-        User(name="王小明", student_id="S001"),
-        Assignment(title="作業"),
-        submission,
-    )
-
-    assert size == len(output.getvalue())
-    with ZipFile(output) as archive:
-        assert archive.read("音檔/學生面試錄音/學生_第1輪.mp3").startswith(b"streamed:")
-
-
-def test_student_streaming_package_rejects_large_source_before_download(monkeypatch):
-    submission = current_submission()
-    monkeypatch.setattr(export_builders.storage.settings, "OBJECT_STORAGE_NAMESPACE", "generation")
-    monkeypatch.setattr(
-        export_builders.storage,
-        "object_size",
-        lambda _key: export_builders.settings.STUDENT_EXPORT_MAX_ASSET_BYTES + 1,
-    )
-    monkeypatch.setattr(
-        export_builders.storage,
-        "download_file_to",
-        lambda *_args, **_kwargs: pytest.fail("oversized source must not be downloaded"),
-    )
-
-    with pytest.raises(ValueError, match="單檔限制"):
-        export_builders.write_submission_result_package(
-            BytesIO(),
-            User(name="王小明", student_id="S001"),
-            Assignment(title="作業"),
-            submission,
-        )
-
-
 def test_result_package_rejects_incomplete_audio_categories(monkeypatch):
     monkeypatch.setattr(
         export_builders.storage.settings,

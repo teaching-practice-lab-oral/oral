@@ -4,7 +4,7 @@
   let contractModule = null;
   const fallbackSections = ['job-profile', 'writing', 'shadowing', 'roleplay', 'report', 'reflection']
     .map((path, index) => ({ id: index + 1, path }));
-  const modulePromise = import('/static/js/workflow-contract.mjs?v=1').then(module => {
+  const modulePromise = import('/static/js/workflow-contract.mjs').then(module => {
     contractModule = module;
     return module;
   });

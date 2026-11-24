@@ -1,5 +1,5 @@
-import { AccountSetupController } from '/static/student/account-setup.mjs?v=1';
-import { apiErrorMessage } from '/static/student/api-error.mjs?v=1';
+import { AccountSetupController } from '/static/student/account-setup.mjs';
+import { apiErrorMessage } from '/static/student/api-error.mjs';
 
 function clearStudentAuthState() {
   ['role', 'name', 'user_id', 'userId', 'studentId', 'must_change_password', 'requires_legal_acknowledgement', 'isPrivilegedAdmin']
@@ -117,17 +117,17 @@ function renderCompletedActions(assignment, dateState) {
   const exportSubmissionId = Number(assignment.result_export_submission_id);
   const canExport = Number.isInteger(exportSubmissionId) && exportSubmissionId > 0;
   const resultAction = resultUrl
-    ? `<a href="${resultUrl}" class="btn btn-view"><i class="bi bi-eye me-1"></i>查看成果</a>`
-    : '<button type="button" class="btn btn-view" disabled title="找不到已完成的提交紀錄"><i class="bi bi-eye me-1"></i>查看成果</button>';
+    ? `<a href="${resultUrl}" class="btn btn-view">查看成果</a>`
+    : '<button type="button" class="btn btn-view" disabled title="找不到已完成的提交紀錄">查看成果</button>';
   const exportAction = canExport
-    ? `<button type="button" class="btn btn-export-result" data-action="exportResultPackage" data-args='[${assignmentId},${exportSubmissionId}]' data-export-submission-id="${exportSubmissionId}"><i class="bi bi-file-earmark-zip me-1"></i>作業匯出</button>`
-    : '<button type="button" class="btn btn-export-result" disabled title="老師完成批改後即可匯出"><i class="bi bi-file-earmark-zip me-1"></i>作業匯出</button>';
+    ? `<button type="button" class="btn btn-export-result" data-action="exportResultPackage" data-args='[${assignmentId},${exportSubmissionId}]' data-export-submission-id="${exportSubmissionId}" title="下載最新一次完成的作業（Word 檔，不含錄音）">作業匯出</button>`
+    : '<button type="button" class="btn btn-export-result" disabled title="老師批改完就可以匯出">作業匯出</button>';
   const retryAttributes = availability.allowed
     ? `data-action="retryAssignment" data-args='[${assignmentId}]' data-retry-assignment-id="${assignmentId}"`
     : `disabled title="${escHtml(availability.reason)}"`;
   return `<div class="completed-actions">
     ${resultAction}
-    <button type="button" class="btn btn-retry" ${retryAttributes}><i class="bi bi-arrow-repeat me-1"></i>再次練習</button>
+    <button type="button" class="btn btn-retry" ${retryAttributes}>再次練習</button>
     ${exportAction}
   </div>
   <div id="resultExportFeedback-${assignmentId}" class="result-export-feedback" role="status" aria-live="polite"></div>
@@ -155,7 +155,7 @@ async function exportResultPackage(assignmentId, submissionId) {
   const originalHtml = button?.innerHTML || '';
   if (button) {
     button.disabled = true;
-    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>正在打包…';
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>準備檔案中…';
   }
   setResultExportFeedback(normalizedAssignmentId, '');
 
@@ -166,10 +166,10 @@ async function exportResultPackage(assignmentId, submissionId) {
     );
     if (!response.ok) {
       const error = await response.json().catch(() => null);
-      throw new Error(apiErrorMessage(error, '成果包匯出失敗，請稍後再試。'));
+      throw new Error(apiErrorMessage(error, '匯出失敗，請稍後再試。'));
     }
     const blob = await response.blob();
-    const filename = resultPackageFilename(response, `學習成果_${normalizedSubmissionId}.zip`);
+    const filename = resultPackageFilename(response, `學習成果_${normalizedSubmissionId}.docx`);
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = objectUrl;
@@ -178,11 +178,11 @@ async function exportResultPackage(assignmentId, submissionId) {
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-    setResultExportFeedback(normalizedAssignmentId, '成果包下載已開始。', true);
+    setResultExportFeedback(normalizedAssignmentId, '已開始下載 Word 檔。', true);
   } catch (error) {
     setResultExportFeedback(
       normalizedAssignmentId,
-      error?.message || '成果包匯出失敗，請稍後再試。',
+      error?.message || '匯出失敗，請稍後再試。',
     );
   } finally {
     if (button?.isConnected) {
@@ -268,7 +268,7 @@ async function openSubmissionHistory(assignmentId) {
       .filter(item => item && item.submitted_at)
       .sort((left, right) => Number(right.attempt_number) - Number(left.attempt_number));
     if (!attempts.length) {
-      body.innerHTML = '<div class="text-center text-muted py-5"><i class="bi bi-inbox fs-1 d-block mb-2"></i>目前尚無已正式送出的提交紀錄。</div>';
+      body.innerHTML = '<div class="text-center text-muted py-5">目前尚無已正式送出的提交紀錄。</div>';
       return;
     }
     body.innerHTML = `<div class="d-grid gap-3">${attempts.map(attempt => {
@@ -276,7 +276,7 @@ async function openSubmissionHistory(assignmentId) {
       const attemptNumber = Number(attempt.attempt_number);
       return `<div class="record-list-item d-flex align-items-center justify-content-between gap-3 flex-wrap">
         <div><div class="fw-bold">第 ${attemptNumber} 次練習</div><div class="small text-muted mt-1">完成時間：${escHtml(fmtDatetime(attempt.submitted_at))}</div></div>
-        <a class="btn btn-outline-primary btn-sm" href="${reportViewUrl(assignmentId, submissionId)}"><i class="bi bi-eye me-1"></i>查看完整結果</a>
+        <a class="btn btn-outline-primary btn-sm" href="${reportViewUrl(assignmentId, submissionId)}">查看完整結果</a>
       </div>`;
     }).join('')}</div>`;
   } catch (error) {
@@ -327,8 +327,8 @@ function renderGradeRevision(grade, isCurrentVersion, open) {
         <div class="col-md-6"><strong>批改者：</strong>${escHtml(gradeIdentity(grade))}</div>
         <div class="col-12"><strong>修改理由：</strong>${escHtml(gradeReason(grade))}</div>
       </div>
-      <h6 class="fw-bold">總評</h6><p style="white-space:pre-wrap">${escHtml(grade.teacher_comment || '—')}</p>
-      <h6 class="fw-bold">改進建議</h6><p style="white-space:pre-wrap">${escHtml(grade.teacher_feedback || '—')}</p>
+      <h6 class="fw-bold">總評</h6><p class="text-pre-wrap">${escHtml(grade.teacher_comment || '—')}</p>
+      <h6 class="fw-bold">改進建議</h6><p class="text-pre-wrap">${escHtml(grade.teacher_feedback || '—')}</p>
       <h6 class="fw-bold mb-1">各項評分等級</h6>${renderGradeRatings(grade.ratings)}
     </div>
   </details>`;
@@ -357,7 +357,7 @@ async function openGradeHistory(assignmentId) {
     });
     body.innerHTML = [...attempts.entries()].map(([attemptNumber, revisions], attemptIndex) => `
       <section class="grade-attempt">
-        <h6 class="fw-bold mb-3"><i class="bi bi-journal-check me-1 text-primary"></i>第 ${attemptNumber} 次練習</h6>
+        <h6 class="fw-bold mb-3">第 ${attemptNumber} 次練習</h6>
         ${revisions.map((grade, revisionIndex) => renderGradeRevision(grade, revisionIndex === 0, attemptIndex === 0 && revisionIndex === 0)).join('')}
       </section>`).join('');
   } catch (error) {
@@ -394,6 +394,8 @@ async function loadAssignments() {
     return;
   }
 
+  const openRows = [];
+  const archivedRows = [];
   data.forEach(a => {
     const stageNum = a.current_stage || 1;
     const isCompleted = a.is_submitted;
@@ -402,14 +404,13 @@ async function loadAssignments() {
     const pct = Math.round((displayStage / 6) * 100);
     const ds = dateStatus(a);
 
-    const accentClass = isCompleted ? 'completed' : (ds.state === 'overdue' ? 'overdue' : ds.state === 'late' ? 'warning' : stageNum >= 6 ? 'warning' : '');
     let statusHtml;
     if (ds.state === 'pending') {
-      statusHtml = `<span class="status-badge status-pending"><i class="bi bi-clock me-1"></i>尚未開放</span>`;
+      statusHtml = `<span class="status-badge status-pending"><i class="bi bi-clock"></i>尚未開放</span>`;
     } else if (ds.state === 'overdue' && !isCompleted) {
-      statusHtml = `<span class="status-badge status-overdue"><i class="bi bi-calendar-x me-1"></i>已截止</span>`;
+      statusHtml = `<span class="status-badge status-overdue"><i class="bi bi-calendar-x"></i>已截止</span>`;
     } else if (ds.state === 'late' && !isCompleted) {
-      statusHtml = `<span class="status-badge status-late"><i class="bi bi-calendar-plus me-1"></i>補繳中・第 ${displayStage}/6 階段：${stageLabel(stageNum)}</span>`;
+      statusHtml = `<span class="status-badge status-late"><i class="bi bi-calendar-plus"></i>補繳中・第 ${displayStage}/6 階段：${stageLabel(stageNum)}</span>`;
     } else if (isCompleted) {
       statusHtml = `<span class="status-badge status-completed"><i class="bi bi-check-circle-fill"></i>已完成</span>`;
     } else if (stageNum >= 6) {
@@ -430,54 +431,65 @@ async function loadAssignments() {
     if (isCompleted) {
       btnHtml = renderCompletedActions(a, ds);
     } else if (ds.state === 'pending') {
-      btnHtml = `<button class="btn btn-locked" disabled><i class="bi bi-lock me-1"></i>尚未開放</button>`;
+      btnHtml = `<button class="btn btn-locked" disabled>尚未開放</button>`;
     } else if (ds.state === 'late') {
-      btnHtml = `<a href="${sectionUrl}" class="btn btn-start w-100" style="background:linear-gradient(90deg,#d97706,#b45309)"><i class="bi bi-pencil-fill me-1"></i>${stageNum === 1 ? '開始補繳' : '繼續補繳'}</a>`;
+      btnHtml = `<a href="${sectionUrl}" class="btn btn-start w-100 btn-start-late">${stageNum === 1 ? '開始補繳' : '繼續補繳'}</a>`;
     } else if (ds.state === 'overdue') {
       btnHtml = a.attempt_number > 0
-        ? `<a href="${sectionUrl}" class="btn btn-view w-100"><i class="bi bi-eye me-1"></i>檢視作業</a>`
-        : `<button class="btn btn-locked" disabled><i class="bi bi-calendar-x me-1"></i>已截止</button>`;
+        ? `<a href="${sectionUrl}" class="btn btn-view w-100">檢視作業</a>`
+        : `<button class="btn btn-locked" disabled>已截止</button>`;
     } else {
-      btnHtml = `<a href="${sectionUrl}" class="btn btn-start w-100"><i class="bi bi-play-fill me-1"></i>${stageNum === 1 ? '開始作業' : '繼續練習'}</a>`;
+      btnHtml = `<a href="${sectionUrl}" class="btn btn-start w-100">${stageNum === 1 ? '開始作業' : '繼續練習'}</a>`;
     }
 
     const dueBadgeClass = ds.state === 'overdue' ? 'overdue' : ds.state === 'late' ? 'late' : '';
-    const dueBadgeIcon = ds.state === 'overdue' ? 'calendar-x' : ds.state === 'late' ? 'calendar-plus' : (ds.state === 'pending' ? 'calendar-plus' : 'calendar');
+    const isArchived = isCompleted || ds.state === 'overdue';
 
-    const col = document.createElement('div');
-    col.className = 'col-md-6 col-lg-4';
-    col.innerHTML = `
-      <div class="assignment-card">
-        <div class="card-accent ${accentClass}"></div>
-        <div class="card-content">
-          <div class="d-flex justify-content-between align-items-start mb-2">
-            <div class="assignment-title">${escHtml(a.title)}</div>
-          </div>
-          <p class="assignment-desc">${escHtml(a.description || '—')}</p>
-          <div class="stage-progress">
-            <div class="stage-label">
-              <span class="stage-name">${statusHtml}</span>
-              <span class="stage-count">${displayStage}/6</span>
-            </div>
-            <div class="progress">
-              <div class="progress-bar ${barColor}" style="width:${pct}%"></div>
-            </div>
-          </div>
-          <div class="due-badge ${dueBadgeClass}">
-            <i class="bi bi-${dueBadgeIcon}"></i>
-            ${escHtml(ds.text)}
-          </div>
-          <div class="assignment-actions">
-            ${btnHtml}
-            <div class="record-actions">
-              <button type="button" class="btn-record" data-action="openSubmissionHistory" data-args='[${Number(a.id)}]' ${a.has_submission_history ? '' : 'disabled title="尚無提交紀錄"'}><i class="bi bi-clock-history me-1"></i>查看提交紀錄</button>
-              <button type="button" class="btn-record" data-action="openGradeHistory" data-args='[${Number(a.id)}]' ${a.has_grade_history ? '' : 'disabled title="老師尚未完成批改"'}><i class="bi bi-award me-1"></i>查看成績</button>
-            </div>
-          </div>
+    const row = document.createElement('article');
+    row.className = 'assignment-row';
+    row.innerHTML = `
+      <div class="assignment-main">
+        <h3 class="assignment-title">${escHtml(a.title)}</h3>
+        ${a.description ? `<p class="assignment-desc">${escHtml(a.description)}</p>` : ''}
+        <div class="assignment-meta">
+          ${statusHtml}
+          <span class="due-badge ${dueBadgeClass}">${escHtml(ds.text)}</span>
+        </div>
+        <div class="progress" role="progressbar" aria-label="作業進度" aria-valuenow="${displayStage}" aria-valuemin="0" aria-valuemax="6">
+          <div class="progress-bar ${barColor} pct-w-${Math.min(100, Math.max(0, pct))}"></div>
+        </div>
+      </div>
+      <div class="assignment-actions">
+        ${btnHtml}
+        <div class="record-actions">
+          <button type="button" class="btn-record" data-action="openSubmissionHistory" data-args='[${Number(a.id)}]' ${a.has_submission_history ? '' : 'disabled title="尚無提交紀錄"'}>提交紀錄</button>
+          <button type="button" class="btn-record" data-action="openGradeHistory" data-args='[${Number(a.id)}]' ${a.has_grade_history ? '' : 'disabled title="老師尚未完成批改"'}>查看成績</button>
         </div>
       </div>`;
-    list.appendChild(col);
+    const sortKey = ds.state === 'pending' ? 1 : 0;
+    (isArchived ? archivedRows : openRows).push({ row, sortKey });
   });
+
+  const openGroup = document.createElement('section');
+  openGroup.className = 'assignment-group';
+  openGroup.innerHTML = `<h2 class="assignment-group-title">待完成<span class="assignment-group-count">${openRows.length}</span></h2>`;
+  const openList = document.createElement('div');
+  openList.className = 'assignment-rows';
+  openRows.sort((x, y) => x.sortKey - y.sortKey).forEach(({ row }) => openList.appendChild(row));
+  if (!openRows.length) openList.innerHTML = '<p class="assignment-rows-empty">目前沒有待完成的作業。</p>';
+  openGroup.appendChild(openList);
+  list.appendChild(openGroup);
+
+  if (archivedRows.length) {
+    const archive = document.createElement('details');
+    archive.className = 'assignment-group assignment-group-archive';
+    archive.innerHTML = `<summary class="assignment-group-title">已完成／已截止<span class="assignment-group-count">${archivedRows.length}</span></summary>`;
+    const archiveList = document.createElement('div');
+    archiveList.className = 'assignment-rows';
+    archivedRows.forEach(({ row }) => archiveList.appendChild(row));
+    archive.appendChild(archiveList);
+    list.appendChild(archive);
+  }
 }
 
 function escHtml(str) {

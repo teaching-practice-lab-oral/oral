@@ -25,7 +25,7 @@ from app.schemas import (
     FinalDraftAnswersRequest,
 )
 from app.services import rate_limiter, openai_chat
-from app.services.input_validator import validate_draft_text
+from app.services.input_validator import validate_final_draft_text
 from app.services.openai_chat import (
     draft_feedback_response_format,
     extract_json_object,
@@ -219,7 +219,7 @@ def save_final_draft_draft(
     _require_feedback_ready(sub)
     answers = bind_answers_to_snapshot(db, sub, payload.final_draft_answers, require_all=False)
     for item in answers:
-        validate_draft_text(item["text"])
+        validate_final_draft_text(item["text"])
     replace_answers(db, sub, "final", answers)
     db.commit()
     db.refresh(sub)
@@ -238,7 +238,7 @@ async def save_final_draft(
     _require_feedback_ready(sub)
     answers = bind_answers_to_snapshot(db, sub, payload.final_draft_answers, require_all=True)
     for item in answers:
-        validate_draft_text(item["text"])
+        validate_final_draft_text(item["text"])
     replace_answers(db, sub, "final", answers)
 
     student_id = current_user.student_id  # capture before releasing the session (avoids reload)

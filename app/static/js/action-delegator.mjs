@@ -58,7 +58,6 @@ window.handleTagKeyH = function (wrap, input, e) { window.handleTagKey?.(e, wrap
 window.toggleActiveH = function (id) { window.toggleActive?.call(this, id, this.checked, this); };
 window.confirmDeleteH = function () { window.confirmDelete?.(this.dataset.id, this.dataset.name); };
 window.openDeleteAssignmentH = function () { window.openDeleteAssignment?.(this.dataset.id, this.dataset.title); };
-window.openResetAssignmentH = function () { window.openResetAssignment?.(this.dataset.id, this.dataset.title); };
 window.openDeleteUserH = function () { window.openDeleteUser?.(this.dataset.id, this.dataset.name, this.dataset.sid); };
 window.openEditClassH = function () { window.openEditClass?.(this.dataset.id, this.dataset.name, this.dataset.course); };
 window.openResetH = function () { window.openReset?.(this.dataset.id, this.dataset.name); };

@@ -1,8 +1,8 @@
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -10,38 +10,27 @@ from app.auth import get_current_admin
 from app.database import get_db
 from app.db_helpers import load_users_by_ids
 from app.models import (
-    User, Assignment, Submission, ApiUsageLog, LoginEvent, ActiveSession,
-    AdminAuditLog, WorkerRoutingEvent,
+    User, ApiUsageLog, LoginEvent, ActiveSession,
+    AdminAuditLog,
 )
 from app.services.admin_scope import (
     apply_student_visibility_filter, apply_user_visibility_filter,
-    assignment_visible_to_admin, ensure_admin_can_access_user, is_privileged_admin,
+    ensure_admin_can_access_user, ensure_privileged_admin, is_privileged_admin,
 )
 from app.schemas import (
     ApiUsageLogResponse, ApiUsageLogListResponse,
     LoginEventResponse, LoginEventListResponse,
-    ActiveSessionResponse,
+    ActiveSessionResponse, LoginUnfreezeResponse,
     AdminAuditLogResponse, AdminAuditLogListResponse,
-    WorkerRoutingStatusItem, WorkerRoutingStatusResponse, WorkerHealthResponse,
 )
 from app.utils import taipei_now
-from app.config import settings
-from app.services import worker_client
-from app.services.workflow_policy import workflow_stage_label
+from app.services.admin_audit import log_admin_action
+from app.services.rate_limiter import LOGIN_UNFREEZE_ACTION
 from app.services.input_validator import normalize_http_text
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
-
-
-ROUTE_STATUS_LABELS = {
-    "worker_success": "由台灣語音處理伺服器完成",
-    "fallback_error": "語音處理伺服器失敗，已由主系統接手",
-    "local_weight": "本次留在主站",
-    "local_cooldown": "語音處理伺服器暫停分流",
-    "local_disabled": "分流未啟用",
-}
 
 
 # ── Usage Logs ────────────────────────────────────────────────────────────────
@@ -192,158 +181,6 @@ def list_active_sessions(
     return result
 
 
-@router.get("/worker-routing-status", response_model=WorkerRoutingStatusResponse)
-def list_worker_routing_status(
-    student_id: Optional[str] = Query(None, max_length=64),
-    status: Optional[str] = Query(None, max_length=32),
-    stage: Optional[int] = Query(None, ge=1, le=9),
-    active_only: bool = Query(False),
-    recent_minutes: int = Query(120, ge=5, le=1440),
-    limit: int = Query(100, ge=1, le=300),
-    admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db),
-):
-    student_id = normalize_http_text(student_id, field_name="student_id")
-    status = normalize_http_text(status, field_name="status")
-    if status and status not in ROUTE_STATUS_LABELS:
-        raise HTTPException(status_code=422, detail="status 無效")
-    now = taipei_now()
-    visible_users = (
-        apply_user_visibility_filter(db.query(User), admin)
-        .filter(User.role == "student")
-        .all()
-    )
-    if student_id:
-        visible_users = [u for u in visible_users if u.student_id == student_id]
-    visible_by_id = {u.id: u for u in visible_users}
-    if not visible_by_id:
-        return WorkerRoutingStatusResponse(
-            enabled=settings.CHT_WORKER_ENABLED,
-            base_url=settings.CHT_WORKER_BASE_URL,
-            weight=settings.cht_worker_weight_ratio,
-            cooldown_seconds=settings.CHT_WORKER_COOLDOWN_SECONDS,
-            items=[],
-        )
-
-    visible_user_ids = set(visible_by_id)
-    sessions = (
-        db.query(ActiveSession)
-        .filter(ActiveSession.expires_at > now, ActiveSession.user_id.in_(visible_user_ids))
-        .order_by(ActiveSession.last_seen_at.desc())
-        .all()
-    )
-    latest_session_by_user: dict[int, ActiveSession] = {}
-    for session in sessions:
-        latest_session_by_user.setdefault(session.user_id, session)
-
-    visible_assignments = {
-        assignment.id: assignment
-        for assignment in db.query(Assignment).all()
-        if assignment_visible_to_admin(admin, assignment)
-    }
-    visible_assignment_ids = set(visible_assignments)
-
-    since = now - timedelta(minutes=recent_minutes)
-    event_query = (
-        db.query(WorkerRoutingEvent)
-        .outerjoin(Submission, WorkerRoutingEvent.submission_id == Submission.id)
-        .filter(
-            WorkerRoutingEvent.user_id.in_(visible_user_ids),
-            WorkerRoutingEvent.created_at >= since,
-            or_(
-                WorkerRoutingEvent.submission_id.is_(None),
-                Submission.assignment_id.in_(visible_assignment_ids),
-            ),
-        )
-        .order_by(WorkerRoutingEvent.created_at.desc(), WorkerRoutingEvent.id.desc())
-    )
-    if status:
-        event_query = event_query.filter(WorkerRoutingEvent.route_status == status)
-    events = event_query.limit(1000).all()
-    latest_event_by_user: dict[int, WorkerRoutingEvent] = {}
-    for event in events:
-        if event.user_id is not None:
-            latest_event_by_user.setdefault(event.user_id, event)
-
-    candidate_user_ids = set(latest_session_by_user)
-    if not active_only:
-        candidate_user_ids.update(latest_event_by_user)
-    candidate_user_ids.intersection_update(visible_user_ids)
-
-    rows: list[WorkerRoutingStatusItem] = []
-    for user_id in candidate_user_ids:
-        user = visible_by_id.get(user_id)
-        if not user:
-            continue
-        latest_submission = (
-            db.query(Submission)
-            .filter(
-                Submission.user_id == user_id,
-                Submission.assignment_id.in_(visible_assignment_ids),
-            )
-            .order_by(Submission.updated_at.desc(), Submission.id.desc())
-            .first()
-        ) if visible_assignment_ids else None
-        if stage and (not latest_submission or latest_submission.stage != stage):
-            continue
-        event = latest_event_by_user.get(user_id)
-        if status and not event:
-            continue
-        assignment = visible_assignments.get(latest_submission.assignment_id) if latest_submission else None
-        session = latest_session_by_user.get(user_id)
-        current_stage = latest_submission.stage if latest_submission else None
-        rows.append(WorkerRoutingStatusItem(
-            user_id=user.id,
-            student_id=user.student_id,
-            name=user.name,
-            role=user.role,
-            online=bool(session),
-            last_seen_at=session.last_seen_at if session else None,
-            submission_id=latest_submission.id if latest_submission else None,
-            assignment_id=latest_submission.assignment_id if latest_submission else None,
-            assignment_title=assignment.title if assignment else None,
-            stage=current_stage,
-            stage_label=workflow_stage_label(current_stage),
-            operation=event.operation if event else None,
-            route_status=event.route_status if event else None,
-            route_status_label=ROUTE_STATUS_LABELS.get(event.route_status, event.route_status) if event else None,
-            worker_url=event.worker_url if event else None,
-            detail=event.detail if event else None,
-            duration_ms=event.duration_ms if event else None,
-            routed_at=event.created_at if event else None,
-        ))
-
-    rows.sort(key=lambda item: (
-        0 if item.online else 1,
-        -(item.routed_at.timestamp() if item.routed_at else 0),
-        item.student_id,
-    ))
-
-    return WorkerRoutingStatusResponse(
-        enabled=settings.CHT_WORKER_ENABLED,
-        base_url=settings.CHT_WORKER_BASE_URL,
-        weight=settings.cht_worker_weight_ratio,
-        cooldown_seconds=settings.CHT_WORKER_COOLDOWN_SECONDS,
-        items=rows[:limit],
-    )
-
-
-@router.get("/worker-health", response_model=WorkerHealthResponse)
-async def get_worker_health(
-    admin: User = Depends(get_current_admin),
-):
-    result = await worker_client.check_health()
-    return WorkerHealthResponse(
-        online=bool(result.get("online")),
-        configured=bool(result.get("configured")),
-        base_url=str(result.get("base_url") or ""),
-        status_code=result.get("status_code"),
-        duration_ms=result.get("duration_ms"),
-        detail=result.get("detail"),
-        checked_at=taipei_now(),
-    )
-
-
 @router.get("/admin-audit-logs", response_model=AdminAuditLogListResponse)
 def list_admin_audit_logs(
     page: int = Query(1, ge=1),
@@ -417,3 +254,47 @@ def list_admin_audit_logs(
         for log in logs
     ]
     return AdminAuditLogListResponse(items=items, total=total, page=page, limit=limit)
+
+
+@router.post("/login-unfreeze", response_model=LoginUnfreezeResponse)
+def unfreeze_all_logins(
+    request: Request,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Clear every account lock and reset the per-IP failed-login window."""
+    ensure_privileged_admin(admin, "只有指定管理員可解除全站登入限制")
+    now = taipei_now()
+    affected = (
+        db.query(User)
+        .filter(or_(User.locked_until.isnot(None), User.failed_login_count > 0))
+        .with_for_update()
+        .all()
+    )
+    locked = [u for u in affected if u.locked_until and u.locked_until > now]
+    for user in affected:
+        user.failed_login_count = 0
+        user.locked_until = None
+    log_admin_action(
+        db,
+        admin,
+        LOGIN_UNFREEZE_ACTION,
+        request=request,
+        target_type="system",
+        target_label="全站登入限制",
+        summary=f"解除 {len(locked)} 個鎖定帳號，並重設 IP 登入失敗計數",
+        details={
+            "unlocked_student_ids": [u.student_id for u in locked][:200],
+            "reset_failure_counts": len(affected),
+        },
+    )
+    db.commit()
+    if locked:
+        message = f"已解除 {len(locked)} 個帳號的鎖定，IP 登入限制也一併重設。"
+    else:
+        message = "目前沒有被鎖定的帳號，IP 登入限制已重設。"
+    return LoginUnfreezeResponse(
+        unlocked_accounts=len(locked),
+        reset_failure_counts=len(affected),
+        message=message,
+    )

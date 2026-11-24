@@ -643,37 +643,6 @@ class StudentPresence(Base):
     )
 
 
-class WorkerRoutingEvent(Base):
-    __tablename__ = "worker_routing_events"
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    student_id = Column(String(64), nullable=False, index=True)
-    submission_id = Column(Integer, ForeignKey("submissions.id", ondelete="SET NULL"), nullable=True, index=True)
-    stage = Column(Integer, nullable=True)
-    operation = Column(String(64), nullable=False)
-    route_status = Column(String(32), nullable=False, index=True)
-    worker_url = Column(String(512), nullable=True)
-    detail = Column(String(256), nullable=True)
-    duration_ms = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=taipei_now, nullable=False, index=True)
-
-    user = relationship("User", foreign_keys=[user_id])
-    submission = relationship("Submission", foreign_keys=[submission_id])
-
-    __table_args__ = (
-        CheckConstraint(
-            "route_status IN ('worker_success', 'fallback_error', 'local_weight', 'local_cooldown', 'local_disabled')",
-            name="ck_worker_routing_events_status",
-        ),
-        CheckConstraint("stage IS NULL OR stage BETWEEN 1 AND 8", name="ck_worker_routing_events_stage"),
-        CheckConstraint("duration_ms IS NULL OR duration_ms >= 0", name="ck_worker_routing_events_duration"),
-        Index("ix_worker_routing_events_created_id_desc", created_at.desc(), id.desc()),
-        Index("ix_worker_routing_events_user_created", "user_id", created_at.desc()),
-        Index("ix_worker_routing_events_status_created", "route_status", created_at.desc()),
-    )
-
-
 class LoginEvent(Base):
     __tablename__ = "login_events"
 

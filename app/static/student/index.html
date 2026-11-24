@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="AI 英語面試" />
   <meta name="application-name" content="AI 英語面試" />
-  <meta name="theme-color" content="#4f46e5" />
+  <meta name="theme-color" content="#1F3A5F" />
   <title>我的作業 - AI 英語面試練習系統</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="icon" href="/favicon.ico" sizes="any" />
@@ -20,224 +20,129 @@
   <meta property="og:type" content="website" />
   <meta property="og:image" content="/static/favicon.svg" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-  integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
-  crossorigin="anonymous" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-  integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+"
-  crossorigin="anonymous" />
-  <link rel="stylesheet" href="/static/student/account-setup.css?v=2" />
-  <link rel="stylesheet" href="/static/student/common.css?v=1" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+" crossorigin="anonymous"/>
+  <link rel="stylesheet" href="/static/student/account-setup.css" />
+  <link rel="stylesheet" href="/static/student/common.css" />
   <style>
     .stage-watermark {
-      position: fixed;
-      left: 50%;
-      top: 50%;
-      z-index: 0;
-      display: none;
+      position: fixed; left: 50%; top: 50%; z-index: 0; display: none;
       transform: translate(-50%, -50%) rotate(-12deg);
-      color: #4f46e5;
-      font-size: clamp(8rem, 25vw, 24rem);
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      line-height: 1;
-      opacity: 0.08;
-      pointer-events: none;
-      user-select: none;
-      white-space: nowrap;
+      color: var(--primary); font-size: clamp(8rem, 25vw, 24rem); font-weight: 800;
+      letter-spacing: 0.08em; line-height: 1; opacity: 0.06;
+      pointer-events: none; user-select: none; white-space: nowrap;
     }
-    .stage-watermark.is-visible {
-      display: block;
+    .stage-watermark.is-visible { display: block; }
+
+    .page-title { font-size: 1.6rem; font-weight: 700; margin: 0 0 1.5rem; }
+
+    /* Groups */
+    .assignment-group + .assignment-group { margin-top: 2rem; }
+    .assignment-group-title {
+      display: flex; align-items: center; gap: .5rem;
+      font-size: 1rem; font-weight: 700; color: var(--ink); margin: 0 0 .75rem;
     }
-    .page-hero {
-      background: white;
-      border-bottom: 1px solid #e2e8f0;
-      padding: 1.5rem 0;
-      margin-bottom: 2rem;
+    .assignment-group-count {
+      min-width: 1.6rem; padding: 0 .45rem; border-radius: var(--radius-sm);
+      background: #E9ECF0; color: var(--muted); font-size: .78rem; font-weight: 600; text-align: center;
     }
-    .assignment-card {
-      background: white;
-      border-radius: 16px;
-      border: 1px solid #e2e8f0;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-      transition: transform 0.2s, box-shadow 0.2s;
-      overflow: hidden;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
+    details.assignment-group-archive > summary { cursor: pointer; list-style: none; padding: .5rem 0; }
+    details.assignment-group-archive > summary::-webkit-details-marker { display: none; }
+    details.assignment-group-archive > summary::after {
+      content: ""; width: .5rem; height: .5rem; margin-left: .25rem;
+      border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+      transform: rotate(-45deg); transition: transform .15s;
     }
-    .assignment-card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 8px 30px rgba(79,70,229,0.15);
+    details.assignment-group-archive[open] > summary::after { transform: rotate(45deg); }
+
+    /* One bordered list, rows separated by hairlines */
+    .assignment-rows { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+    .assignment-rows-empty { margin: 0; padding: 1.25rem; color: var(--muted); }
+    .assignment-row {
+      display: grid; grid-template-columns: minmax(0, 1fr) 15rem; gap: 1.5rem;
+      padding: 1.25rem 1.5rem; align-items: start;
     }
-    .card-accent {
-      height: 5px;
-      background: linear-gradient(90deg, var(--primary), #7c3aed);
-    }
-    .card-accent.completed {
-      background: linear-gradient(90deg, #10b981, #059669);
-    }
-    .card-accent.warning {
-      background: linear-gradient(90deg, #f59e0b, #d97706);
-    }
-    .card-accent.overdue {
-      background: linear-gradient(90deg, #ef4444, #dc2626);
-    }
-    .card-content {
-      padding: 1.25rem;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-    .assignment-title {
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: #1e1b4b;
-      margin-bottom: 0.5rem;
-    }
-    .assignment-desc {
-      font-size: 0.85rem;
-      color: #64748b;
-      flex: 1;
-      margin-bottom: 1rem;
-    }
-    .stage-progress {
-      margin-bottom: 1rem;
-    }
-    .stage-label {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.4rem;
-    }
-    .stage-label .stage-name {
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--primary);
-    }
-    .stage-label .stage-count {
-      font-size: 0.75rem;
-      color: #94a3b8;
-    }
-    .progress { height: 6px; border-radius: 10px; background: #e2e8f0; }
-    .progress-bar { border-radius: 10px; }
-    .due-badge {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-      font-size: 0.78rem;
-      color: #94a3b8;
-      margin-bottom: 1rem;
-    }
-    .due-badge.overdue { color: #ef4444; }
-    .due-badge.late { color: #d97706; }
-    .btn-start {
-      background: linear-gradient(90deg, var(--primary), #7c3aed);
-      border: none;
-      color: white;
-      font-weight: 600;
-      border-radius: 10px;
-      padding: 0.55rem 1rem;
-      transition: opacity 0.2s;
-    }
-    .btn-start:hover { opacity: 0.88; color: white; }
-    .btn-view {
-      background: white;
-      border: 2px solid #10b981;
-      color: #10b981;
-      font-weight: 600;
-      border-radius: 10px;
-      padding: 0.5rem 1rem;
-      transition: all 0.2s;
-    }
-    .btn-view:hover { background: #10b981; color: white; }
-    .completed-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
-    .completed-actions .btn { display: flex; align-items: center; justify-content: center; }
-    .btn-retry {
-      background: linear-gradient(90deg, var(--primary), #7c3aed);
-      border: 2px solid transparent;
-      color: white;
-      font-weight: 600;
-      border-radius: 10px;
-      padding: 0.5rem 1rem;
-      transition: opacity 0.2s;
-    }
-    .btn-retry:hover:not(:disabled) { opacity: 0.88; color: white; }
-    .btn-retry:disabled { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; opacity: 1; }
-    .btn-export-result {
-      grid-column: 1 / -1;
-      background: linear-gradient(90deg, #4f46e5, #7c3aed);
-      border: 2px solid transparent;
-      color: white;
-      font-weight: 600;
-      border-radius: 10px;
-      padding: 0.5rem 1rem;
-    }
-    .btn-export-result:hover:not(:disabled) { opacity: 0.88; color: white; }
-    .btn-export-result:disabled { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; opacity: 1; }
-    .result-export-feedback { color: #b91c1c; font-size: 0.78rem; margin-top: 0.45rem; }
-    .result-export-feedback.is-success { color: #047857; }
-    .result-export-feedback:empty { display: none; }
-    .retry-feedback { color: #b91c1c; font-size: 0.78rem; margin-top: 0.45rem; }
-    .retry-feedback:empty { display: none; }
-    .assignment-actions { display: flex; flex-direction: column; gap: 0.6rem; }
-    .record-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
-    .btn-record {
-      border: 1.5px solid #c7d2fe;
-      color: #4338ca;
-      background: #fff;
-      border-radius: 9px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      padding: 0.48rem 0.35rem;
-      white-space: nowrap;
-    }
-    .btn-record:hover:not(:disabled) { background: #eef2ff; border-color: #818cf8; color: #3730a3; }
-    .btn-record:disabled { background: #f8fafc; border-color: #e2e8f0; color: #94a3b8; opacity: 1; }
-    .record-list-item { border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem; }
-    .grade-attempt + .grade-attempt { border-top: 1px solid #e2e8f0; padding-top: 1.25rem; margin-top: 1.25rem; }
-    .grade-revision { border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
-    .grade-revision + .grade-revision { margin-top: 0.75rem; }
-    .grade-revision summary { cursor: pointer; list-style: none; padding: 0.85rem 1rem; background: #f8fafc; }
-    .grade-revision summary::-webkit-details-marker { display: none; }
-    .grade-revision[open] summary { border-bottom: 1px solid #e2e8f0; }
-    .grade-revision-body { padding: 1rem; }
-    .grade-rating { border-bottom: 1px solid #f1f5f9; padding: 0.5rem 0; }
-    .grade-rating:last-child { border-bottom: 0; }
+    .assignment-row + .assignment-row { border-top: 1px solid var(--border); }
+    .assignment-title { font-size: 1.1rem; font-weight: 700; color: var(--ink); margin: 0 0 .25rem; line-height: 1.4; }
+    .assignment-desc { font-size: .9rem; color: var(--muted); margin: 0 0 .6rem; }
+    .assignment-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .9rem; margin-bottom: .6rem; }
+    .progress { height: 4px; border-radius: 2px; background: #E9ECF0; max-width: 24rem; }
+    .progress-bar { border-radius: 2px; }
+    .due-badge { font-size: .82rem; color: var(--muted); }
+    .due-badge.overdue { color: var(--danger); }
+    .due-badge.late { color: var(--warning); }
+
     .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.3rem;
-      padding: 0.3rem 0.7rem;
-      border-radius: 20px;
-      font-size: 0.78rem;
-      font-weight: 600;
+      display: inline-flex; align-items: center; gap: .3rem;
+      padding: .15rem .55rem; border-radius: var(--radius-sm);
+      font-size: .78rem; font-weight: 600;
     }
-    .status-completed { background: #d1fae5; color: #065f46; }
-    .status-active { background: #ede9fe; color: #4338ca; }
-    .status-warning { background: #fef3c7; color: #92400e; }
-    .status-pending { background: #e0f2fe; color: #0369a1; }
-    .status-overdue { background: #fee2e2; color: #b91c1c; }
-    .status-late { background: #fef3c7; color: #b45309; }
+    .status-completed { background: var(--success-soft); color: var(--success); }
+    .status-active { background: var(--primary-soft); color: var(--primary); }
+    .status-warning, .status-late { background: var(--warning-soft); color: var(--warning); }
+    .status-pending { background: #EEF0F3; color: var(--muted); }
+    .status-overdue { background: var(--danger-soft); color: var(--danger); }
+
+    /* Actions column */
+    .assignment-actions { display: flex; flex-direction: column; gap: .5rem; }
+    .btn-start, .btn-retry, .btn-export-result {
+      background: var(--primary); border: 1px solid var(--primary); color: #fff;
+      font-weight: 600; border-radius: var(--radius-sm); padding: .5rem 1rem;
+    }
+    .btn-start:hover, .btn-retry:hover:not(:disabled), .btn-export-result:hover:not(:disabled) {
+      background: var(--primary-hover); border-color: var(--primary-hover); color: #fff;
+    }
+    .btn-view {
+      background: var(--surface); border: 1px solid var(--primary); color: var(--primary);
+      font-weight: 600; border-radius: var(--radius-sm); padding: .5rem 1rem;
+    }
+    .btn-view:hover:not(:disabled) { background: var(--primary-soft); color: var(--primary); }
+    .btn-retry:disabled, .btn-export-result:disabled, .btn-view:disabled {
+      background: var(--surface-soft); border-color: var(--border); color: var(--faint); opacity: 1;
+    }
+    .btn-export-result { background: var(--surface); color: var(--ink); border-color: var(--border); }
+    .btn-export-result:hover:not(:disabled) { background: var(--surface-soft); border-color: var(--muted); color: var(--ink); }
     .btn-locked {
-      background: #f1f5f9;
-      border: 2px solid #e2e8f0;
-      color: #94a3b8;
-      font-weight: 600;
-      border-radius: 10px;
-      padding: 0.55rem 1rem;
-      width: 100%;
-      cursor: not-allowed;
+      width: 100%; background: var(--surface-soft); border: 1px solid var(--border); color: var(--faint);
+      font-weight: 600; border-radius: var(--radius-sm); padding: .5rem 1rem; cursor: not-allowed;
     }
-    .empty-state {
-      text-align: center;
-      padding: 4rem 2rem;
-      color: #94a3b8;
+    .completed-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+    .completed-actions .btn { display: flex; align-items: center; justify-content: center; }
+    .completed-actions .btn-export-result { grid-column: 1 / -1; }
+    .result-export-feedback, .retry-feedback { color: var(--danger); font-size: .78rem; }
+    .result-export-feedback.is-success { color: var(--success); }
+    .result-export-feedback:empty, .retry-feedback:empty { display: none; }
+    .record-actions { display: flex; justify-content: center; gap: 1.25rem; }
+    .btn-record {
+      background: none; border: 0; padding: .25rem 0; color: var(--primary);
+      font-size: .85rem; font-weight: 600; text-decoration: underline; text-underline-offset: .2em;
+      text-decoration-color: rgba(31,58,95,.3);
     }
-    .empty-state i { font-size: 4rem; opacity: 0.4; display: block; margin-bottom: 1rem; }
+    .btn-record:hover:not(:disabled) { text-decoration-color: var(--primary); }
+    .btn-record:disabled { color: var(--faint); text-decoration: none; cursor: not-allowed; }
 
+    @media (max-width: 767.98px) {
+      .assignment-row { grid-template-columns: 1fr; gap: 1rem; padding: 1.1rem 1rem; }
+      .progress { max-width: none; }
+      .btn-start, .btn-view, .btn-retry, .btn-export-result, .btn-locked { min-height: 44px; }
+    }
 
+    /* Submission / grade history modal */
+    .record-list-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
+    .grade-attempt + .grade-attempt { border-top: 1px solid var(--border); padding-top: 1.25rem; margin-top: 1.25rem; }
+    .grade-revision { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .grade-revision + .grade-revision { margin-top: .75rem; }
+    .grade-revision summary { cursor: pointer; list-style: none; padding: .85rem 1rem; background: var(--surface-soft); }
+    .grade-revision summary::-webkit-details-marker { display: none; }
+    .grade-revision[open] summary { border-bottom: 1px solid var(--border); }
+    .grade-revision-body { padding: 1rem; }
+    .grade-rating { border-bottom: 1px solid #EEF0F3; padding: .5rem 0; }
+    .grade-rating:last-child { border-bottom: 0; }
+
+    .empty-state { text-align: center; padding: 4rem 2rem; color: var(--muted); }
+    .empty-state h5 { color: var(--ink); }
   </style>
+  <link rel="stylesheet" href="/static/css/ui.css">
 </head>
 <body>
   <nav class="navbar navbar-custom navbar-dark">
@@ -252,10 +157,10 @@
           <span id="userName"></span>
         </span>
         <button class="btn btn-outline-light btn-sm" data-action="openChangePw">
-          <i class="bi bi-key me-1"></i>變更密碼
+          變更密碼
         </button>
         <button class="btn btn-outline-light btn-sm" data-action="logout">
-          <i class="bi bi-box-arrow-right me-1"></i>登出
+          登出
         </button>
       </div>
     </div>
@@ -339,7 +244,7 @@
                 <i class="bi bi-eye"></i>
               </button>
             </div>
-            <div class="password-hint"><i class="bi bi-info-circle"></i>請勿使用與舊密碼相同的組合。</div>
+            <div class="password-hint">請勿使用與舊密碼相同的組合。</div>
           </div>
 
           <div class="password-group">
@@ -381,32 +286,26 @@
   </div>
 
   <div class="container py-4">
-    <div class="d-flex align-items-center mb-4 gap-2">
-      <i class="bi bi-journal-text fs-4 text-primary"></i>
-      <h4 class="mb-0 fw-bold">我的作業</h4>
-    </div>
+    <h1 class="page-title">我的作業</h1>
 
     <div id="loadingMsg" class="text-center py-5">
-      <div class="spinner-border text-primary"></div>
+      <div class="spinner-border text-secondary"></div>
       <p class="mt-2 text-muted">載入作業中...</p>
     </div>
 
     <div id="emptyMsg" class="empty-state d-none">
-      <i class="bi bi-inbox"></i>
       <h5>目前沒有開放中的作業</h5>
       <p class="text-muted small">請等待教師開放作業後再回來查看。</p>
     </div>
 
-    <div id="assignmentList" class="row g-3"></div>
+    <div id="assignmentList"></div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-  integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
-  crossorigin="anonymous"></script>
-  <script src="/static/pwa.js?v=7"></script>
-  <script src="/static/student/workflow.js?v=4"></script>
-  <script type="module" src="/static/student/controllers/index.mjs?v=4"></script>
-  <script type="module" src="/static/student/controllers/index-page.mjs?v=11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+  <script src="/static/pwa.js"></script>
+  <script src="/static/student/workflow.js"></script>
+  <script type="module" src="/static/student/controllers/index.mjs"></script>
+  <script type="module" src="/static/student/controllers/index-page.mjs"></script>
 
 <div id="stageWatermark" class="stage-watermark" aria-hidden="true">Stage</div>
 <script>
@@ -414,7 +313,7 @@
     document.getElementById('stageWatermark').classList.add('is-visible');
   }
 </script>
-<footer style="text-align:center;padding:12px 0 8px;font-size:0.85rem;color:#888;">AI 英語面試練習系統 · Apache-2.0</footer>
+<footer class="site-footer">AI 英語面試練習系統 · Apache-2.0</footer>
 
 </body>
 </html>

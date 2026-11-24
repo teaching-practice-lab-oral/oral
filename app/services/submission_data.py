@@ -286,24 +286,53 @@ def build_roleplay_conversation(db: Session, submission: Submission) -> dict:
 
 
 def replace_roleplay_turns(db: Session, submission: Submission, conversation: dict) -> None:
-    db.query(RoleplayTurn).filter(RoleplayTurn.submission_id == submission.id).delete()
+    """Make the stored turns match ``conversation`` by turn number.
+
+    Rows are updated in place rather than deleted and re-inserted, so each
+    turn keeps its original ``created_at`` and only changed turns get a new
+    ``updated_at``.
+    """
     turns = conversation.get("turns", []) if isinstance(conversation, dict) else []
+    existing = {
+        row.turn_number: row
+        for row in db.query(RoleplayTurn).filter(RoleplayTurn.submission_id == submission.id)
+    }
     now = taipei_now()
+    kept: set[int] = set()
     for item in turns:
-        db.add(
-            RoleplayTurn(
-                submission_id=submission.id,
-                turn_number=int(item.get("turn_number", 0)),
-                source_question_index=item.get("source_question_index"),
-                interviewer_question=str(item.get("interviewer_question", "")),
-                interviewer_tts_key=item.get("interviewer_tts_key"),
-                student_transcript=item.get("student_transcript"),
-                student_audio_key=item.get("student_audio_key"),
-                student_metrics=item.get("student_metrics"),
-                created_at=now,
-                updated_at=now,
+        turn_number = int(item.get("turn_number", 0))
+        values = {
+            "source_question_index": item.get("source_question_index"),
+            "interviewer_question": str(item.get("interviewer_question", "")),
+            "interviewer_tts_key": item.get("interviewer_tts_key"),
+            "student_transcript": item.get("student_transcript"),
+            "student_audio_key": item.get("student_audio_key"),
+            "student_metrics": item.get("student_metrics"),
+        }
+        kept.add(turn_number)
+        row = existing.get(turn_number)
+        if row is None:
+            db.add(
+                RoleplayTurn(
+                    submission_id=submission.id,
+                    turn_number=turn_number,
+                    created_at=now,
+                    updated_at=now,
+                    **values,
+                )
             )
-        )
+            continue
+        changed = False
+        for field, value in values.items():
+            if getattr(row, field) != value:
+                setattr(row, field, value)
+                changed = True
+        if changed:
+            row.updated_at = now
+    for turn_number, row in existing.items():
+        if turn_number not in kept:
+            db.delete(row)
+    db.flush()
 
 
 def get_report_data(db: Session, submission: Submission) -> dict | list | None:

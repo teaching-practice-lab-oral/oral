@@ -88,8 +88,6 @@ function applyFormState(data){
   issueCategory.value=(data&&data.issue_category)||'';
   issueDescription.value=(data&&data.issue_description)||'';
   issueFields.classList.toggle('d-none',!hasIssue.checked);
-  const v=getView();
-  if(v)reflectionGuide.innerHTML=renderReflectionTaskGuide(v,{answers});
 }
 
 function setEditingDisabled(disabled){
@@ -243,22 +241,6 @@ function keepServerDraft(){
   editRevision=0;savedRevision=0;
   if(serverUpdatedAt)setSavedStatus();else setSaveStatus('','尚未儲存');
 }
-function renderReflectionTaskGuide(v,data){
-  const answers=Array.isArray(data.answers)?data.answers:[];
-  const completed=answers.filter(answer=>String(answer||'').trim()).length;
-  const state=viewId||v.submitted_at||data.submitted_at?'completed':isPastDue()?'read-only':'active';
-  if(state!=='active')return renderTaskGuide({title:state==='read-only'?'作業已截止，心得僅供查看':'心得已正式送出',progress:`心得 ${completed}/${questions.length} 題已完成`,next:'回看時，找出當時訂下的行動，確認下一次練習是否真的有做到。',view:v,state});
-  return renderTaskGuide({
-    title:'用「哪裡、發現、下一步」把心得寫具體',
-    progress:`心得已完成 ${completed}/${questions.length} 題`,
-    actions:['先指出證據在哪一題、哪一輪或哪一段逐字稿。','再寫你做得好的地方或遇到的問題，以及判斷原因。','最後寫清楚下次做什麼、何時做、怎麼確認進步。'],
-    support:{title:'只想到「很好」或「要加強」時',items:['回到一段實際回答、錄音或回饋，先描述當時發生了什麼。','把「多練習」改成可執行的動作，例如每週錄兩次並比較關鍵字是否更清楚。'],html:learningScaffoldStageHtml(v,'reflection')},
-    starters:['在第 __ 題／第 __ 輪，我……','回聽或查看回饋後，我發現……','下次我會在 __ 前，用 __ 練習，並用 __ 確認進步。'],
-    checks:[`${workflowLimit('reflection_question_count')} 題都有引用這次練習的具體內容。`,'優勢與待改進處都有說明原因。','後續行動包含做法、時間與檢查方式。'],
-    next:`系統會自動保存；確認 ${workflowLimit('reflection_question_count')} 題完整後正式送出，本次作業才算完成。`,
-    view:v,
-  });
-}
 function reflectionSuggestionItems(value){
   if(Array.isArray(value))return value.map(item=>String(item||'').trim()).filter(Boolean);
   if(typeof value!=='string')return[];
@@ -270,17 +252,13 @@ function reflectionSuggestionItems(value){
 function renderAiSuggestionCard(v){
   const report=v&&v.report_data?tryParseJson(v.report_data):null;
   const suggestions=reflectionSuggestionItems(report&&report.overall_suggestions);
-  const suggestionHtml=suggestions.length
-    ?`<ul class="mb-2">${suggestions.map(item=>`<li class="mb-1">${escHtml(item)}</li>`).join('')}</ul>`
-    :'<p class="text-muted small mb-2">本次 AI 回饋目前沒有可顯示的改進建議，請依照你看到的回饋與實際作答完成反思。</p>';
-  return `<aside class="ai-suggestion-card" aria-label="本次 AI 回饋的改進建議"><div class="fw-bold mb-2"><i class="bi bi-lightbulb me-1 text-primary"></i>先讀這次 AI 回饋的改進建議</div>${suggestionHtml}<div class="small text-primary-emphasis"><strong>回答前想一想：</strong>從中挑一項，對照你的實際回答，說明自己的一項優勢、最需要改進之處，以及判斷的證據。</div></aside>`;
+  if(!suggestions.length)return '';
+  return `<aside class="ai-suggestion-card" aria-label="AI 回饋的建議"><div class="fw-bold mb-2">這次 AI 回饋的建議</div><ul class="mb-0">${suggestions.map(item=>`<li class="mb-1">${escHtml(item)}</li>`).join('')}</ul></aside>`;
 }
 function renderQuestions(data){
-  const support=getLearningSupport(getView());
-  const placeholder=support.mode==='guided'?'請指出發生在哪一題或哪一輪，再寫下具體例子。':support.mode==='supported'?'先寫你的判斷，再補上本次練習中的證據。':'請用具體證據完成你的獨立反思。';
   questionsBox.innerHTML=questions.map((q,i)=>{
     const suggestionCard=i===2?renderAiSuggestionCard(getView()):'';
-    return `<div class="question-card"><label class="form-label fw-bold" for="answer${i}">${i+1}. ${escHtml(q)} <span class="text-danger">*</span></label>${suggestionCard}<textarea id="answer${i}" class="form-control reflection-answer" maxlength="3000" placeholder="${escAttr(placeholder)}">${escHtml((data.answers||[])[i]||'')}</textarea><div class="form-text">避免只寫「很好」或「要加強」；請交代你從哪一段回答、錄音或報告做出這個判斷。</div></div>`;
+    return `<div class="question-card"><label class="form-label fw-bold" for="answer${i}">${i+1}. ${escHtml(q)} <span class="text-danger">*</span></label>${suggestionCard}<textarea id="answer${i}" class="form-control reflection-answer" maxlength="3000">${escHtml((data.answers||[])[i]||'')}</textarea></div>`;
   }).join('');
 }
 function setLocked(reason='submitted',clearDraft=false){
@@ -403,7 +381,7 @@ async function init(){
   document.getElementById('loadingMsg').classList.add('d-none');
   document.getElementById('content').classList.remove('d-none');
   document.getElementById('assignmentTitle').textContent=assignment.title;
-  document.getElementById('assignmentDesc').textContent=assignment.description||'';
+  
   const dueDate=document.getElementById('dueDate');
   if(assignment.due_date){
     dueDate.textContent=`截止日期：${new Date(assignment.due_date).toLocaleString('zh-TW')}`;
@@ -415,7 +393,6 @@ async function init(){
   const data=v.reflection_data||{answers:['','','','',''],has_issue:false};
   reflectionDraft=new ReflectionDraftController({storagePrefix:LOCAL_DRAFT_PREFIX,submissionId:v.id,assignmentId,revision:data.revision||0});
   serverDraftExists=!!v.reflection_data;
-  reflectionGuide.innerHTML=renderReflectionTaskGuide(v,data);
   renderQuestions(data);applyFormState(data);loadPhoto(data);
   serverUpdatedAt=data.updated_at||null;
   const submitted=!!(v.submitted_at||data.submitted_at);
@@ -432,8 +409,6 @@ async function init(){
 
 questionsBox.addEventListener('input',event=>{
   if(!event.target.classList.contains('reflection-answer'))return;
-  const v=getView();
-  if(v)reflectionGuide.innerHTML=renderReflectionTaskGuide(v,{answers:[...document.querySelectorAll('.reflection-answer')].map(input=>input.value)});
   markDraftDirty();
 });
 hasIssue.addEventListener('change',()=>{issueFields.classList.toggle('d-none',!hasIssue.checked);markDraftDirty();});
@@ -574,7 +549,6 @@ Object.assign(window, {
   finishRecoveryChoice,
   recoverLocalDraft,
   keepServerDraft,
-  renderReflectionTaskGuide,
   reflectionSuggestionItems,
   renderAiSuggestionCard,
   renderQuestions,

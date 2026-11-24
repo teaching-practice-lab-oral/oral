@@ -11,34 +11,32 @@
   <meta property="og:image" content="/static/favicon.svg" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-  integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
-  crossorigin="anonymous" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
-  integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD"
-  crossorigin="anonymous" />
-  <link rel="stylesheet" href="/static/admin/css/common.css?v=4" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD" crossorigin="anonymous"/>
+  <link rel="stylesheet" href="/static/admin/css/common.css" />
   <style>
-    .stat-card {
-      background: white;
-      border-radius: 16px;
-      padding: 1.4rem 1.5rem;
-      border: 1px solid #e2e8f0;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-      display: flex;
-      align-items: center;
-      gap: 1rem;
+    .stat-strip {
+      display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+      background: var(--admin-surface); border: 1px solid var(--admin-border); border-radius: var(--admin-radius);
     }
-    .stat-icon {
-      width: 52px; height: 52px;
-      border-radius: 14px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.5rem;
-      flex-shrink: 0;
+    .stat-item { padding: 1.1rem 1.4rem; }
+    .stat-item + .stat-item { border-left: 1px solid var(--admin-border); }
+    .stat-value { font-size: 1.9rem; font-weight: 750; line-height: 1.1; color: var(--admin-ink); font-variant-numeric: tabular-nums; }
+    .stat-label { font-size: .82rem; color: var(--admin-muted); margin-top: .25rem; }
+    @media (max-width: 991.98px) {
+      .stat-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .stat-item:nth-child(4) { border-left: 0; }
+      .stat-item:nth-child(n+4) { border-top: 1px solid var(--admin-border); }
     }
-    .stat-value { font-size: 1.8rem; font-weight: 800; line-height: 1; }
-    .stat-label { font-size: 0.82rem; color: #64748b; margin-top: 0.2rem; }
+    @media (max-width: 575.98px) {
+      .stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stat-item { padding: .85rem 1rem; }
+      .stat-item:nth-child(4) { border-left: 1px solid var(--admin-border); }
+      .stat-item:nth-child(odd) { border-left: 0; }
+      .stat-item:nth-child(n+3) { border-top: 1px solid var(--admin-border); }
+    }
   </style>
+  <link rel="stylesheet" href="/static/css/ui.css">
 </head>
 <body>
   <nav class="navbar navbar-admin navbar-expand-lg"></nav>
@@ -49,52 +47,12 @@
       <i class="bi bi-speedometer2 me-2 text-primary"></i>系統總覽
     </h5>
 
-    <div class="row g-3 mb-4">
-      <div class="col-6 col-md-4 col-xl-2">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#ede9fe;color:#6d28d9"><i class="bi bi-people-fill"></i></div>
-          <div>
-            <div class="stat-value text-primary" id="statStudents">-</div>
-            <div class="stat-label">學生總數</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-6 col-md-4 col-xl-2">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#dbeafe;color:#1d4ed8"><i class="bi bi-journal-text"></i></div>
-          <div>
-            <div class="stat-value text-info" id="statAssignments">-</div>
-            <div class="stat-label">作業數</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-6 col-md-4 col-xl-2">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#f1f5f9;color:#475569"><i class="bi bi-collection"></i></div>
-          <div>
-            <div class="stat-value text-secondary" id="statSubmissions">-</div>
-            <div class="stat-label">提交記錄</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-6 col-md-4 col-xl-2">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#d1fae5;color:#065f46"><i class="bi bi-check-circle-fill"></i></div>
-          <div>
-            <div class="stat-value text-success" id="statCompleted">-</div>
-            <div class="stat-label">已完成</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-6 col-md-4 col-xl-2">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#fef3c7;color:#92400e"><i class="bi bi-lightning-charge-fill"></i></div>
-          <div>
-            <div class="stat-value text-warning" id="statApiToday">-</div>
-            <div class="stat-label">今日 API 用量</div>
-          </div>
-        </div>
-      </div>
+    <div class="stat-strip mb-4">
+      <div class="stat-item"><div class="stat-value" id="statStudents">-</div><div class="stat-label">學生總數</div></div>
+      <div class="stat-item"><div class="stat-value" id="statAssignments">-</div><div class="stat-label">作業數</div></div>
+      <div class="stat-item"><div class="stat-value" id="statSubmissions">-</div><div class="stat-label">提交記錄</div></div>
+      <div class="stat-item"><div class="stat-value" id="statCompleted">-</div><div class="stat-label">已完成</div></div>
+      <div class="stat-item"><div class="stat-value" id="statApiToday">-</div><div class="stat-label">今日 API 用量</div></div>
     </div>
 
     <div class="row g-3">
@@ -102,7 +60,7 @@
         <div class="section-card">
           <div class="card-header d-flex justify-content-between align-items-center">
             <span><i class="bi bi-journal-text me-2 text-muted"></i>作業列表</span>
-            <a href="/admin/assignments" class="btn btn-primary"><i class="bi bi-gear me-1"></i><span class="button-label-nudge">管理</span></a>
+            <a href="/admin/assignments" class="btn btn-outline-secondary btn-sm">管理作業</a>
           </div>
           <div class="table-responsive">
             <table class="table table-hover mb-0">
@@ -121,10 +79,8 @@
     </div>
   </div>
 
-  <script src="/static/admin/js/common.js?v=8"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-  integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
-  crossorigin="anonymous"></script>
+  <script src="/static/admin/js/common.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
   <script>
     async function loadDashboard() {
       await window._adminReady; // wait for refresh so the rotated session hash is valid
@@ -174,7 +130,7 @@
             <td class="ps-3 fw-semibold">${escHtml(a.title)}</td>
             <td class="small text-muted">${a.due_date ? new Date(a.due_date).toLocaleDateString('zh-TW') : '—'}</td>
             <td><span class="badge ${stCls}">${stTxt}</span></td>
-            <td><a href="/admin/assignments/${a.id}/results" class="btn btn-outline-primary py-0">查看學生作業</a></td>
+            <td class="text-end pe-3"><a href="/admin/assignments/${a.id}/results" class="row-action-link">查看學生作業</a></td>
           </tr>`;
         }).join('');
       } else {
@@ -185,6 +141,6 @@
     loadDashboard();
   </script>
 
-<footer style="text-align:center;padding:12px 0 8px;font-size:0.85rem;color:#888;">AI 英語面試練習系統 · Apache-2.0</footer>
+<footer class="site-footer">AI 英語面試練習系統 · Apache-2.0</footer>
 </body>
 </html>

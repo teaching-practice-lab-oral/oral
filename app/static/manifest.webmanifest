@@ -15,8 +15,8 @@
       "url": "/manifest.webmanifest"
     }
   ],
-  "background_color": "#f8fafc",
-  "theme_color": "#4f46e5",
+  "background_color": "#F5F6F8",
+  "theme_color": "#1F3A5F",
   "orientation": "any",
   "icons": [
     {

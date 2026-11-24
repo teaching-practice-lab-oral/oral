@@ -15,14 +15,9 @@
         </button>
       </li>
       <li class="nav-item">
-        <button class="nav-link" id="tab-worker-routing-btn" data-bs-toggle="tab" data-bs-target="#tab-worker-routing" type="button">
-          <i class="bi bi-diagram-3 me-1"></i>分流狀態
-        </button>
-      </li>
-      <li class="nav-item">
         <button class="nav-link" id="tab-active-sessions-btn" data-bs-toggle="tab" data-bs-target="#tab-active-sessions" type="button">
           <i class="bi bi-wifi me-1"></i>已登入裝置
-          <span class="badge bg-success bg-opacity-75 ms-1" id="as-sessionBadge" style="font-size:0.7rem;display:none"></span>
+          <span class="badge bg-success bg-opacity-75 ms-1 fs-xs d-none" id="as-sessionBadge"></span>
         </button>
       </li>
     </ul>
@@ -31,10 +26,17 @@
 
       <!-- ── 登入稽核 Tab ── -->
       <div class="tab-pane fade show active" id="tab-login-audit">
+        <div id="la-unfreezeBar" class="alert alert-light border d-flex flex-wrap align-items-center gap-2 py-2 mb-3" hidden>
+          <i class="bi bi-unlock text-primary"></i>
+          <span class="small">學生密碼輸錯太多次會被暫停登入 15 分鐘。按右邊的按鈕可以立刻解除所有帳號和 IP 的限制。</span>
+          <button class="btn btn-outline-primary btn-sm ms-auto" id="la-unfreezeBtn" data-action="laUnfreezeAll">
+            <i class="bi bi-unlock me-1"></i>一鍵解除登入限制
+          </button>
+        </div>
         <div class="filter-bar d-flex flex-wrap gap-2 align-items-end">
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">學號搜尋</label>
-            <input type="text" id="la-filterStudentId" class="form-control form-control-sm" maxlength="64" style="min-width:140px" placeholder="輸入學號…">
+            <input type="text" id="la-filterStudentId" class="form-control form-control-sm minw-140" maxlength="64" placeholder="輸入學號…">
           </div>
           <div class="audit-date-field">
             <label class="form-label small fw-semibold text-muted mb-1">開始日期</label>
@@ -46,7 +48,7 @@
           </div>
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">結果篩選</label>
-            <select id="la-filterSuccess" class="form-select form-select-sm" style="width:auto">
+            <select id="la-filterSuccess" class="form-select form-select-sm w-auto">
               <option value="">全部</option>
               <option value="true">成功</option>
               <option value="false">失敗</option>
@@ -54,7 +56,7 @@
           </div>
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">每頁筆數</label>
-            <select id="la-filterLimit" class="form-select form-select-sm" style="width:auto">
+            <select id="la-filterLimit" class="form-select form-select-sm w-auto">
               <option value="50">50</option>
               <option value="100">100</option>
               <option value="200">200</option>
@@ -100,11 +102,11 @@
         <div class="filter-bar d-flex flex-wrap gap-2 align-items-end">
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">操作者學號</label>
-            <input type="text" id="aa-filterAdminStudentId" class="form-control form-control-sm" maxlength="64" style="min-width:140px" placeholder="輸入操作者學號…">
+            <input type="text" id="aa-filterAdminStudentId" class="form-control form-control-sm minw-140" maxlength="64" placeholder="輸入操作者學號…">
           </div>
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">操作類型</label>
-            <select id="aa-filterAction" class="form-select form-select-sm" style="min-width:220px">
+            <select id="aa-filterAction" class="form-select form-select-sm minw-220">
               <option value="">全部</option>
               <option value="admin.user.create">建立帳號</option>
               <option value="admin.user.import_xlsx">XLSX 匯入帳號</option>
@@ -117,12 +119,14 @@
               <option value="admin.user.delete">刪除使用者</option>
               <option value="admin.assignment.send_due_reminders">手動寄送提醒</option>
               <option value="admin.assignment.seed_presets">同步預設作業</option>
+              <option value="admin.login.unfreeze_all">解除全站登入限制</option>
               <option value="admin.assignment.create">建立作業</option>
               <option value="admin.assignment.update">更新作業</option>
               <option value="admin.assignment.delete">刪除作業</option>
               <option value="admin.assignment.toggle">切換作業啟用</option>
               <option value="admin.assignment.reset_submissions">清空提交紀錄</option>
               <option value="admin.assignment.allow_retake">允許重作</option>
+              <option value="admin.assignment.rewind_submission">退回作答階段</option>
               <option value="admin.assignment.set_late_deadline">設定補繳期限</option>
               <option value="admin.rubric.create">建立評分規準</option>
               <option value="admin.rubric.update">更新評分規準草稿</option>
@@ -145,7 +149,7 @@
           </div>
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">對象類型</label>
-            <select id="aa-filterTargetType" class="form-select form-select-sm" style="width:auto">
+            <select id="aa-filterTargetType" class="form-select form-select-sm w-auto">
               <option value="">全部</option>
               <option value="user">使用者</option>
               <option value="user_batch">批次使用者</option>
@@ -172,7 +176,7 @@
           </div>
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">每頁筆數</label>
-            <select id="aa-filterLimit" class="form-select form-select-sm" style="width:auto">
+            <select id="aa-filterLimit" class="form-select form-select-sm w-auto">
               <option value="50">50</option>
               <option value="100">100</option>
               <option value="200">200</option>
@@ -220,7 +224,7 @@
         <div class="filter-bar d-flex flex-wrap gap-2 align-items-end">
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">學號搜尋</label>
-            <input type="text" id="ul-filterStudentId" class="form-control form-control-sm" maxlength="64" style="min-width:140px" placeholder="輸入學號…">
+            <input type="text" id="ul-filterStudentId" class="form-control form-control-sm minw-140" maxlength="64" placeholder="輸入學號…">
           </div>
           <div class="audit-date-field">
             <label class="form-label small fw-semibold text-muted mb-1">開始日期</label>
@@ -232,7 +236,7 @@
           </div>
           <div>
             <label class="form-label small fw-semibold text-muted mb-1">每頁筆數</label>
-            <select id="ul-filterLimit" class="form-select form-select-sm" style="width:auto">
+            <select id="ul-filterLimit" class="form-select form-select-sm w-auto">
               <option value="50">50</option>
               <option value="100" selected>100</option>
               <option value="200">200</option>
@@ -274,92 +278,6 @@
               <i class="bi bi-arrow-down-circle me-1"></i>載入更多
             </button>
             <span id="ul-loadMoreInfo" class="text-muted small ms-2"></span>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── 分流狀態 Tab ── -->
-      <div class="tab-pane fade" id="tab-worker-routing">
-        <div class="filter-bar d-flex flex-wrap gap-2 align-items-end">
-          <div>
-            <label class="form-label small fw-semibold text-muted mb-1">學號搜尋</label>
-            <input type="text" id="wr-filterStudentId" class="form-control form-control-sm" maxlength="64" style="min-width:140px" placeholder="輸入學號…">
-          </div>
-          <div>
-            <label class="form-label small fw-semibold text-muted mb-1">分流結果</label>
-            <select id="wr-filterStatus" class="form-select form-select-sm" style="min-width:160px">
-              <option value="">全部</option>
-              <option value="worker_success">由台灣語音處理伺服器完成</option>
-              <option value="fallback_error">處理失敗，已由主系統接手</option>
-              <option value="local_weight">本次留在主站</option>
-              <option value="local_cooldown">語音處理伺服器暫停分流</option>
-              <option value="local_disabled">分流未啟用</option>
-            </select>
-          </div>
-          <div>
-            <label class="form-label small fw-semibold text-muted mb-1">目前階段</label>
-            <select id="wr-filterStage" class="form-select form-select-sm" style="min-width:140px">
-              <option value="">全部</option>
-              <option value="2">草稿撰寫</option>
-              <option value="3">AI 練習回饋</option>
-              <option value="4">最終草稿</option>
-              <option value="5">跟讀示範</option>
-              <option value="6">角色扮演</option>
-              <option value="7">完成面試</option>
-              <option value="8">學習反思</option>
-              <option value="9">正式完成</option>
-            </select>
-          </div>
-          <div>
-            <label class="form-label small fw-semibold text-muted mb-1">最近記錄</label>
-            <select id="wr-filterRecentMinutes" class="form-select form-select-sm" style="width:auto">
-              <option value="30">30 分鐘</option>
-              <option value="120" selected>2 小時</option>
-              <option value="360">6 小時</option>
-              <option value="1440">24 小時</option>
-            </select>
-          </div>
-          <div class="form-check mb-1">
-            <input class="form-check-input" type="checkbox" id="wr-filterActiveOnly">
-            <label class="form-check-label small fw-semibold text-muted" for="wr-filterActiveOnly">只看在線學生</label>
-          </div>
-          <div class="ms-auto d-flex gap-2 align-items-end">
-            <button class="btn btn-primary btn-sm" data-action="wrLoad">
-              <i class="bi bi-search me-1"></i>查詢
-            </button>
-            <button class="btn btn-outline-secondary btn-sm refresh-btn" id="wr-refreshBtn" data-action="wrLoad">
-              <i class="bi bi-arrow-clockwise me-1"></i>重新整理
-            </button>
-          </div>
-        </div>
-
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-          <span id="wr-enabledBadge" class="badge bg-light text-secondary border">—</span>
-          <span id="wr-healthBadge" class="badge bg-light text-secondary border">台灣語音處理伺服器：未檢查</span>
-          <span id="wr-weightBadge" class="badge bg-light text-secondary border">—</span>
-          <span id="wr-workerUrl" class="text-muted small audit-text-wrap"></span>
-          <span id="wr-healthDetail" class="text-muted small audit-text-wrap"></span>
-          <span id="wr-lastRefresh" class="text-muted small ms-auto"></span>
-        </div>
-
-        <div class="main-card">
-          <div class="table-responsive">
-            <table class="table table-hover mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>學生</th>
-                  <th>在線</th>
-                  <th>當前練習</th>
-                  <th>分流狀態</th>
-                  <th>工作類型</th>
-                  <th>處理伺服器</th>
-                  <th>最近更新</th>
-                </tr>
-              </thead>
-              <tbody id="wr-tableBody">
-                <tr><td colspan="7" class="text-center text-muted py-5">請切換至此頁以載入…</td></tr>
-              </tbody>
-            </table>
           </div>
         </div>
       </div>

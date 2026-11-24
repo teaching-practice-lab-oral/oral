@@ -36,9 +36,6 @@ dist-source/
 oral.code-workspace
 /.local-tests/
 security-audit/**
-**/tests/
-!/tests/
-!/tests/**
 tests/**
 alembic/versions/.gitkeep
 .gitignore

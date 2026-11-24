@@ -2,7 +2,7 @@
 
 const AdminWorkflow = (() => {
   let metadata = null;
-  const readyPromise = import('/static/js/workflow-contract.mjs?v=1')
+  const readyPromise = import('/static/js/workflow-contract.mjs')
     .then(module => module.loadWorkflowMetadata())
     .then(value => { metadata = value; return value; })
     .catch(() => ({ version: 0, sections: [], stages: [], limits: {} }));
@@ -124,7 +124,7 @@ function _renderAdminChrome() {
 
 _renderAdminChrome();
 
-const AdminApiClientReady = import('/static/js/api-client.mjs?v=2');
+const AdminApiClientReady = import('/static/js/api-client.mjs');
 const adminNativeFetch = window.fetch.bind(window);
 window.AdminApiClientReady = AdminApiClientReady;
 window.fetch = (url, options = {}) => {
