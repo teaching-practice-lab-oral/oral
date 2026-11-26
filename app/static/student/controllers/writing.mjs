@@ -197,7 +197,7 @@ function renderSection1(container, stage, isCompleted) {
   body.innerHTML += `
     <div class="sub-step ${doneB ? 'done' : activeB ? 'active-step' : ''}">
       <div class="sub-step-label">${doneB ? '✓ ' : ''}AI 練習回饋</div>
-      <div class="alert alert-light border small py-2">這是給你修改用的 AI 回饋，不算成績。成績由老師依評分規準另外評分。</div>
+      <div class="alert alert-light border small py-2">此為AI回饋，不計入成績。</div>
       ${hasFeedback ? renderFeedbackHtml(vs.draft2_ai_feedback) : ''}
       ${isActive && !hasFeedback ? `
         <div id="feedbackActionArea">
