@@ -1,4 +1,4 @@
-# AI 英文口試練習系統
+# AI 英語面試練習系統
 
 幫助大學生練習英文面試的 AI 輔助平台。學生依序完成「欲應徵的職位 → 寫作練習 → 跟讀練習 → 角色扮演 → AI 回饋 → 心得撰寫」六個區段，老師（管理員）負責開放作業與正式批改。
 
@@ -6,450 +6,224 @@
 
 ---
 
-## 系統需求（部署前請確認）
-
-| 項目 | 說明 |
-|------|------|
-| 伺服器 | OCI ARM VM（Ampere A1，Ubuntu 22.04 建議）|
-| Docker | 需安裝 Docker 與 Docker Compose |
-| OpenAI API | 提供 GPT 與 Whisper 功能 |
-| Oracle Object Storage | 儲存學生錄音檔（S3 相容）|
-| Cloudflare Turnstile | 登入防機器人驗證 |
-| SMTP 信箱 | 發送通知信給學生 |
-
-上述 OCI、Cloudflare、OpenAI 與外部 SMTP 是目前提供的部署範例，不是 Apache-2.0 授權的一部分，也不代表只能使用這些供應商。
-
----
-
-## 本機開發與測試
-
-建議使用 Python 3.11。請只把測試憑證放在未追蹤的 `.env`：
-
-```bash
-python3.11 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
-cp .env.development.example .env
-python3 -c "import secrets; print(secrets.token_hex(32))"
-```
-
-將最後一個指令輸出的亂數貼到 `.env` 的 `SECRET_KEY` 後再啟動；本機網址為 `http://localhost:7683`。
-
-若要以 Docker 啟動本機服務：
-
-```bash
-docker compose up -d --build
-```
-
-公開原始碼不包含測試檔；維護者的驗證程式應放在 Git 忽略的 `.local-tests/`，不得提交到公開倉庫。
-
-請勿使用真實學生資料作為開發 fixture，也不要把 `.env`、database dump、匯出檔、錄音或照片提交到版本控制。
-
----
-
-## 第一步：安裝 Docker（OCI ARM 伺服器）
-
-> 如果你的伺服器已經裝好 Docker，可以跳過這一步。
-
-```bash
-# 更新套件
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl gnupg
-
-# 加入 Docker 官方金鑰
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-# 加入 Docker 軟體庫（ARM64）
-echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
-  | sudo tee /etc/apt/sources.list.d/docker.list
-
-# 安裝 Docker
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-# 讓目前使用者不需要 sudo 就能用 Docker
-sudo usermod -aG docker $USER
-
-# 重新登入後才會生效，先登出：
-exit
-```
-
-重新 SSH 登入後，測試 Docker 是否正常：
-
-```bash
-docker run hello-world
-```
-
-看到 `Hello from Docker!` 就代表安裝成功。
-
----
-
-## 第二步：下載專案
-
-```bash
-git clone <你的-repo-網址> /home/ubuntu/oral
-cd /home/ubuntu/oral
-```
-
----
-
-## 第三步：設定 Oracle Object Storage
-
-這是用來存放學生錄音的雲端空間（免費方案有 10 GB）。
-
-1. 登入 **OCI Console** → Object Storage → **Create Bucket**
-   - Bucket 名稱：自訂（例如 `oral-audio`）
-   - Visibility：**Private**（私人，不對外公開）
-
-2. 取得存取金鑰：
-   - Identity → Users → 你的帳號 → **Customer Secret Keys** → **Generate Secret Key**
-   - 複製 **Access Key ID** 和 **Secret Access Key**（Secret Key 只會顯示一次！）
-
-3. 找到你的 Namespace：
-   - Object Storage 頁面右上角可以看到 `Namespace: xxxxxxxxxx`
-
-4. 組合 S3 端點網址格式：
-   ```
-   https://<namespace>.compat.objectstorage.<region>.oraclecloud.com
-   ```
-   例如：`https://axxxxxabc.compat.objectstorage.ap-tokyo-1.oraclecloud.com`
-
----
-
-## 第四步：設定 Cloudflare Turnstile（登入防機器人）
-
-1. 登入 **Cloudflare Dashboard** → Turnstile → **Add Site**
-2. 填入你的網域（或 IP）
-3. 複製 **Site Key** 和 **Secret Key**
-
----
-
-## 第五步：設定 production 環境變數
-
-```bash
-cp .env.example .env.production
-nano .env.production
-```
-
-依照以下說明逐一填寫，**不要留下範例的假值**；這份內容也對應 [.env.example](.env.example) 與 `config.py` 的設定項目：
-
-```env
-# ── 資料庫 ──────────────────────────────────────────────────
-POSTGRES_USER=oral
-POSTGRES_PASSWORD=replace-with-a-long-random-database-password
-POSTGRES_DB=oraldb
-DATABASE_URL=postgresql://oral:replace-with-a-long-random-database-password@db:5432/oraldb
-
-# ── JWT / 使用者會話 ────────────────────────────────────────
-# 用以下指令產生一個安全的亂數金鑰：
-# python3 -c "import secrets; print(secrets.token_hex(32))"
-SECRET_KEY=
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_HOURS=8
-SESSION_TOUCH_SECONDS=60
-STUDENT_ONLINE_LIMIT=200
-STUDENT_PRESENCE_TTL_SECONDS=300
-DB_POOL_SIZE=10
-DB_MAX_OVERFLOW=10
-DB_POOL_TIMEOUT=10
-DB_POOL_RECYCLE=1800
-
-# ── OpenAI ───────────────────────────────────────────────────
-OPENAI_API_KEY=sk-...
-
-# ── Oracle Object Storage ────────────────────────────────────
-OCI_ENDPOINT_URL=https://<namespace>.compat.objectstorage.<region>.oraclecloud.com
-OCI_ACCESS_KEY_ID=your-oci-access-key-id
-OCI_SECRET_ACCESS_KEY=your-oci-secret-access-key
-OCI_BUCKET_NAME=oral-audio
-OCI_REGION=ap-tokyo-1
-# 每次重建 PostgreSQL 都必須換一個新的 8–64 字元亂數 namespace，
-# 讓新資料不會覆寫仍保留在 OCI 的舊學生媒體：
-# python3 -c "import secrets; print('oral-' + secrets.token_hex(12))"
-OBJECT_STORAGE_NAMESPACE=oral-貼上剛產生的亂數
-RESULT_PACKAGE_EXPIRE_DAYS=14
-RESULT_DOWNLOAD_REDIRECT_SECONDS=300
-
-# ── 郵件設定 ─────────────────────────────────────────────────
-MAIL_HOST=smtp.example.com
-MAIL_PORT=587
-MAIL_USER=your-smtp-username
-MAIL_USERNAME=
-MAIL_PASSWORD=your-smtp-password
-MAIL_FROM=your-email@example.com
-MAIL_FROM_NAME=AI 英文口試練習系統
-MAIL_REPLY_TO=reply-to@example.com
-MAIL_REPLY_TO_NAME=Your Name
-PASSWORD_RESET_ADMIN_EMAIL=security-contact@example.com
-REMINDER_EXCLUDED_EMAILS=
-MAIL_SIGNATURE_HTML=
-MAIL_STARTTLS=true
-MAIL_SSL_TLS=false
-MAIL_SERVER=
-
-# ── Cloudflare Turnstile ─────────────────────────────────────
-TURNSTILE_SECRET_KEY=your-turnstile-secret-key
-TURNSTILE_SITE_KEY=your-turnstile-site-key
-
-# ── 應用程式 ─────────────────────────────────────────────────
-APP_ENV=production
-APP_ENV_FILE=.env.production
-# production compose 需要固定的 image digest，不能用可變的 :latest
-MEET_IMAGE=your-registry/meet@sha256:replace-with-built-image-digest
-PUBLIC_BASE_URL=https://your-domain.example.com
-CORS_ORIGINS=https://your-domain.example.com
-TRUSTED_HOSTS=your-domain.example.com
-TRUSTED_PROXY_IPS=127.0.0.1,::1
-MAX_REQUEST_BODY_BYTES=58720256
-FORWARDED_ALLOW_IPS=127.0.0.1
-PROTECTED_ADMIN_STUDENT_ID=12345678
-GUNICORN_WORKERS=4
-
-# ── API 使用量限制 ─────────────────────────────────────────
-STAGE_HOURLY_LIMIT=20
-DAILY_API_LIMIT=40
-MAX_AUDIO_SECONDS=300
-
-# ── 保留與清理 ─────────────────────────────────────────────
-LOGIN_EVENT_RETENTION_DAYS=180
-ADMIN_AUDIT_RETENTION_DAYS=365
-API_USAGE_RETENTION_DAYS=90
-PROCTOR_EVENT_RETENTION_DAYS=365
-MAINTENANCE_CLEANUP_INTERVAL_SECONDS=86400
-PASSWORD_RESET_EXPIRE_HOURS=72
-PASSWORD_RESET_USER_DAILY_LIMIT=3
-PASSWORD_RESET_IP_HOURLY_LIMIT=10
-
-# ── 併發控制 ────────────────────────────────────────────────
-OPENAI_CHAT_MODEL=gpt-5.4-mini
-OPENAI_WHISPER_MODEL=whisper-1
-OPENAI_TTS_MODEL=gpt-4o-mini-tts
-# TTS 語音、指示與 1.0x 語速由 roleplay/shadowing profile 集中管理；輸入上限 4,096 字元。
-OPENAI_MAX_CONCURRENCY=15
-TTS_MAX_CONCURRENCY=10
-AUDIO_PROCESSING_MAX_CONCURRENCY=20
-```
-
-> `MAIL_PASSWORD` 請填入 SMTP 服務商核發的密碼，不一定與帳號登入密碼相同。
-
----
-
-## 第六步：啟動服務
-
-```bash
-cd /home/ubuntu/oral
-
-# 會先啟動 db，再由 migrate service 執行 baseline、系統資料 bootstrap
-# 與 alembic check；全部成功後 web 才會啟動。
-docker compose --env-file .env.production -f docker-compose-production.yml up -d
-
-# 確認 db / web 都在跑，migrate 應該已完成並退出
-docker compose --env-file .env.production -f docker-compose-production.yml ps
-
-# 看即時 log（Ctrl+C 離開）
-docker compose --env-file .env.production -f docker-compose-production.yml logs -f web
-```
-
-服務啟動後，網站位於：`http://你的伺服器IP:7682`
-
----
-
-## 第七步：確認資料庫初始化
-
-production compose 會自動跑：
-
-```bash
-docker compose --env-file .env.production -f docker-compose-production.yml run --rm migrate
-```
-
-這個指令安全且可重複執行；它會執行 `scripts/bootstrap_database.py`，套用 migration、建立或修復唯一的系統評分規準與三個系統提示詞，最後以 `alembic check` 確認 ORM 沒有 drift。預設作業不會自動建立，須由管理員在作業頁明確同步。
-
-目前 migration 是全新資料庫專用的 current-schema baseline，不支援從舊 revision 直接升級。部署此版本前必須依維護手冊備份並重建 PostgreSQL volume。
-
-若要確認目前版本：
-
-```bash
-docker compose --env-file .env.production -f docker-compose-production.yml exec db \
-  psql -U oral -d oraldb -c "select version_num from alembic_version;"
-```
-
----
-
-## 第八步：建立第一個管理員帳號
-
-```bash
-docker compose --env-file .env.production -f docker-compose-production.yml exec web python scripts/init_admin.py \
-  --name "系統管理員" \
-  --student-id admin001 \
-  --email admin@example.com
-```
-
-指令會以不顯示輸入內容的方式要求輸入並再次確認密碼；密碼不會出現在 shell history 或 process list。成功後會顯示帳號資訊。
-
-然後到 `http://你的伺服器IP:7682/login`，用 `admin001` 和剛設定的密碼登入。
-
-> 之後新增其他管理員帳號，請登入後到 `/admin/users` 操作，**沒有公開的管理員註冊頁面**。
-
----
-
-## 維運：解除學生帳號鎖定
-
-學生連續登入失敗 5 次時，帳號會鎖定 15 分鐘。
-
-**全站一鍵解除**：指定管理員（`PROTECTED_ADMIN_STUDENT_ID`）可在 `/admin/login-audit` 的「登入稽核」分頁按「一鍵解除登入限制」。這會清掉所有帳號的失敗次數與鎖定時間，同時重設來源 IP 的失敗計數（只計算解除之後的失敗，登入紀錄不會被刪除）。每次操作都會記在「敏感操作」分頁。
-
-**只解除單一學生**：在正式環境執行：
-
-```bash
-docker compose --env-file .env.production -f docker-compose-production.yml \
-  exec web python scripts/unlock_student.py --student-id S12345678
-```
-
-將 `S12345678` 換成實際學號。工具會先顯示學生姓名、帳號狀態、登入失敗次數與鎖定截止時間；只有輸入完整小寫 `yes` 才會提交變更：
-
-```text
-學生帳號資訊：
-  學號：S12345678
-  姓名：測試學生
-  啟用狀態：是
-  登入失敗次數：5
-  鎖定至：2026-10-09 12:00:00
-請輸入 yes 確認解除此學生帳號的鎖定： yes
-已解除學生帳號 S12345678 的登入鎖定。
-```
-
-此指令只會將該學生的 `failed_login_count` 歸零並清除 `locked_until`，不會變更密碼、帳號啟用狀態或現有登入 session。不存在、非學生或已停用的帳號都會安全地拒絕操作。
-
-> 帳號鎖定與來源 IP 的登入頻率限制是兩個獨立機制。如果用這個指令解鎖後仍顯示「登入嘗試過於頻繁，請稍後再試。」，表示同一 IP 在 15 分鐘內的失敗次數已達上限，請改用上面的全站一鍵解除，或等時間窗結束。
-
----
-
 ## 學生操作流程
 
-每個作業包含六個區段，依序完成：
-
-| 環節 | 內容 |
+| 區段 | 內容 |
 |------|------|
-| 1. 欲應徵的職位 | 設定目標職位、工作內容與需要能力 |
-| 2. 寫作練習 | 寫初稿 → 取得 AI 練習回饋 → 寫終稿 |
-| 3. 跟讀練習 | 系統將終稿轉成語音，學生跟讀並錄音上傳 |
-| 4. 角色扮演 | 回答 4 題核心題目與 1 題未預告的臨場追問 |
-| 5. AI 回饋 | 整理整場面試的優勢與具體改進建議，不作為老師正式成績 |
-| 6. 心得撰寫 | 對照作答與 AI 回饋完成反思，再由老師正式批改 |
+| 1. 欲應徵的職位 | 設定目標職位、工作內容與所需職能，系統據此產生每題的個人化學習鷹架 |
+| 2. 寫作練習 | 寫草稿 → 取得 AI 練習回饋 → 修改為最終稿 |
+| 3. 跟讀練習 | 系統將最終稿轉成示範語音，學生跟讀並錄音上傳 |
+| 4. 角色扮演 | AI 面試官提問 4 題核心題目，再加 1 題未預告的臨場追問 |
+| 5. AI 回饋 | 整理整場面試的優勢與改進建議，不列入正式成績 |
+| 6. 心得撰寫 | 對照作答與 AI 回饋完成反思，送出後由老師正式批改 |
 
-系統預設有 5 份作業（個人背景、技能成就、情境應變、工作態度、公司認識），老師只需設定開放日期與截止日期。每份作業最多可提交 3 次。
-
----
-
-## 常用指令
-
-```bash
-# 測試/本機環境：使用 .env 或指定 APP_ENV_FILE=.env.test
-docker compose up -d --build
-
-# production 環境：使用 .env.production；Compose 會先跑 migrate/bootstrap 再啟動 web
-docker compose --env-file .env.production -f docker-compose-production.yml up -d
-
-# 重新啟動 web 服務（改完程式碼後用這個）
-docker compose --env-file .env.production -f docker-compose-production.yml restart web
-
-# 查看 production migration log
-docker compose --env-file .env.production -f docker-compose-production.yml logs migrate
-
-# 連進資料庫查看資料
-docker compose --env-file .env.production -f docker-compose-production.yml exec db psql -U oral -d oraldb
-
-# 查看 web 服務 log
-docker compose --env-file .env.production -f docker-compose-production.yml logs -f web
-
-```
-
----
-
-## 速率限制
-
-為避免學生濫用 API，系統設有以下限制：
-
-- 每個環節預設最多 **每小時 20 次** AI 呼叫
-- 每位學生預設每天最多 **40 次** 外部 API 呼叫
-- 上傳錄音檔最長 **5 分鐘**
-
-部署者可透過 `STAGE_HOURLY_LIMIT`、`DAILY_API_LIMIT` 與 `MAX_AUDIO_SECONDS` 調整這些限制。
-
-音訊上傳、心得照片與學生作業匯出另使用短期的
-`costly_action_usage_logs` 做跨 worker 原子限流；建議正式環境沿用
-[`.env.security-limits.example`](.env.security-limits.example) 的平衡型預設。
-這些紀錄預設保留兩天，和付費 API 的 `api_usage_logs` 分開計算。
+每份作業最多可練習 3 次。
 
 ---
 
 ## 系統架構
 
 ```
-瀏覽器（Bootstrap 5）
+瀏覽器（HTML／JavaScript，Bootstrap 5）
         │
-FastAPI（port 7682）
-  ├── /api/auth/*      JWT 登入驗證
+FastAPI（gunicorn + uvicorn，容器內 port 7682）
+  ├── /api/auth/*      登入與帳號
   ├── /api/student/*   學生功能
   ├── /api/admin/*     管理員功能
-  └── static/          HTML 靜態頁面
+  └── /static/*        前端頁面
         │
-PostgreSQL（port 5432，僅容器內部存取）
-        ├── OpenAI（Whisper 語音辨識 + GPT 學習回饋 + TTS 語音合成）
-        ├── Oracle Object Storage（儲存錄音）
-        └── Outlook SMTP（寄發通知信）
+        ├── PostgreSQL 15（僅容器內部存取）
+        ├── S3 相容物件儲存（錄音、照片、成果包）
+        ├── OpenAI（文字回饋、Whisper 語音辨識、TTS 語音合成）
+        └── SMTP（帳號、提醒與成果通知信）
+```
+
+### 外部服務
+
+| 項目 | 用途 |
+|------|------|
+| Docker 與 Docker Compose | 執行資料庫、遷移、備份與網站服務 |
+| OpenAI API | 寫作回饋、角色扮演、語音辨識與語音合成 |
+| S3 相容物件儲存 | 儲存學生錄音、心得照片與成果包（範例使用 Oracle Object Storage） |
+| Cloudflare Turnstile | 登入頁防機器人驗證 |
+| SMTP 信箱 | 寄送帳號、密碼重設、截止提醒與成果通知 |
+| HTTPS 反向代理 | 正式環境必須以 HTTPS 網域對外服務 |
+
+上述供應商只是目前的部署範例，不是 Apache-2.0 授權的一部分，也不代表只能使用這些供應商。
+
+---
+
+## 本機開發
+
+本機環境以 Docker Compose 啟動，網址為 `http://localhost:7683`：
+
+```bash
+cp .env.example .env
+python3 -c "import secrets; print(secrets.token_hex(32))"   # 貼到 .env 的 SECRET_KEY
+docker compose up -d --build
+```
+
+啟動前把 `.env` 改成本機設定：`APP_ENV=development`、`PUBLIC_BASE_URL` 與 `CORS_ORIGINS` 設為 `http://localhost:7683`、`TRUSTED_HOSTS=localhost,127.0.0.1`；不使用的外部服務請清空範例憑證。
+
+本機的 `docker-compose.yml` 固定讀取 `.env`，並把 `app/` 與 `alembic/` 掛載進容器，修改程式後重新啟動 `web` 即可。
+
+開發時請勿使用真實學生資料，也不要把 `.env`、資料庫備份、匯出檔、錄音或照片提交到版本控制。
+
+---
+
+## 正式環境部署
+
+以下以 Ubuntu 伺服器（範例為 OCI Ampere A1 ARM VM）為例。
+
+### 1. 安裝 Docker
+
+依 [Docker 官方文件](https://docs.docker.com/engine/install/ubuntu/) 安裝 Docker Engine 與 Compose plugin，然後讓目前使用者不需要 `sudo`：
+
+```bash
+sudo usermod -aG docker $USER   # 重新登入後生效
+docker run hello-world          # 看到 Hello from Docker! 代表安裝成功
+```
+
+### 2. 下載專案並建置映像檔
+
+正式環境的 Compose 只接受固定 digest 的映像檔，不會在伺服器上自行建置，也不接受可變動的 `:latest`。請在建置機器上建置並推送到你的 container registry：
+
+```bash
+git clone https://github.com/teaching-practice-lab-oral/oral.git
+cd oral
+docker buildx build --platform linux/arm64 -t <your-registry>/meet:<版本> --push .
+docker buildx imagetools inspect <your-registry>/meet:<版本>   # 取得 sha256 digest
+```
+
+伺服器上同樣需要一份專案（Compose 檔與 `scripts/` 會被掛載使用）。
+
+### 3. 準備物件儲存
+
+以 Oracle Object Storage 為例：
+
+1. OCI Console → Object Storage → **Create Bucket**，Visibility 選 **Private**。
+2. Identity → Users → 你的帳號 → **Customer Secret Keys** → **Generate Secret Key**，記下 Access Key ID 與 Secret Access Key（Secret 只顯示一次）。
+3. S3 端點格式為 `https://<namespace>.compat.objectstorage.<region>.oraclecloud.com`，namespace 可在 Object Storage 頁面看到。
+
+### 4. 設定 Cloudflare Turnstile
+
+Cloudflare Dashboard → Turnstile → **Add Site**，填入網域，記下 Site Key 與 Secret Key。
+
+### 5. 設定環境變數
+
+```bash
+cp .env.example .env.production
+nano .env.production
+```
+
+逐項填寫，不要留下範例假值。正式環境啟動時會檢查設定，以下項目缺少或格式不符時服務不會啟動：
+
+| 設定 | 說明 |
+|------|------|
+| `POSTGRES_PASSWORD`、`DATABASE_URL` | 使用長亂數密碼；兩處的帳號、密碼與資料庫名稱必須一致 |
+| `SECRET_KEY` | `python3 -c "import secrets; print(secrets.token_hex(32))"` |
+| `OBJECT_STORAGE_NAMESPACE` | 8–64 字元，例如 `python3 -c "import secrets; print('oral-' + secrets.token_hex(12))"`。**每次重建資料庫都要換新值**，避免新資料覆寫物件儲存中的舊媒體 |
+| `PUBLIC_BASE_URL` | 對外的 HTTPS 網址 |
+| `CORS_ORIGINS`、`TRUSTED_HOSTS` | 明確列出正式網域，不可使用 `*` |
+| `TURNSTILE_SECRET_KEY`、`TURNSTILE_SITE_KEY` | 第 4 步取得的金鑰 |
+| `MEET_IMAGE` | 第 2 步取得的映像檔，格式為 `<registry>/meet@sha256:...` |
+| `PROTECTED_ADMIN_STUDENT_ID` | 指定管理員的帳號，只有此帳號能修改評分規準、建立預設作業、解除全站登入限制等 |
+| `OPENAI_API_KEY`、`OCI_*`、`MAIL_*` | 外部服務憑證；`MAIL_PASSWORD` 請填 SMTP 服務商核發的密碼 |
+
+其餘項目（API 用量與上傳／匯出限流、資料保留天數、併發數）可沿用 [.env.example](.env.example) 的預設值。
+
+### 6. 啟動服務
+
+```bash
+docker compose --env-file .env.production -f docker-compose-production.yml up -d
+docker compose --env-file .env.production -f docker-compose-production.yml ps
+```
+
+啟動順序為：`db` → `migrate`（套用資料庫遷移、建立系統評分規準、執行 `alembic check`，完成後退出）→ `web`。另有 `pg_backup` 服務每天 03:00 備份資料庫到 `./pg_backup/`，保留 7 天。
+
+`web` 在主機的 7682 port 提供服務。請以 HTTPS 反向代理（例如 Nginx、Caddy 或 Cloudflare Tunnel）將 `PUBLIC_BASE_URL` 的網域轉到 7682；系統只接受 `TRUSTED_HOSTS` 列出的網域，直接用 IP 連線會被拒絕。
+
+資料庫遷移從 `001_current_schema_baseline` 開始，早於此 baseline 的舊資料庫不支援直接升級，需先備份再重建。
+
+### 7. 建立第一個管理員帳號
+
+```bash
+docker compose --env-file .env.production -f docker-compose-production.yml exec web \
+  python scripts/init_admin.py --name "系統管理員" --student-id admin001 --email admin@example.com
+```
+
+指令會要求輸入並確認密碼，輸入內容不會顯示，也不會留在 shell history。完成後到 `<PUBLIC_BASE_URL>/login` 登入。
+
+之後的帳號請在管理後台的「使用者」頁新增或以 Excel 匯入，系統沒有公開的註冊頁面。若要使用五份預設作業，請以指定管理員登入，在「作業」頁按「建立預設五套作業」，再為各作業設定開放與截止日期。
+
+### 更新版本
+
+建置並推送新的映像檔（第 2 步），把 `.env.production` 的 `MEET_IMAGE` 換成新的 digest，然後：
+
+```bash
+git pull
+docker compose --env-file .env.production -f docker-compose-production.yml up -d
+```
+
+`migrate` 會在 `web` 啟動前自動套用新的資料庫遷移。
+
+---
+
+## 維運
+
+### 常用指令
+
+以下指令都需要加上 `--env-file .env.production -f docker-compose-production.yml`，為簡潔起見以 `$PROD` 表示：
+
+```bash
+PROD="--env-file .env.production -f docker-compose-production.yml"
+
+docker compose $PROD logs -f web          # 查看網站 log
+docker compose $PROD logs migrate         # 查看資料庫遷移 log
+docker compose $PROD restart web          # 重新啟動網站
+docker compose $PROD run --rm migrate     # 手動重跑遷移與系統資料檢查（可重複執行）
+docker compose $PROD exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'   # 進入資料庫
+```
+
+### 解除登入鎖定
+
+同一帳號連續登入失敗 5 次會鎖定 15 分鐘；同一來源 IP 在 15 分鐘內失敗次數過多也會被暫時限制。
+
+指定管理員可在「稽核」→「登入稽核」分頁按「一鍵解除登入限制」，會清除所有帳號的鎖定與來源 IP 的失敗計數；登入紀錄不會刪除，操作會記在「敏感操作」分頁。
+
+### API 用量限制
+
+| 設定 | `.env.example` 的值 | 說明 |
+|------|------|------|
+| `STAGE_HOURLY_LIMIT` | 20 | 每個階段每小時的 AI 呼叫次數 |
+| `DAILY_API_LIMIT` | 40 | 每位學生每天的外部 API 呼叫次數（未設定時為 50） |
+| `MAX_AUDIO_SECONDS` | 300 | 單一錄音的最長秒數 |
+
+若需手動清除某位學生當天的 API 用量：
+
+```bash
+docker compose $PROD exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+DELETE FROM api_usage_logs
+WHERE user_id = <學生的 user_id>
+  AND called_at >= (NOW() AT TIME ZONE 'Asia/Taipei')::date;
+SQL
 ```
 
 ---
 
 ## 常見問題
 
-**Q：啟動後網站打不開？**
+**網站打不開？**
+確認反向代理已把網域轉到 7682，且雲端與主機防火牆（例如 OCI Security List、`ufw`）允許代理連到該 port。也請確認瀏覽器使用的網域有列在 `TRUSTED_HOSTS`。
 
-1. 確認防火牆有開放 7682 port：OCI Console → Networking → VCN → Security List → 新增 Ingress Rule，port 7682，TCP
-2. 伺服器本機防火牆：`sudo ufw allow 7682`
+**`web` 的 log 顯示資料庫連線錯誤？**
+通常是 `DATABASE_URL` 中的帳號、密碼或資料庫名稱與 `POSTGRES_*` 不一致。
 
-**Q：`docker compose logs -f web` 顯示資料庫連線錯誤？**
-
-通常是 `.env.production` 裡的 `DATABASE_URL` 密碼和 `POSTGRES_PASSWORD` 不一致，對照確認。
-
-**Q：Alembic 說「Target database is not up to date」？**
-
-```bash
-docker compose --env-file .env.production -f docker-compose-production.yml run --rm migrate
-```
-
-**Q：更新程式碼後如何重新部署？**
-
-```bash
-git pull
-docker compose --env-file .env.production -f docker-compose-production.yml pull
-docker compose --env-file .env.production -f docker-compose-production.yml up -d
-```
+**`web` 沒有啟動？**
+`web` 要等 `migrate` 成功才會啟動。執行 `docker compose $PROD logs migrate` 查看原因，常見的是缺少必要設定或 `OBJECT_STORAGE_NAMESPACE` 格式不符。
 
 ---
 
-## 管理後台清理用量（手動）
-
-如需手動清除某位學生當天的 API 用量：
-
-```bash
-docker compose --env-file .env.production -f docker-compose-production.yml exec db psql -U oral -d oraldb -c "
-DELETE FROM api_usage_logs
-WHERE user_id = <學生的user_id>
-  AND called_at >= (NOW() AT TIME ZONE 'Asia/Taipei')::date;
-"
-```
-
----
-
-## 貢獻、安全與授權
-
-- 貢獻流程與測試方式：[CONTRIBUTING.md](CONTRIBUTING.md)
-- 私人安全弱點通報：[SECURITY.md](SECURITY.md)
-- 社群互動規範：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- 第三方套件與容器元件：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
-- 建立乾淨公開上傳檔：[docs/open-source-release.md](docs/open-source-release.md)
+## 授權
 
 除非檔案另有明確標示，本 repository 的原始碼與文件依 Apache License 2.0 提供。第三方依賴、遠端載入資產、基底映像與外部服務仍適用各自條款。

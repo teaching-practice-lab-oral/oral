@@ -268,6 +268,32 @@ def reset_password_page():
     return HTMLResponse(body, headers=_NO_CACHE)
 
 
+# ── Legal pages (使用者條款／隱私權政策) ─────────────────────────────────────
+legal_dir = os.path.join(os.path.dirname(__file__), "legal")
+_LEGAL_PAGES = {
+    "/legal": "index.html",
+    "/legal/": "index.html",
+    "/legal/privacy-notice": "privacy-notice.html",
+    "/legal/privacy-notice/": "privacy-notice.html",
+    "/legal/system-terms": "system-terms.html",
+    "/legal/system-terms/": "system-terms.html",
+}
+
+
+def _legal_page(filename: str):
+    def handler():
+        return FileResponse(
+            os.path.join(legal_dir, filename),
+            media_type="text/html",
+            headers={"Cache-Control": "no-cache"},
+        )
+    return handler
+
+
+for _path, _filename in _LEGAL_PAGES.items():
+    app.add_api_route(_path, _legal_page(_filename), methods=["GET"], include_in_schema=False)
+
+
 @app.get("/student", include_in_schema=False)
 def student_index(request: Request):
     if r := _admin_redirect(request):
