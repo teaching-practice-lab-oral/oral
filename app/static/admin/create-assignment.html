@@ -34,33 +34,10 @@
     .step-label { font-size: 0.75rem; color: #94a3b8; margin-top: 0.35rem; text-align: center; }
     .step-item.active .step-label, .step-item.done .step-label { color: #1F3A5F; font-weight: 600; }
 
-    /* Module cards */
-    .module-card {
-      border: 2px solid #e2e8f0; border-radius: var(--admin-radius); padding: 1.25rem;
-      cursor: pointer; transition: all 0.2s; background: white; user-select: none;
-    }
-    .module-card.active { border-color: #1F3A5F; background: #E8EDF4; }
-    .module-card.locked { border-color: #1F3A5F; background: #E8EDF4; cursor: default; }
-    .module-icon { font-size: 2rem; margin-bottom: 0.5rem; }
-    .module-title { font-weight: 700; font-size: 1rem; }
-    .module-desc { font-size: 0.83rem; color: #64748b; margin-top: 0.25rem; }
-    .module-stages { font-size: 0.75rem; color: #94a3b8; margin-top: 0.4rem; }
-    .module-toggle { float: right; }
-
-    /* Flow preview */
-    .flow-preview { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
-    .flow-step {
-      background: white; border: 1.5px solid #e2e8f0; border-radius: 8px;
-      padding: 0.3rem 0.7rem; font-size: 0.78rem; color: #475569; transition: all 0.2s;
-    }
-    .flow-step.active-module { border-color: #1F3A5F; background: #E8EDF4; color: #1F3A5F; font-weight: 600; }
-    .flow-arrow { color: #94a3b8; font-size: 0.9rem; }
-
     /* Summary */
     .summary-row { display: flex; gap: 1rem; margin-bottom: 0.75rem; }
     .summary-label { font-size: 0.82rem; color: #64748b; min-width: 100px; flex-shrink: 0; }
     .summary-value { font-size: 0.88rem; color: #1e293b; font-weight: 500; }
-    .badge-module { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.78rem; padding: 0.25rem 0.6rem; border-radius: 8px; }
   </style>
   <link rel="stylesheet" href="/static/css/ui.css">
 </head>
@@ -80,89 +57,22 @@
     <div class="wizard-steps mb-4">
       <div class="step-item active" id="step-ind-1">
         <div class="step-circle" id="step-circle-1">1</div>
-        <div class="step-label">固定流程</div>
+        <div class="step-label">基本設定</div>
       </div>
       <div class="step-item" id="step-ind-2">
         <div class="step-circle" id="step-circle-2">2</div>
-        <div class="step-label">基本設定</div>
+        <div class="step-label">評分設定</div>
       </div>
       <div class="step-item" id="step-ind-3">
         <div class="step-circle" id="step-circle-3">3</div>
-        <div class="step-label">評分設定</div>
-      </div>
-      <div class="step-item" id="step-ind-4">
-        <div class="step-circle" id="step-circle-4">4</div>
         <div class="step-label">確認送出</div>
       </div>
     </div>
 
-    <!-- ── STEP 1: 固定流程 ── -->
+    <!-- ── STEP 1: 基本設定 ── -->
     <div id="step1" class="panel">
-      <h6 class="fw-bold mb-1">所有作業使用固定六環節流程</h6>
-      <p class="text-muted small mb-4">欲應徵的職位、寫作、跟讀、角色扮演、AI 回饋與心得撰寫均為必做。</p>
-
-      <div class="row g-3 mb-3">
-        <!-- Writing (always on) -->
-        <div class="col-md-4">
-          <div class="module-card locked h-100" id="mod-writing">
-            <div class="d-flex align-items-start justify-content-between">
-              <div>
-                <div class="module-icon"><i class="bi bi-pencil-square" aria-hidden="true"></i></div>
-                <div class="module-title">寫作練習</div>
-              </div>
-              <span class="badge bg-success">必選</span>
-            </div>
-            <div class="module-desc">學生撰寫英文草稿，獲得 AI 文法和表達回饋，再修改成最終稿。</div>
-            <div class="module-stages">Stage 1–4</div>
-          </div>
-        </div>
-        <!-- Shadowing -->
-        <div class="col-md-4">
-          <div class="module-card locked active h-100" id="mod-shadowing">
-            <div class="d-flex align-items-start justify-content-between">
-              <div>
-                <div class="module-icon"><i class="bi bi-mic" aria-hidden="true"></i></div>
-                <div class="module-title">跟讀練習</div>
-              </div>
-              <span class="badge bg-success">必選</span>
-            </div>
-            <div class="module-desc">系統生成最終稿的 TTS 音訊，供學生跟讀、錄音與反覆練習。</div>
-            <div class="module-stages">Stage 5</div>
-          </div>
-        </div>
-        <!-- Roleplay -->
-        <div class="col-md-4">
-          <div class="module-card locked active h-100" id="mod-roleplay">
-            <div class="d-flex align-items-start justify-content-between">
-              <div>
-                <div class="module-icon"><i class="bi bi-people" aria-hidden="true"></i></div>
-                <div class="module-title">角色扮演及 AI 回饋</div>
-              </div>
-              <span class="badge bg-success">必選</span>
-            </div>
-            <div class="module-desc">AI 擔任面試官進行英文口試，最後生成具體的學習回饋與改善建議。</div>
-            <div class="module-stages">Stage 6–8</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Flow preview -->
-      <div class="bg-light rounded-3 p-3">
-        <div class="text-muted small fw-semibold mb-2">學生完成流程預覽：</div>
-        <div class="flow-preview" id="flowPreview"></div>
-      </div>
-
-      <div class="d-flex justify-content-end mt-4">
-        <button class="btn btn-primary px-4" data-action="goStep" data-args='[2]'>
-          下一步：基本設定 <i class="bi bi-arrow-right ms-1"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- ── STEP 2: 基本設定 ── -->
-    <div id="step2" class="panel d-none">
       <h6 class="fw-bold mb-3">基本設定</h6>
-      <div id="step2Alert" class="alert d-none mb-3"></div>
+      <div id="step1Alert" class="alert d-none mb-3"></div>
 
       <div class="mb-3">
         <label class="form-label fw-semibold">標題 <span class="text-danger">*</span></label>
@@ -218,14 +128,13 @@
         <label class="form-check-label">立即啟用</label>
       </div>
 
-      <div class="d-flex justify-content-between mt-4">
-        <button class="btn btn-outline-secondary" data-action="goStep" data-args='[1]'><i class="bi bi-arrow-left me-1"></i>上一步</button>
-        <button class="btn btn-primary px-4" data-action="validateStep2">下一步：評分設定 <i class="bi bi-arrow-right ms-1"></i></button>
+      <div class="d-flex justify-content-end mt-4">
+        <button class="btn btn-primary px-4" data-action="validateStep1">下一步：評分設定 <i class="bi bi-arrow-right ms-1"></i></button>
       </div>
     </div>
 
-    <!-- ── STEP 3: 評分設定 ── -->
-    <div id="step3" class="panel d-none">
+    <!-- ── STEP 2: 評分設定 ── -->
+    <div id="step2" class="panel d-none">
       <h6 class="fw-bold mb-3">評分設定</h6>
       <p class="text-muted small mb-4">AI 練習與角色扮演使用系統統一規則；老師只需選擇正式批改使用的評分規準。</p>
 
@@ -236,18 +145,18 @@
       </div>
 
       <div class="d-flex justify-content-between mt-4">
-        <button class="btn btn-outline-secondary" data-action="goStep" data-args='[2]'><i class="bi bi-arrow-left me-1"></i>上一步</button>
-        <button class="btn btn-primary px-4" data-action="goStep" data-args='[4]'>下一步：確認送出 <i class="bi bi-arrow-right ms-1"></i></button>
+        <button class="btn btn-outline-secondary" data-action="goStep" data-args='[1]'><i class="bi bi-arrow-left me-1"></i>上一步</button>
+        <button class="btn btn-primary px-4" data-action="goStep" data-args='[3]'>下一步：確認送出 <i class="bi bi-arrow-right ms-1"></i></button>
       </div>
     </div>
 
-    <!-- ── STEP 4: 確認送出 ── -->
-    <div id="step4" class="panel d-none">
+    <!-- ── STEP 3: 確認送出 ── -->
+    <div id="step3" class="panel d-none">
       <h6 class="fw-bold mb-3">確認作業設定</h6>
-      <div id="step4Alert" class="alert d-none mb-3"></div>
+      <div id="step3Alert" class="alert d-none mb-3"></div>
       <div id="summaryContent" class="mb-4"></div>
       <div class="d-flex justify-content-between mt-4">
-        <button class="btn btn-outline-secondary" data-action="goStep" data-args='[3]'><i class="bi bi-arrow-left me-1"></i>上一步</button>
+        <button class="btn btn-outline-secondary" data-action="goStep" data-args='[2]'><i class="bi bi-arrow-left me-1"></i>上一步</button>
         <button class="btn btn-success px-4" id="submitBtn" data-action="submitAssignment">
           <i class="bi bi-check-circle me-1"></i>建立作業
         </button>

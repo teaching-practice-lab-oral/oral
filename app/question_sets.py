@@ -190,7 +190,7 @@ QUESTION_SETS = OrderedDict(
                 "label": "企業了解、未來展望與提問",
                 "items": [
                     _item(
-                        "What do you know about the industry you want to work in?",
+                        "What do you know about our industry?",
                         "呈現你對目標產業做過基本研究，並能說明趨勢、挑戰或所需能力與自己的關係。",
                         ("說出一至兩項已查證的產業資訊", "解釋其趨勢或挑戰為何重要", "連結到自己的準備或目標職位"),
                         "使用自己實際查到的產業現況、趨勢或挑戰；沒有資料時不要猜測。",

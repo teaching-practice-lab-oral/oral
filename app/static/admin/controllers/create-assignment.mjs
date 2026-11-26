@@ -1,28 +1,7 @@
 // ── State ─────────────────────────────────────────────────────────────────
-const modules = { shadowing: true, roleplay: true };
 let currentStep = 1;
 let dtpS2Start, dtpS2Due;
 let questionSets = [];
-
-// ── Module toggles ────────────────────────────────────────────────────────
-function toggleModule(name) {
-  return;
-}
-
-function updateFlowPreview() {
-  const icons = ['bi-briefcase', 'bi-pencil-square', 'bi-mic', 'bi-people', 'bi-chat-square-text', 'bi-journal-text'];
-  const steps = icons.map((icon, index) => ({
-    label: `<i class="bi ${icon} me-1" aria-hidden="true"></i>${escHtml(AdminWorkflow.sectionLabel(index + 1))}`,
-    on: true,
-  }));
-  const html = steps
-    .filter(s => s.on)
-    .map((s, i, arr) =>
-      (i > 0 ? '<span class="flow-arrow">→</span>' : '') +
-      `<span class="flow-step active-module">${s.label}</span>`
-    ).join('');
-  document.getElementById('flowPreview').innerHTML = html;
-}
 
 function selectedQuestions() {
   const key = document.getElementById('s2QuestionSet').value;
@@ -79,32 +58,32 @@ function goStep(n) {
   document.getElementById(`step${n}`).classList.remove('d-none');
 
   // Update indicators
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 3; i++) {
     const ind = document.getElementById(`step-ind-${i}`);
     const circ = document.getElementById(`step-circle-${i}`);
     ind.className = 'step-item' + (i === n ? ' active' : i < n ? ' done' : '');
     circ.innerHTML = i < n ? '<i class="bi bi-check"></i>' : i;
   }
   currentStep = n;
-  if (n === 4) renderSummary();
+  if (n === 3) renderSummary();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function validateStep2() {
+function validateStep1() {
   const title = document.getElementById('s2Title').value.trim();
-  if (!title) { showStep2Alert('請填寫作業標題'); return; }
+  if (!title) { showStep1Alert('請填寫作業標題'); return; }
   const key = document.getElementById('s2QuestionSet').value;
-  if (!key) { showStep2Alert('請選擇公版題組或重新整理頁面'); return; }
+  if (!key) { showStep1Alert('請選擇公版題組或重新整理頁面'); return; }
   const qs = selectedQuestions();
   if (key === 'custom' && (qs.length !== 4 || qs.some(q => !q))) {
-    showStep2Alert('自訂題組必須填寫全部 4 題');
+    showStep1Alert('自訂題組必須填寫全部 4 題');
     return;
   }
-  goStep(3);
+  goStep(2);
 }
 
-function showStep2Alert(msg) {
-  const el = document.getElementById('step2Alert');
+function showStep1Alert(msg) {
+  const el = document.getElementById('step1Alert');
   el.className = 'alert alert-danger';
   el.textContent = msg;
 }
@@ -121,17 +100,9 @@ function renderSummary() {
   const dueDisplay = dtpS2Due?.display.value || '';
   const isActive = document.getElementById('s2IsActive').checked;
 
-  const modBadges = [
-    `<span class="badge-module badge bg-success"><i class="bi bi-pencil-square me-1"></i>寫作練習</span>`,
-    `<span class="badge-module badge bg-primary"><i class="bi bi-mic me-1"></i>跟讀練習</span>`,
-    `<span class="badge-module badge bg-purple"><i class="bi bi-people me-1"></i>角色扮演＋回饋</span>`,
-    `<span class="badge-module badge bg-info"><i class="bi bi-journal-text me-1"></i>心得撰寫</span>`,
-  ].filter(Boolean).join(' ');
-
   document.getElementById('summaryContent').innerHTML = `
     <div class="row g-3">
       <div class="col-12">
-        <div class="summary-row"><span class="summary-label text-muted">啟用模組</span><span class="summary-value">${modBadges}</span></div>
         <div class="summary-row"><span class="summary-label text-muted">標題</span><span class="summary-value">${escHtml(title)}</span></div>
         ${desc ? `<div class="summary-row"><span class="summary-label text-muted">說明</span><span class="summary-value">${escHtml(desc)}</span></div>` : ''}
         ${ctx ? `<div class="summary-row"><span class="summary-label text-muted">AI 主題背景</span><span class="summary-value text-info">${escHtml(ctx)}</span></div>` : ''}
@@ -182,7 +153,7 @@ async function submitAssignment() {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    const el = document.getElementById('step4Alert');
+    const el = document.getElementById('step3Alert');
     el.className = 'alert alert-danger';
     el.textContent = err.detail || '建立失敗，請稍後再試';
     btn.disabled = false;
@@ -238,8 +209,6 @@ async function loadClassHint() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
-updateFlowPreview();
-AdminWorkflow.ready().then(updateFlowPreview);
 loadClassHint();
 loadRubrics();
 loadQuestionSets();
@@ -248,15 +217,13 @@ dtpS2Due = new DateTimePicker('s2DueDate', { placeholder: '（不限）' });
 document.addEventListener('click', () => { DateTimePicker.closeAll(); });
 
 Object.assign(window, {
-  toggleModule,
-  updateFlowPreview,
   selectedQuestions,
   updateQuestionSetUI,
   loadQuestionSets,
   loadRubrics,
   goStep,
-  validateStep2,
-  showStep2Alert,
+  validateStep1,
+  showStep1Alert,
   renderSummary,
   submitAssignment,
   focusTagInput,
