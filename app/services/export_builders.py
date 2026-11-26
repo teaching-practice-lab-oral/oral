@@ -23,13 +23,11 @@ from app.services.workflow_policy import CORE_QUESTION_COUNT
 _INVALID_XML_CHARS = re.compile("[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]")
 _INVALID_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 _FONT = "Microsoft JhengHei"
-_BRAND = "4F46E5"
-_BRAND_DARK = "312E81"
-_BRAND_LIGHT = "EEF2FF"
+_ACCENT = "1E3A5F"
 _TEXT = "1F2937"
 _MUTED = "6B7280"
 _BORDER = "D1D5DB"
-_SUCCESS_LIGHT = "ECFDF5"
+_HEADER_FILL = "F3F4F6"
 
 
 @dataclass(frozen=True)
@@ -129,6 +127,18 @@ def _set_table_borders(table, color: str = _BORDER, size: int = 6) -> None:
         node.set(qn("w:color"), color)
 
 
+def _set_paragraph_bottom_border(paragraph, color: str = _BORDER, size: int = 6) -> None:
+    p_pr = paragraph._p.get_or_add_pPr()
+    borders = OxmlElement("w:pBdr")
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), str(size))
+    bottom.set(qn("w:space"), "4")
+    bottom.set(qn("w:color"), color)
+    borders.append(bottom)
+    p_pr.append(borders)
+
+
 def _set_repeat_table_header(row) -> None:
     tr_pr = row._tr.get_or_add_trPr()
     repeat = OxmlElement("w:tblHeader")
@@ -178,9 +188,9 @@ def _configure_document(doc: Document, student: User, assignment: Assignment, su
     normal.paragraph_format.line_spacing = 1.25
 
     for name, size, color in (
-        ("Title", 24, _BRAND_DARK),
-        ("Heading 1", 16, _BRAND_DARK),
-        ("Heading 2", 13, _BRAND_DARK),
+        ("Title", 24, _ACCENT),
+        ("Heading 1", 16, _ACCENT),
+        ("Heading 2", 13, _ACCENT),
         ("Heading 3", 11, _TEXT),
     ):
         style = doc.styles[name]
@@ -193,7 +203,7 @@ def _configure_document(doc: Document, student: User, assignment: Assignment, su
 
     header = section.header.paragraphs[0]
     header.paragraph_format.space_after = Pt(3)
-    _set_run_font(header.add_run("AI 英語面試練習系統"), size=9, bold=True, color=_BRAND)
+    _set_run_font(header.add_run("AI 英語面試練習系統"), size=9, bold=True, color=_ACCENT)
     _set_run_font(header.add_run(f"　｜　{_xml_safe(assignment.title)}"), size=9, color=_MUTED)
 
     footer = section.footer.paragraphs[0]
@@ -217,25 +227,13 @@ def _configure_document(doc: Document, student: User, assignment: Assignment, su
 
 
 def _add_section_heading(doc: Document, number: int, title: str) -> None:
-    table = doc.add_table(rows=1, cols=2)
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    table.autofit = False
-    table.columns[0].width = Cm(2.6)
-    table.columns[1].width = Cm(14.6)
-    left, right = table.rows[0].cells
-    _set_cell_shading(left, _BRAND_DARK)
-    _set_cell_shading(right, _BRAND)
-    for cell in (left, right):
-        _set_cell_margins(cell, top=130, bottom=130, start=170, end=170)
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-    paragraph = left.paragraphs[0]
-    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    paragraph = doc.add_paragraph()
+    paragraph.paragraph_format.space_before = Pt(18)
+    paragraph.paragraph_format.space_after = Pt(8)
     _keep_with_next(paragraph)
-    _set_run_font(paragraph.add_run(f"SECTION {number}"), size=9.5, bold=True, color="FFFFFF")
-    paragraph = right.paragraphs[0]
-    _keep_with_next(paragraph)
-    _set_run_font(paragraph.add_run(title), size=13, bold=True, color="FFFFFF")
-    doc.add_paragraph().paragraph_format.space_after = Pt(1)
+    _set_run_font(paragraph.add_run(f"{number}　"), size=14, bold=True, color=_MUTED)
+    _set_run_font(paragraph.add_run(title), size=14, bold=True, color=_ACCENT)
+    _set_paragraph_bottom_border(paragraph)
 
 
 def _add_subheading(doc: Document, text: str) -> None:
@@ -243,7 +241,7 @@ def _add_subheading(doc: Document, text: str) -> None:
     paragraph.paragraph_format.space_before = Pt(8)
     paragraph.paragraph_format.space_after = Pt(4)
     _keep_with_next(paragraph)
-    _set_run_font(paragraph.add_run(text), size=12, bold=True, color=_BRAND_DARK)
+    _set_run_font(paragraph.add_run(text), size=12, bold=True, color=_TEXT)
 
 
 def _add_labeled_paragraph(
@@ -254,7 +252,7 @@ def _add_labeled_paragraph(
     empty: str = "（未填寫）",
 ) -> None:
     paragraph = doc.add_paragraph()
-    _set_run_font(paragraph.add_run(f"{label}："), bold=True, color=_BRAND_DARK)
+    _set_run_font(paragraph.add_run(f"{label}："), bold=True, color=_TEXT)
     _set_run_font(paragraph.add_run(str(value or empty)))
 
 
@@ -262,14 +260,12 @@ def _add_answer_card(doc: Document, question: str, answer: object) -> None:
     table = doc.add_table(rows=2, cols=1)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.autofit = True
-    _set_table_borders(table, "C7D2FE", 6)
+    _set_table_borders(table)
     header, body = table.cell(0, 0), table.cell(1, 0)
-    _set_cell_shading(header, _BRAND_LIGHT)
-    _set_cell_shading(body, "FFFFFF")
     for cell in (header, body):
         _set_cell_margins(cell, top=110, bottom=110, start=160, end=160)
     _keep_with_next(header.paragraphs[0])
-    _set_run_font(header.paragraphs[0].add_run(question), size=10.5, bold=True, color=_BRAND_DARK)
+    _set_run_font(header.paragraphs[0].add_run(question), size=10.5, bold=True, color=_TEXT)
     _set_run_font(body.paragraphs[0].add_run(str(answer or "（未填寫）")), size=10.5)
     _set_row_cant_split(table.rows[0])
     doc.add_paragraph().paragraph_format.space_after = Pt(1)
@@ -282,9 +278,9 @@ def _add_corrections_table(doc: Document, corrections: list[dict]) -> None:
     _set_table_borders(table)
     for index, label in enumerate(("原句", "修正", "說明")):
         cell = table.rows[0].cells[index]
-        _set_cell_shading(cell, _BRAND_DARK)
+        _set_cell_shading(cell, _HEADER_FILL)
         _set_cell_margins(cell)
-        _set_run_font(cell.paragraphs[0].add_run(label), size=9.5, bold=True, color="FFFFFF")
+        _set_run_font(cell.paragraphs[0].add_run(label), size=9.5, bold=True, color=_TEXT)
     _set_repeat_table_header(table.rows[0])
     for correction in corrections:
         row = table.add_row()
@@ -296,10 +292,6 @@ def _add_corrections_table(doc: Document, corrections: list[dict]) -> None:
         for index, value in enumerate(values):
             cell = row.cells[index]
             _set_cell_margins(cell)
-            if index == 0:
-                _set_cell_shading(cell, "FEF2F2")
-            elif index == 1:
-                _set_cell_shading(cell, _SUCCESS_LIGHT)
             _set_run_font(cell.paragraphs[0].add_run(str(value)), size=9.5)
     doc.add_paragraph().paragraph_format.space_after = Pt(1)
 
@@ -401,7 +393,7 @@ def build_submission_docx(student: User, assignment: Assignment, sub) -> bytes:
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     title.paragraph_format.space_before = Pt(8)
     title.paragraph_format.space_after = Pt(3)
-    _set_run_font(title.add_run(_xml_safe(assignment.title)), size=24, bold=True, color=_BRAND_DARK)
+    _set_run_font(title.add_run(_xml_safe(assignment.title)), size=24, bold=True, color=_ACCENT)
     subtitle = doc.add_paragraph()
     subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
     subtitle.paragraph_format.space_after = Pt(14)
@@ -410,7 +402,7 @@ def build_submission_docx(student: User, assignment: Assignment, sub) -> bytes:
     info = doc.add_table(rows=2, cols=2)
     info.alignment = WD_TABLE_ALIGNMENT.CENTER
     info.autofit = True
-    _set_table_borders(info, "C7D2FE", 6)
+    _set_table_borders(info)
     submitted_at = sub.submitted_at.strftime("%Y-%m-%d %H:%M") if sub.submitted_at else "未完成"
     info_values = (
         ("學生", f"{_xml_safe(student.name)}（{_xml_safe(student.student_id)}）"),
@@ -420,7 +412,6 @@ def build_submission_docx(student: User, assignment: Assignment, sub) -> bytes:
     )
     for index, (label, value) in enumerate(info_values):
         cell = info.cell(index // 2, index % 2)
-        _set_cell_shading(cell, _BRAND_LIGHT if index % 2 == 0 else "FFFFFF")
         _set_cell_margins(cell, top=130, bottom=130, start=170, end=170)
         paragraph = cell.paragraphs[0]
         _set_run_font(paragraph.add_run(f"{label}\n"), size=8.5, bold=True, color=_MUTED)
@@ -482,7 +473,7 @@ def build_submission_docx(student: User, assignment: Assignment, sub) -> bytes:
                 _set_run_font(paragraph.add_run("未發現英文文法或用字錯誤。"), color=_MUTED)
             _add_answer_card(doc, "建議範文", item["polished_sample"])
         _add_subheading(doc, "組織架構建議")
-        _add_bullets(doc, feedback["organization_suggestions"], color=_BRAND_DARK)
+        _add_bullets(doc, feedback["organization_suggestions"])
     else:
         doc.add_paragraph("（尚未取得 AI 回饋）")
 
@@ -556,9 +547,9 @@ def build_submission_docx(student: User, assignment: Assignment, sub) -> bytes:
         ):
             raise ValueError("口語回饋清單不是目前格式")
         _add_subheading(doc, "表現優點")
-        _add_bullets(doc, strengths, color="047857")
+        _add_bullets(doc, strengths)
         _add_subheading(doc, "改進建議")
-        _add_bullets(doc, suggestions, color="9A3412")
+        _add_bullets(doc, suggestions)
     else:
         doc.add_paragraph("（尚未生成 AI 回饋）")
 
@@ -598,10 +589,9 @@ def build_submission_docx(student: User, assignment: Assignment, sub) -> bytes:
             raise ValueError("教師批改資料不是目前格式")
         score = doc.add_table(rows=1, cols=2)
         score.alignment = WD_TABLE_ALIGNMENT.CENTER
-        _set_table_borders(score, "A5B4FC", 8)
+        _set_table_borders(score)
         score_label, score_value = score.rows[0].cells
-        _set_cell_shading(score_label, _BRAND_DARK)
-        _set_cell_shading(score_value, _BRAND_LIGHT)
+        _set_cell_shading(score_label, _HEADER_FILL)
         for cell in (score_label, score_value):
             _set_cell_margins(cell, top=180, bottom=180, start=200, end=200)
             cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
@@ -609,7 +599,7 @@ def build_submission_docx(student: User, assignment: Assignment, sub) -> bytes:
             score_label.paragraphs[0].add_run("教師最後成績"),
             size=12,
             bold=True,
-            color="FFFFFF",
+            color=_TEXT,
         )
         score_paragraph = score_value.paragraphs[0]
         score_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -617,7 +607,7 @@ def build_submission_docx(student: User, assignment: Assignment, sub) -> bytes:
             score_paragraph.add_run(f"{float(grade['final_score']):g} / 100"),
             size=20,
             bold=True,
-            color=_BRAND_DARK,
+            color=_ACCENT,
         )
         doc.add_paragraph()
         _add_labeled_paragraph(
@@ -639,9 +629,9 @@ def build_submission_docx(student: User, assignment: Assignment, sub) -> bytes:
         _set_table_borders(rubric_table)
         for index, label in enumerate(("評分面向", "評分項目", "結果")):
             cell = rubric_table.rows[0].cells[index]
-            _set_cell_shading(cell, _BRAND_DARK)
+            _set_cell_shading(cell, _HEADER_FILL)
             _set_cell_margins(cell)
-            _set_run_font(cell.paragraphs[0].add_run(label), size=9.5, bold=True, color="FFFFFF")
+            _set_run_font(cell.paragraphs[0].add_run(label), size=9.5, bold=True, color=_TEXT)
         _set_repeat_table_header(rubric_table.rows[0])
         for item in ratings:
             row = rubric_table.add_row()
